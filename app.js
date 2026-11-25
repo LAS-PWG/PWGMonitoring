@@ -21201,6 +21201,7 @@ var firebase_applet_config_default = {
 // src/lib/auth.ts
 var SCOPES = ["https://www.googleapis.com/auth/spreadsheets"];
 var MANUAL_TOKEN_STORAGE_KEY = "sitetrack_sheets_oauth_token_v1";
+var PERSISTED_AUTH_META_KEY = "sitetrack_sheets_auth_meta_v2";
 var cachedApp = null;
 var cachedAuth = null;
 function getSafeAuth() {
@@ -21222,17 +21223,56 @@ var UnauthorizedDomainError = class extends Error {
 		this.projectId = projectId;
 	}
 };
-var isSigningIn = false;
-var cachedAccessToken = (() => {
+function readPersistedAuthMeta() {
 	try {
-		return window.sessionStorage.getItem(MANUAL_TOKEN_STORAGE_KEY) || null;
-	} catch {
-		return null;
-	}
-})();
-function setManualAccessToken(token) {
+		const rawLocal = window.localStorage.getItem(PERSISTED_AUTH_META_KEY);
+		if (rawLocal) {
+			const parsed = JSON.parse(rawLocal);
+			if (parsed && typeof parsed.token === "string" && parsed.token.trim()) return parsed;
+		}
+	} catch {}
+	try {
+		const legacySession = window.sessionStorage.getItem(MANUAL_TOKEN_STORAGE_KEY);
+		if (legacySession && legacySession.trim()) return {
+			token: legacySession.trim(),
+			savedAt: Date.now()
+		};
+	} catch {}
+	try {
+		const legacyLocal = window.localStorage.getItem(MANUAL_TOKEN_STORAGE_KEY);
+		if (legacyLocal && legacyLocal.trim()) return {
+			token: legacyLocal.trim(),
+			savedAt: Date.now()
+		};
+	} catch {}
+	return null;
+}
+var isSigningIn = false;
+var cachedAuthMeta = readPersistedAuthMeta();
+var cachedAccessToken = cachedAuthMeta?.token || null;
+function getSavedAuthMeta() {
+	return cachedAuthMeta;
+}
+function hasPersistedAccessToken() {
+	return Boolean(cachedAccessToken);
+}
+function setManualAccessToken(token, userEmail) {
 	const cleaned = token ? token.trim() : null;
 	cachedAccessToken = cleaned || null;
+	cachedAuthMeta = cleaned ? {
+		token: cleaned,
+		savedAt: Date.now(),
+		userEmail: userEmail ?? cachedAuthMeta?.userEmail ?? null
+	} : null;
+	try {
+		if (cleaned && cachedAuthMeta) {
+			window.localStorage.setItem(PERSISTED_AUTH_META_KEY, JSON.stringify(cachedAuthMeta));
+			window.localStorage.setItem(MANUAL_TOKEN_STORAGE_KEY, cleaned);
+		} else {
+			window.localStorage.removeItem(PERSISTED_AUTH_META_KEY);
+			window.localStorage.removeItem(MANUAL_TOKEN_STORAGE_KEY);
+		}
+	} catch {}
 	try {
 		if (cleaned) window.sessionStorage.setItem(MANUAL_TOKEN_STORAGE_KEY, cleaned);
 		else window.sessionStorage.removeItem(MANUAL_TOKEN_STORAGE_KEY);
@@ -21261,6 +21301,13 @@ async function verifyTokenHasSheetsScope(accessToken) {
 }
 var initAuth = (onAuthSuccess, onAuthFailure) => {
 	try {
+		if (!cachedAccessToken) {
+			const restored = readPersistedAuthMeta();
+			if (restored) {
+				cachedAuthMeta = restored;
+				cachedAccessToken = restored.token;
+			}
+		}
 		if (cachedAccessToken) {
 			if (onAuthSuccess) onAuthSuccess(null, cachedAccessToken);
 		}
@@ -21271,6 +21318,7 @@ var initAuth = (onAuthSuccess, onAuthFailure) => {
 		}
 		return onAuthStateChanged(authInstance, async (user) => {
 			if (user && cachedAccessToken) {
+				if (user.email && cachedAuthMeta && !cachedAuthMeta.userEmail) setManualAccessToken(cachedAccessToken, user.email);
 				if (onAuthSuccess) onAuthSuccess(user, cachedAccessToken);
 			} else if (cachedAccessToken) {
 				if (onAuthSuccess) onAuthSuccess(null, cachedAccessToken);
@@ -21297,7 +21345,7 @@ var googleSignIn = async () => {
 			setManualAccessToken(null);
 			throw new Error("Google Sheets permission was not checked on the consent screen. Please click \"Sign in with Google\" again and check the box for \"See, edit, create, and delete all your Google Sheets spreadsheets\".");
 		}
-		setManualAccessToken(credential.accessToken);
+		setManualAccessToken(credential.accessToken, result.user.email);
 		return {
 			user: result.user,
 			accessToken: credential.accessToken
@@ -24868,6 +24916,29 @@ var LayoutGrid = createLucideIcon("layout-grid", [
 		y: "14",
 		rx: "1",
 		key: "1bb6yr"
+	}]
+]);
+/**
+* @license lucide-react v0.546.0 - ISC
+*
+* This source code is licensed under the ISC license.
+* See the LICENSE file in the root directory of this source tree.
+*/
+var Link2 = createLucideIcon("link-2", [
+	["path", {
+		d: "M9 17H7A5 5 0 0 1 7 7h2",
+		key: "8i5ue5"
+	}],
+	["path", {
+		d: "M15 7h2a5 5 0 1 1 0 10h-2",
+		key: "1b9ql8"
+	}],
+	["line", {
+		x1: "8",
+		x2: "16",
+		y1: "12",
+		y2: "12",
+		key: "1jonct"
 	}]
 ]);
 /**
@@ -36712,11 +36783,50 @@ var MaintenanceTabView = ({ projectTypes, projects, sites, subProjects, contract
 * SPDX-License-Identifier: Apache-2.0
 */
 var PORTABLE_STORAGE_KEY = "sitetrack_portable_data_v1";
+var SHEET_ID_STORAGE_KEY = "sitetrack_linked_sheet_id_v1";
+var SHEET_MODE_STORAGE_KEY = "sitetrack_sheet_sync_mode_v1";
+function extractSpreadsheetId(input) {
+	const trimmed = input.trim();
+	if (!trimmed) return DEFAULT_SPREADSHEET_ID;
+	const match = trimmed.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+	if (match && match[1]) return match[1];
+	return trimmed;
+}
 function App() {
-	const [isLiveGoogleSheetConnected, setIsLiveGoogleSheetConnected] = (0, import_react.useState)(false);
+	const [spreadsheetId, setSpreadsheetId] = (0, import_react.useState)(() => {
+		try {
+			const savedId = window.localStorage.getItem(SHEET_ID_STORAGE_KEY);
+			if (savedId && savedId.trim()) return extractSpreadsheetId(savedId);
+			const winData = window.__SITETRACK_INITIAL_DATA__;
+			if (winData?.spreadsheetId && winData.spreadsheetId.trim()) return extractSpreadsheetId(winData.spreadsheetId);
+		} catch {}
+		return DEFAULT_SPREADSHEET_ID;
+	});
+	const [sheetSyncMode, setSheetSyncMode] = (0, import_react.useState)(() => {
+		if (hasPersistedAccessToken()) return "oauth";
+		try {
+			const savedMode = window.localStorage.getItem(SHEET_MODE_STORAGE_KEY);
+			if (savedMode === "public-gviz" || savedMode === "oauth") return savedMode;
+		} catch {}
+		return "local";
+	});
+	const [isLiveGoogleSheetConnected, setIsLiveGoogleSheetConnected] = (0, import_react.useState)(() => hasPersistedAccessToken());
 	const [user, setUser] = (0, import_react.useState)(null);
+	const [persistedUserEmail, setPersistedUserEmail] = (0, import_react.useState)(() => getSavedAuthMeta()?.userEmail ?? null);
 	const [isLoggingIn, setIsLoggingIn] = (0, import_react.useState)(false);
-	const [spreadsheetId] = (0, import_react.useState)(DEFAULT_SPREADSHEET_ID);
+	const persistSheetLinkSettings = (0, import_react.useCallback)((nextSheetId, nextMode) => {
+		const cleanId = extractSpreadsheetId(nextSheetId);
+		setSpreadsheetId(cleanId);
+		try {
+			window.localStorage.setItem(SHEET_ID_STORAGE_KEY, cleanId);
+		} catch {}
+		if (nextMode) {
+			setSheetSyncMode(nextMode);
+			try {
+				window.localStorage.setItem(SHEET_MODE_STORAGE_KEY, nextMode);
+			} catch {}
+		}
+	}, []);
 	const [activeTab, setActiveTab] = (0, import_react.useState)("dashboard");
 	const [adminInitialSection, setAdminInitialSection] = (0, import_react.useState)("accounts_dashboard");
 	const [preselectedSubProjectId, setPreselectedSubProjectId] = (0, import_react.useState)(null);
@@ -36827,52 +36937,24 @@ function App() {
 	const activeUser = (0, import_react.useMemo)(() => {
 		return effectiveUserAccounts.find((u) => u.userId === activeUserId) || effectiveUserAccounts[0];
 	}, [effectiveUserAccounts, activeUserId]);
-	const loadLiveGoogleSheetData = (0, import_react.useCallback)(async (silent = false) => {
-		if (!silent) setIsLoadingSheet(true);
-		setErrorMessage(null);
-		try {
-			const result = await inspectAndLoadSpreadsheet(spreadsheetId);
-			setSheetData(result);
-			setIsLiveGoogleSheetConnected(true);
-			try {
-				window.localStorage.setItem(PORTABLE_STORAGE_KEY, JSON.stringify(result));
-			} catch {}
-		} catch (err) {
-			if (err instanceof AuthRequiredError) {
-				setIsLiveGoogleSheetConnected(false);
-				if (!silent && err.message) setErrorMessage(err.message);
-			} else {
-				const message = err instanceof Error ? err.message : "Failed to load live Google Sheet data. Operating in self-contained local data mode.";
-				if (!silent) setErrorMessage(message);
-			}
-		} finally {
-			if (!silent) setIsLoadingSheet(false);
-		}
-	}, [spreadsheetId]);
-	(0, import_react.useEffect)(() => {
-		const unsubscribe = initAuth((authedUser) => {
-			setUser(authedUser);
-			loadLiveGoogleSheetData(true);
-		}, () => {
-			setIsLiveGoogleSheetConnected(false);
-		});
-		return () => unsubscribe();
-	}, [loadLiveGoogleSheetData]);
 	const [isSheetConnectModalOpen, setIsSheetConnectModalOpen] = (0, import_react.useState)(false);
 	const [unauthorizedHostname, setUnauthorizedHostname] = (0, import_react.useState)(typeof window !== "undefined" ? window.location.hostname : "");
+	const [sheetLinkInput, setSheetLinkInput] = (0, import_react.useState)(spreadsheetId);
 	const [manualOAuthTokenInput, setManualOAuthTokenInput] = (0, import_react.useState)("");
 	const [isSyncingPublicSheet, setIsSyncingPublicSheet] = (0, import_react.useState)(false);
-	const handleSyncPublicSharedSheet = (0, import_react.useCallback)(async (silentIfUnavailable = false) => {
+	const handleSyncPublicSharedSheet = (0, import_react.useCallback)(async (silentIfUnavailable = false, overrideSheetId) => {
+		const targetId = extractSpreadsheetId(overrideSheetId || spreadsheetId);
 		setIsSyncingPublicSheet(true);
 		if (!silentIfUnavailable) setErrorMessage(null);
 		try {
-			const result = await inspectAndLoadSpreadsheetPublicGviz(spreadsheetId);
+			const result = await inspectAndLoadSpreadsheetPublicGviz(targetId);
 			if (result) {
 				setSheetData(result);
+				persistSheetLinkSettings(targetId, "public-gviz");
 				try {
 					window.localStorage.setItem(PORTABLE_STORAGE_KEY, JSON.stringify(result));
 				} catch {}
-				showToast("Synced all 8 tabs directly from Google Sheet (Public / Link-Shared Direct Mode).");
+				if (!silentIfUnavailable) showToast("Synced all 8 tabs directly from Google Sheet (Link remembered across refreshes).");
 				return true;
 			}
 			if (!silentIfUnavailable) setErrorMessage("Direct Link-Shared Sync requires the Google Sheet to be shared as \"Anyone with the link can view\", or paste a Google Sheets OAuth Access Token below for private Read & Write access.");
@@ -36883,37 +36965,90 @@ function App() {
 		} finally {
 			setIsSyncingPublicSheet(false);
 		}
-	}, [spreadsheetId]);
+	}, [spreadsheetId, persistSheetLinkSettings]);
+	const loadLiveGoogleSheetData = (0, import_react.useCallback)(async (silent = false, overrideSheetId) => {
+		const targetId = extractSpreadsheetId(overrideSheetId || spreadsheetId);
+		if (!silent) setIsLoadingSheet(true);
+		setErrorMessage(null);
+		try {
+			const result = await inspectAndLoadSpreadsheet(targetId);
+			setSheetData(result);
+			setIsLiveGoogleSheetConnected(true);
+			persistSheetLinkSettings(targetId, "oauth");
+			try {
+				window.localStorage.setItem(PORTABLE_STORAGE_KEY, JSON.stringify(result));
+			} catch {}
+		} catch (err) {
+			if (err instanceof AuthRequiredError) {
+				setIsLiveGoogleSheetConnected(false);
+				if (!await handleSyncPublicSharedSheet(true, targetId) && !silent && err.message) setErrorMessage(err.message);
+			} else {
+				const message = err instanceof Error ? err.message : "Failed to load live Google Sheet data. Operating in self-contained local data mode.";
+				if (!silent) setErrorMessage(message);
+			}
+		} finally {
+			if (!silent) setIsLoadingSheet(false);
+		}
+	}, [
+		spreadsheetId,
+		persistSheetLinkSettings,
+		handleSyncPublicSharedSheet
+	]);
 	(0, import_react.useEffect)(() => {
-		if (!isLiveGoogleSheetConnected || !sheetData || confirmConfig || isProfileModalOpen || isSheetConnectModalOpen) return;
-		const timer = window.setInterval(() => {
+		const unsubscribe = initAuth((authedUser) => {
+			if (authedUser) {
+				setUser(authedUser);
+				if (authedUser.email) setPersistedUserEmail(authedUser.email);
+			}
 			loadLiveGoogleSheetData(true);
+		}, () => {
+			setIsLiveGoogleSheetConnected(false);
+			if (sheetSyncMode === "public-gviz") handleSyncPublicSharedSheet(true);
+		});
+		return () => unsubscribe();
+	}, [
+		loadLiveGoogleSheetData,
+		handleSyncPublicSharedSheet,
+		sheetSyncMode
+	]);
+	(0, import_react.useEffect)(() => {
+		if (!(isLiveGoogleSheetConnected || sheetSyncMode === "public-gviz") || !sheetData || confirmConfig || isProfileModalOpen || isSheetConnectModalOpen) return;
+		const timer = window.setInterval(() => {
+			if (isLiveGoogleSheetConnected) loadLiveGoogleSheetData(true);
+			else if (sheetSyncMode === "public-gviz") handleSyncPublicSharedSheet(true);
 		}, 25e3);
 		return () => window.clearInterval(timer);
 	}, [
 		isLiveGoogleSheetConnected,
+		sheetSyncMode,
 		sheetData,
 		confirmConfig,
 		isProfileModalOpen,
 		isSheetConnectModalOpen,
-		loadLiveGoogleSheetData
+		loadLiveGoogleSheetData,
+		handleSyncPublicSharedSheet
 	]);
-	const handleConnectLiveGoogleSheet = async () => {
+	const handleConnectLiveGoogleSheet = async (overrideSheetId) => {
+		const targetId = extractSpreadsheetId(overrideSheetId || spreadsheetId);
+		persistSheetLinkSettings(targetId);
 		setIsLoggingIn(true);
 		setErrorMessage(null);
 		try {
 			const result = await googleSignIn();
 			if (result) {
 				setUser(result.user);
-				await loadLiveGoogleSheetData(false);
-				showToast("Connected to live Google Sheets v4 API.");
+				setPersistedUserEmail(result.user.email || null);
+				await loadLiveGoogleSheetData(false, targetId);
+				showToast("Connected to live Google Sheets v4 API (Link remembered across refreshes).");
 			}
 		} catch (err) {
 			if (err instanceof UnauthorizedDomainError) {
 				setUnauthorizedHostname(err.hostname || window.location.hostname || "github.io");
-				const loadedPublic = await handleSyncPublicSharedSheet(true);
-				setIsSheetConnectModalOpen(true);
-				if (loadedPublic) showToast("Loaded latest data from shared Google Sheet! For full Read & Write on GitHub Pages, paste an OAuth token or authorize your domain.");
+				if (await handleSyncPublicSharedSheet(true, targetId)) showToast("Synced directly from linked Google Sheet! Open Sheet Link settings to paste an OAuth token for write access.");
+				else {
+					setSheetLinkInput(targetId);
+					setIsSheetConnectModalOpen(true);
+				}
 			} else {
 				const msg = err instanceof Error ? err.message : "Google Sign-In was cancelled. Continuing in Self-Contained Local Data mode.";
 				setErrorMessage(msg);
@@ -36922,17 +37057,43 @@ function App() {
 			setIsLoggingIn(false);
 		}
 	};
+	const handleSyncLiveSheetTrigger = async () => {
+		if (isLiveGoogleSheetConnected) {
+			await loadLiveGoogleSheetData(false);
+			showToast("Synced latest records from live Google Sheets v4 API.");
+			return;
+		}
+		if (sheetSyncMode === "public-gviz") {
+			if (!await handleSyncPublicSharedSheet(false)) {
+				setSheetLinkInput(spreadsheetId);
+				setIsSheetConnectModalOpen(true);
+			}
+			return;
+		}
+		await handleConnectLiveGoogleSheet();
+	};
+	const handleSaveSheetLinkAndSync = async () => {
+		const cleanId = extractSpreadsheetId(sheetLinkInput);
+		persistSheetLinkSettings(cleanId);
+		if (isLiveGoogleSheetConnected) {
+			setIsSheetConnectModalOpen(false);
+			await loadLiveGoogleSheetData(false, cleanId);
+			showToast(`Saved Google Sheet link (${cleanId}) and synced live data.`);
+		} else if (await handleSyncPublicSharedSheet(false, cleanId)) setIsSheetConnectModalOpen(false);
+	};
 	const handleConnectWithPastedToken = async () => {
 		const clean = manualOAuthTokenInput.trim();
 		if (!clean) {
 			setErrorMessage("Please paste a valid Google OAuth 2.0 Access Token.");
 			return;
 		}
+		const cleanId = extractSpreadsheetId(sheetLinkInput || spreadsheetId);
+		persistSheetLinkSettings(cleanId, "oauth");
 		setManualAccessToken(clean);
 		setIsSheetConnectModalOpen(false);
 		setManualOAuthTokenInput("");
-		await loadLiveGoogleSheetData(false);
-		showToast("Connected to live Google Sheets v4 API using OAuth Access Token (Full Read & Write).");
+		await loadLiveGoogleSheetData(false, cleanId);
+		showToast("Connected to live Google Sheets v4 API using OAuth Access Token (Saved across refreshes).");
 	};
 	const handleCopyActiveAccessToken = async () => {
 		const token = await getAccessToken();
@@ -36942,7 +37103,7 @@ function App() {
 		}
 		try {
 			await navigator.clipboard.writeText(token);
-			showToast("Copied Google Sheets OAuth Access Token! Paste it in your GitHub Pages / Netlify app under \"Connect Google Sheet\".");
+			showToast("Copied Google Sheets OAuth Access Token! Paste it in your GitHub Pages / Netlify app under \"Sheet Link\".");
 		} catch {
 			showToast("Could not copy token to clipboard automatically.");
 		}
@@ -36950,7 +37111,9 @@ function App() {
 	const handleLogoutLiveSheet = async () => {
 		await logout();
 		setUser(null);
+		setPersistedUserEmail(null);
 		setIsLiveGoogleSheetConnected(false);
+		persistSheetLinkSettings(spreadsheetId, "local");
 		showToast("Disconnected from live Google Sheet. Running in Self-Contained Local Data Mode (./data.json).");
 	};
 	const requestConfirmation = (config) => {
@@ -37071,49 +37234,40 @@ function App() {
 								className: "inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-800 hover:bg-slate-50 transition-colors whitespace-nowrap",
 								title: "Download Self-Contained ZIP Exports (GitHub Pages, Netlify, Google Sites)",
 								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Download, { className: "h-3.5 w-3.5 text-slate-700" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Export ZIP Packages" })]
-							}), isLiveGoogleSheetConnected ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								className: "flex items-center gap-1.5",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-									type: "button",
-									onClick: () => loadLiveGoogleSheetData(false),
-									disabled: isLoadingSheet,
-									className: "inline-flex items-center gap-1.5 rounded-md bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-800 transition-colors disabled:opacity-50 whitespace-nowrap shrink-0",
-									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(RefreshCw, { className: `h-3.5 w-3.5 ${isLoadingSheet ? "animate-spin" : ""}` }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: isLoadingSheet ? "Syncing..." : "Sync Live Sheet" })]
-								}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-									type: "button",
-									onClick: handleCopyActiveAccessToken,
-									className: "inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors whitespace-nowrap",
-									title: "Copy active Google Sheets OAuth Token to connect GitHub Pages / Netlify immediately",
-									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(KeyRound, { className: "h-3.5 w-3.5 text-slate-600" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-										className: "hidden sm:inline",
-										children: "Copy Sheet Token"
-									})]
-								})]
-							}) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 								className: "flex items-center gap-1.5",
 								children: [
-									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-										className: "hidden xl:inline-flex items-center gap-1 rounded border border-emerald-300 bg-emerald-50 px-2 py-1 text-[11px] font-mono font-semibold text-emerald-900",
-										title: "Running 100% self-contained from ./data.json and browser localStorage",
-										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Database, { className: "h-3 w-3 text-emerald-700" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Local Data (./data.json)" })]
+									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+										type: "button",
+										onClick: handleSyncLiveSheetTrigger,
+										disabled: isLoadingSheet || isLoggingIn || isSyncingPublicSheet,
+										className: "inline-flex items-center gap-1.5 rounded-md bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-800 transition-colors disabled:opacity-50 whitespace-nowrap shrink-0",
+										title: isLiveGoogleSheetConnected ? `Connected via OAuth v4 (Read & Write) · Sheet: ${spreadsheetId}` : sheetSyncMode === "public-gviz" ? `Connected via Direct Shared Sheet Sync · Sheet: ${spreadsheetId}` : `Sync with linked Google Sheet (${spreadsheetId})`,
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(RefreshCw, { className: `h-3.5 w-3.5 ${isLoadingSheet || isLoggingIn || isSyncingPublicSheet ? "animate-spin" : ""}` }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: isLoadingSheet || isLoggingIn || isSyncingPublicSheet ? "Syncing..." : "Sync Live Sheet" })]
+									}),
+									isLiveGoogleSheetConnected && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+										type: "button",
+										onClick: handleCopyActiveAccessToken,
+										className: "inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors whitespace-nowrap",
+										title: "Copy active Google Sheets OAuth Token to connect GitHub Pages / Netlify immediately",
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(KeyRound, { className: "h-3.5 w-3.5 text-slate-600" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+											className: "hidden sm:inline",
+											children: "Copy Sheet Token"
+										})]
 									}),
 									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
 										type: "button",
-										onClick: handleConnectLiveGoogleSheet,
-										disabled: isLoggingIn,
-										className: "inline-flex items-center gap-1.5 rounded-md bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-800 transition-colors disabled:opacity-50 whitespace-nowrap shrink-0",
-										title: "Optional: Connect to external Google Sheets v4 API",
-										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Cloud, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: isLoggingIn ? "Connecting..." : "Connect Google Sheet (Optional)" })]
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-										type: "button",
 										onClick: () => {
 											setUnauthorizedHostname(window.location.hostname || "github.io");
+											setSheetLinkInput(spreadsheetId);
 											setIsSheetConnectModalOpen(true);
 										},
-										className: "inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors",
-										title: "GitHub Pages / External Domain Google Sheet Connection Options (Direct Sync or OAuth Token)",
-										children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(KeyRound, { className: "h-3.5 w-3.5 text-slate-600" })
+										className: "inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors whitespace-nowrap",
+										title: "Manage Linked Google Sheet URL/ID, Direct Shared Sync, or OAuth Token (Persists Across Refreshes)",
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Link2, { className: "h-3.5 w-3.5 text-slate-600" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+											className: "hidden sm:inline",
+											children: "Sheet Link"
+										})]
 									})
 								]
 							})]
@@ -37515,11 +37669,10 @@ function App() {
 								existingSheets: sheetData.existingSheets,
 								missingSheets: sheetData.missingSheets,
 								lastSyncedAt: sheetData.lastSyncedAt,
-								userEmail: isLiveGoogleSheetConnected ? user?.email : "Self-Contained Local Mode (./data/data.json)",
-								isLoadingSheet,
+								userEmail: isLiveGoogleSheetConnected ? user?.email || persistedUserEmail || "Connected via OAuth Token" : sheetSyncMode === "public-gviz" ? "Direct Shared Google Sheet Sync (Auto-Remembered)" : "Self-Contained Local Mode (./data.json)",
+								isLoadingSheet: isLoadingSheet || isSyncingPublicSheet,
 								onForceSync: () => {
-									if (isLiveGoogleSheetConnected) loadLiveGoogleSheetData(false);
-									else handleResetToIncludedDataJson();
+									handleSyncLiveSheetTrigger();
 								},
 								onLogout: handleLogoutLiveSheet,
 								onInitializeSchema: handlePromptSchemaSetup,
@@ -37627,24 +37780,24 @@ function App() {
 							className: "flex items-center justify-between border-b border-slate-200 bg-slate-50 px-5 py-3.5",
 							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 								className: "flex items-center gap-2",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Cloud, { className: "h-4 w-4 text-slate-900" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", {
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Link2, { className: "h-4 w-4 text-slate-900" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", {
 									className: "text-sm font-bold text-slate-900",
-									children: "Connect Google Sheet on GitHub Pages / External Host"
+									children: "Google Sheet Link & Live Sync Settings"
 								}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
 									className: "text-[11px] text-slate-500",
 									children: [
-										"Host Domain:",
+										"Mode:",
 										" ",
 										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
 											className: "font-mono font-semibold text-slate-800",
-											children: unauthorizedHostname || window.location.hostname
+											children: isLiveGoogleSheetConnected ? "OAuth v4 (Read & Write · Saved)" : sheetSyncMode === "public-gviz" ? "Direct Shared Sheet Sync (Saved)" : "Local Dataset (./data.json)"
 										}),
 										" ",
-										"· Sheet ID:",
+										"· Host:",
 										" ",
 										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
 											className: "font-mono",
-											children: spreadsheetId
+											children: unauthorizedHostname || window.location.hostname
 										})
 									]
 								})] })]
@@ -37659,16 +37812,74 @@ function App() {
 							className: "p-5 space-y-4 max-h-[80vh] overflow-y-auto",
 							children: [
 								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "rounded-lg border border-slate-300 bg-slate-50 p-3.5 space-y-2.5",
+									children: [
+										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+											className: "flex items-center justify-between gap-2",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+												className: "font-bold text-slate-900",
+												children: "Linked Google Sheet URL or ID (Remembered Across Refreshes)"
+											}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+												type: "button",
+												onClick: () => setSheetLinkInput("1HNmAdZe7POIzIm9mCUPxQJL7p9BoBZEO1hXq6PZNs5M"),
+												className: "text-[11px] font-semibold text-slate-600 hover:text-slate-900 underline",
+												children: "Reset Default ID"
+											})]
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+											className: "flex flex-col sm:flex-row gap-2",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+												type: "text",
+												value: sheetLinkInput,
+												onChange: (e) => setSheetLinkInput(e.target.value),
+												placeholder: "Paste full Google Sheets URL or Spreadsheet ID...",
+												className: "flex-1 rounded border border-slate-300 bg-white px-3 py-1.5 font-mono text-xs text-slate-900 focus:border-slate-500 focus:outline-none"
+											}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+												type: "button",
+												onClick: handleSaveSheetLinkAndSync,
+												disabled: isLoadingSheet || isSyncingPublicSheet,
+												className: "inline-flex items-center justify-center gap-1.5 rounded bg-slate-900 px-3.5 py-1.5 font-semibold text-white hover:bg-slate-800 disabled:opacity-50 shrink-0",
+												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(RefreshCw, { className: `h-3.5 w-3.5 ${isLoadingSheet || isSyncingPublicSheet ? "animate-spin" : ""}` }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Save Link & Sync" })]
+											})]
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+											className: "flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { children: [
+												"Active Sheet ID:",
+												" ",
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", {
+													className: "font-mono font-semibold text-slate-800",
+													children: spreadsheetId
+												})
+											] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+												className: "flex items-center gap-2",
+												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+													type: "button",
+													onClick: () => handleConnectLiveGoogleSheet(sheetLinkInput),
+													disabled: isLoggingIn,
+													className: "inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2.5 py-1 font-semibold text-slate-800 hover:bg-slate-100",
+													children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Cloud, { className: "h-3 w-3" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Sign in with Google (OAuth)" })]
+												}), (isLiveGoogleSheetConnected || sheetSyncMode === "public-gviz") && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+													type: "button",
+													onClick: handleLogoutLiveSheet,
+													className: "rounded border border-red-200 bg-white px-2.5 py-1 font-semibold text-red-700 hover:bg-red-50",
+													children: "Disconnect"
+												})]
+											})]
+										})
+									]
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 									className: "rounded-lg border border-emerald-200 bg-emerald-50/60 p-3.5 space-y-2",
 									children: [
 										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 											className: "flex items-center justify-between gap-2",
 											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 												className: "font-bold text-emerald-950",
-												children: "Option 1 — Direct Shared Sheet Sync (No Domain Auth Needed)"
+												children: "Option 1 — Direct Shared Sheet Sync (Works on GitHub Pages, Netlify & Preview)"
 											}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
 												className: "rounded bg-emerald-100 px-2 py-0.5 font-mono text-[10px] font-semibold text-emerald-900",
-												children: "Instant on GitHub Pages"
+												children: "No Popup Auth Needed"
 											})]
 										}),
 										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
@@ -37677,7 +37888,7 @@ function App() {
 												"If your Google Sheet is shared as",
 												" ",
 												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "“Anyone with the link can view”" }),
-												", click below to pull all 8 tabs directly from Google Sheets into this browser without needing Firebase domain authorization."
+												", click below to pull all 8 tabs directly from Google Sheets. Your browser remembers this link automatically on every refresh."
 											]
 										}),
 										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
@@ -37686,16 +37897,16 @@ function App() {
 												type: "button",
 												disabled: isSyncingPublicSheet,
 												onClick: async () => {
-													if (await handleSyncPublicSharedSheet(false)) setIsSheetConnectModalOpen(false);
+													if (await handleSyncPublicSharedSheet(false, sheetLinkInput)) setIsSheetConnectModalOpen(false);
 												},
 												className: "inline-flex items-center gap-1.5 rounded bg-slate-900 px-3 py-1.5 font-semibold text-white hover:bg-slate-800 disabled:opacity-50",
 												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(RefreshCw, { className: `h-3.5 w-3.5 ${isSyncingPublicSheet ? "animate-spin" : ""}` }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: isSyncingPublicSheet ? "Syncing 8 Sheet Tabs..." : "Sync Shared Google Sheet Now" })]
 											}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("a", {
-												href: `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`,
+												href: `https://docs.google.com/spreadsheets/d/${extractSpreadsheetId(sheetLinkInput || spreadsheetId)}/edit`,
 												target: "_blank",
 												rel: "noreferrer",
 												className: "inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2.5 py-1.5 font-medium text-slate-700 hover:bg-slate-50",
-												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Open Sheet Sharing Settings" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ExternalLink, { className: "h-3 w-3" })]
+												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Open Google Sheet" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ExternalLink, { className: "h-3 w-3" })]
 											})]
 										})
 									]
@@ -37716,10 +37927,10 @@ function App() {
 										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
 											className: "text-slate-600 leading-relaxed",
 											children: [
-												"To enable full two-way Google Sheets v4 API Read & Write immediately on GitHub Pages, click",
+												"To enable full two-way Google Sheets v4 API Read & Write on GitHub Pages or Netlify, click",
 												" ",
 												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Copy Sheet Token" }),
-												" in the top header of your main workspace (after connecting Google Sheet there), then paste the token below:"
+												" in the header of an OAuth-connected window and paste it below (saved across refreshes):"
 											]
 										}),
 										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
@@ -37744,22 +37955,18 @@ function App() {
 									children: [
 										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 											className: "font-bold text-slate-900",
-											children: "Option 3 — Enable Google Sign-In Popup on Your GitHub Pages Domain"
+											children: "Option 3 — Enable Native Google Sign-In Popup on Your Custom Domain"
 										}),
 										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
 											className: "text-slate-600 leading-relaxed",
 											children: [
-												"Why did",
+												"To allow native Google Sign-In popups directly on",
 												" ",
 												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", {
-													className: "font-mono text-red-700",
-													children: "auth/unauthorized-domain"
+													className: "font-mono font-semibold text-slate-900",
+													children: unauthorizedHostname || window.location.hostname
 												}),
-												" ",
-												"appear? Firebase requires your custom hosting domain to be listed in your Firebase project's",
-												" ",
-												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Authorized Domains" }),
-												" before opening a Google Sign-In popup."
+												", add your domain to Firebase Authorized Domains:"
 											]
 										}),
 										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
@@ -37823,7 +38030,7 @@ function App() {
 							className: "flex items-center justify-between border-t border-slate-200 bg-slate-50 px-5 py-3",
 							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
 								className: "text-[11px] text-slate-500",
-								children: "Self-contained local dataset (./data.json) remains active offline at all times."
+								children: "Linked Sheet ID and local dataset (./data.json) are persisted in browser storage."
 							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
 								type: "button",
 								onClick: () => setIsSheetConnectModalOpen(false),

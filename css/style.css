@@ -2044,6 +2044,10 @@
       background-color: var(--color-amber-800);
     }
 
+    .hover\:bg-red-50:hover {
+      background-color: var(--color-red-50);
+    }
+
     .hover\:bg-red-100:hover {
       background-color: var(--color-red-100);
     }
@@ -2343,10 +2347,6 @@
 
     .xl\:inline {
       display: inline;
-    }
-
-    .xl\:inline-flex {
-      display: inline-flex;
     }
 
     .xl\:flex-row {
