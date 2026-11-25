@@ -21200,6 +21200,7 @@ var firebase_applet_config_default = {
 };
 // src/lib/auth.ts
 var SCOPES = ["https://www.googleapis.com/auth/spreadsheets"];
+var MANUAL_TOKEN_STORAGE_KEY = "sitetrack_sheets_oauth_token_v1";
 var cachedApp = null;
 var cachedAuth = null;
 function getSafeAuth() {
@@ -21213,8 +21214,33 @@ function getSafeAuth() {
 		return null;
 	}
 }
+var UnauthorizedDomainError = class extends Error {
+	constructor(hostname, projectId) {
+		super(`Domain "${hostname}" is not yet in Firebase Authorized Domains for popup sign-in.`);
+		this.name = "UnauthorizedDomainError";
+		this.hostname = hostname;
+		this.projectId = projectId;
+	}
+};
 var isSigningIn = false;
-var cachedAccessToken = null;
+var cachedAccessToken = (() => {
+	try {
+		return window.sessionStorage.getItem(MANUAL_TOKEN_STORAGE_KEY) || null;
+	} catch {
+		return null;
+	}
+})();
+function setManualAccessToken(token) {
+	const cleaned = token ? token.trim() : null;
+	cachedAccessToken = cleaned || null;
+	try {
+		if (cleaned) window.sessionStorage.setItem(MANUAL_TOKEN_STORAGE_KEY, cleaned);
+		else window.sessionStorage.removeItem(MANUAL_TOKEN_STORAGE_KEY);
+	} catch {}
+}
+function getFirebaseProjectId() {
+	return firebase_applet_config_default.projectId || "gen-lang-client-0049307975";
+}
 function createSheetsAuthProvider() {
 	const provider = new GoogleAuthProvider();
 	SCOPES.forEach((scope) => provider.addScope(scope));
@@ -21235,50 +21261,51 @@ async function verifyTokenHasSheetsScope(accessToken) {
 }
 var initAuth = (onAuthSuccess, onAuthFailure) => {
 	try {
+		if (cachedAccessToken) {
+			if (onAuthSuccess) onAuthSuccess(null, cachedAccessToken);
+		}
 		const authInstance = getSafeAuth();
 		if (!authInstance) {
-			if (onAuthFailure) onAuthFailure();
+			if (!cachedAccessToken && onAuthFailure) onAuthFailure();
 			return () => {};
 		}
 		return onAuthStateChanged(authInstance, async (user) => {
-			if (user) {
-				if (cachedAccessToken) {
-					if (onAuthSuccess) onAuthSuccess(user, cachedAccessToken);
-				} else if (!isSigningIn) {
-					cachedAccessToken = null;
-					if (onAuthFailure) onAuthFailure();
-				}
-			} else {
-				cachedAccessToken = null;
+			if (user && cachedAccessToken) {
+				if (onAuthSuccess) onAuthSuccess(user, cachedAccessToken);
+			} else if (cachedAccessToken) {
+				if (onAuthSuccess) onAuthSuccess(null, cachedAccessToken);
+			} else if (!isSigningIn) {
 				if (onAuthFailure) onAuthFailure();
 			}
 		}, () => {
-			cachedAccessToken = null;
-			if (onAuthFailure) onAuthFailure();
+			if (!cachedAccessToken && onAuthFailure) onAuthFailure();
 		});
 	} catch {
-		if (onAuthFailure) onAuthFailure();
+		if (!cachedAccessToken && onAuthFailure) onAuthFailure();
 		return () => {};
 	}
 };
 var googleSignIn = async () => {
 	try {
 		const authInstance = getSafeAuth();
-		if (!authInstance) throw new Error("Google Sign-In is unavailable in this browser environment. Continuing in Self-Contained Local Data mode.");
+		if (!authInstance) throw new UnauthorizedDomainError(typeof window !== "undefined" ? window.location.hostname || "local-file" : "external-host", getFirebaseProjectId());
 		isSigningIn = true;
 		const result = await signInWithPopup(authInstance, createSheetsAuthProvider());
 		const credential = GoogleAuthProvider.credentialFromResult(result);
 		if (!credential?.accessToken) throw new Error("Failed to obtain Google Sheets access token from sign-in.");
 		if (!await verifyTokenHasSheetsScope(credential.accessToken)) {
-			cachedAccessToken = null;
+			setManualAccessToken(null);
 			throw new Error("Google Sheets permission was not checked on the consent screen. Please click \"Sign in with Google\" again and check the box for \"See, edit, create, and delete all your Google Sheets spreadsheets\".");
 		}
-		cachedAccessToken = credential.accessToken;
+		setManualAccessToken(credential.accessToken);
 		return {
 			user: result.user,
-			accessToken: cachedAccessToken
+			accessToken: credential.accessToken
 		};
 	} catch (error) {
+		const errMsg = error instanceof Error ? error.message : String(error);
+		const errCode = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";
+		if (errCode === "auth/unauthorized-domain" || errMsg.includes("auth/unauthorized-domain") || errCode === "auth/operation-not-supported-in-this-environment") throw new UnauthorizedDomainError(typeof window !== "undefined" ? window.location.hostname || "github.io" : "github.io", getFirebaseProjectId());
 		console.error("Sign in error:", error);
 		throw error;
 	} finally {
@@ -21289,14 +21316,14 @@ var getAccessToken = async () => {
 	return cachedAccessToken;
 };
 var clearAccessToken = () => {
-	cachedAccessToken = null;
+	setManualAccessToken(null);
 };
 var logout = async () => {
 	try {
 		const authInstance = getSafeAuth();
 		if (authInstance) await authInstance.signOut();
 	} catch {}
-	cachedAccessToken = null;
+	setManualAccessToken(null);
 };
 // src/lib/sheetsApi.ts
 var SHEETS_BASE_URL = "https://sheets.googleapis.com/v4/spreadsheets";
@@ -21980,6 +22007,271 @@ async function inspectAndLoadSpreadsheet(spreadsheetId) {
 		existingSheets,
 		missingSheets,
 		isSchemaReady: missingSheets.length === 0,
+		sites,
+		projectTypes,
+		projects,
+		subProjects,
+		contractors,
+		contractsTCP,
+		contractPayments,
+		userAccounts,
+		lastSyncedAt: (/* @__PURE__ */ new Date()).toISOString()
+	};
+}
+/**
+* Simple RFC-4180 CSV parser for Google Sheets gviz/tq?tqx=out:csv responses.
+*/
+function parseCsvToRows(csvText) {
+	const rows = [];
+	let currentRow = [];
+	let currentCell = "";
+	let inQuotes = false;
+	for (let i = 0; i < csvText.length; i++) {
+		const ch = csvText[i];
+		const next = csvText[i + 1];
+		if (inQuotes) {
+			if (ch === "\"" && next === "\"") {
+				currentCell += "\"";
+				i++;
+			} else if (ch === "\"") inQuotes = false;
+			else currentCell += ch;
+		} else if (ch === "\"") inQuotes = true;
+		else if (ch === ",") {
+			currentRow.push(currentCell);
+			currentCell = "";
+		} else if (ch === "\r" && next === "\n") {
+			currentRow.push(currentCell);
+			rows.push(currentRow);
+			currentRow = [];
+			currentCell = "";
+			i++;
+		} else if (ch === "\n" || ch === "\r") {
+			currentRow.push(currentCell);
+			rows.push(currentRow);
+			currentRow = [];
+			currentCell = "";
+		} else currentCell += ch;
+	}
+	if (currentCell.length > 0 || currentRow.length > 0) {
+		currentRow.push(currentCell);
+		rows.push(currentRow);
+	}
+	return rows;
+}
+/**
+* Syncs all 8 tabs directly from a link-shared Google Sheet ("Anyone with the link can view")
+* via Google's CORS-enabled gviz CSV export endpoint. Works on GitHub Pages, Netlify, and Google Sites
+* without requiring Firebase domain allowlisting.
+*/
+async function inspectAndLoadSpreadsheetPublicGviz(spreadsheetId) {
+	const cleanId = spreadsheetId.trim();
+	const requiredSheets = [
+		SHEET_NAMES.SITES,
+		SHEET_NAMES.PROJECT_TYPES,
+		SHEET_NAMES.PROJECTS,
+		SHEET_NAMES.SUB_PROJECTS,
+		SHEET_NAMES.CONTRACTORS,
+		SHEET_NAMES.CONTRACTS_TCP,
+		SHEET_NAMES.CONTRACT_PAYMENTS,
+		SHEET_NAMES.USER_ACCOUNTS
+	];
+	const sites = [];
+	const projectTypes = [];
+	const projects = [];
+	const subProjects = [];
+	const contractors = [];
+	const contractsTCP = [];
+	const contractPayments = [];
+	const userAccounts = [];
+	const existingSheets = [];
+	await Promise.all(requiredSheets.map(async (sheetTitle) => {
+		const url = `https://docs.google.com/spreadsheets/d/${encodeURIComponent(cleanId)}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetTitle)}`;
+		const res = await fetch(url, { cache: "no-store" });
+		if (!res.ok) throw new Error(`Could not fetch shared Google Sheet (${res.status}). Ensure your Google Sheet is shared as "Anyone with the link" or connect using a Google Sheets OAuth Access Token.`);
+		const text = await res.text();
+		if (text.trim().startsWith("<!DOCTYPE html") || text.trim().startsWith("<html")) throw new Error("This Google Sheet is private. Either paste a Google Sheets OAuth Access Token below, or set General Access in Google Sheets Share settings to \"Anyone with the link\".");
+		const rows = parseCsvToRows(text);
+		if (rows.length === 0) return;
+		existingSheets.push(sheetTitle);
+		if (sheetTitle === SHEET_NAMES.SITES) for (let i = 1; i < rows.length; i++) {
+			const row = rows[i];
+			if (!row || !row[0] && !row[1]) continue;
+			sites.push({
+				rowNumber: i + 1,
+				siteCode: (row[0] || "").trim().toUpperCase(),
+				siteName: (row[1] || "").trim(),
+				developer: (row[2] || "").trim(),
+				location: (row[3] || "").trim(),
+				createdAt: (row[4] || "").trim()
+			});
+		}
+		else if (sheetTitle === SHEET_NAMES.PROJECT_TYPES) for (let i = 1; i < rows.length; i++) {
+			const row = rows[i];
+			if (!row || !row[0] && !row[1]) continue;
+			const activeRaw = (row[3] || "TRUE").trim().toUpperCase();
+			projectTypes.push({
+				rowNumber: i + 1,
+				typeCode: (row[0] || "").trim().toUpperCase(),
+				typeName: (row[1] || "").trim(),
+				description: (row[2] || "").trim(),
+				active: activeRaw !== "FALSE" && activeRaw !== "0" && activeRaw !== "NO",
+				createdAt: (row[4] || "").trim()
+			});
+		}
+		else if (sheetTitle === SHEET_NAMES.PROJECTS) for (let i = 1; i < rows.length; i++) {
+			const row = rows[i];
+			if (!row || !row[0] && !row[1]) continue;
+			projects.push({
+				rowNumber: i + 1,
+				projectId: (row[0] || "").trim(),
+				mainProjectCode: (row[1] || "").trim().toUpperCase(),
+				siteCode: (row[2] || "").trim().toUpperCase(),
+				siteName: (row[3] || "").trim(),
+				developer: (row[4] || "").trim(),
+				typeCode: (row[5] || "").trim().toUpperCase(),
+				typeName: (row[6] || "").trim(),
+				unitIdentifier: (row[7] || "").trim().toUpperCase(),
+				projectName: (row[8] || "").trim(),
+				status: normalizeStatus(row[9]),
+				createdAt: (row[10] || "").trim(),
+				updatedAt: (row[11] || "").trim()
+			});
+		}
+		else if (sheetTitle === SHEET_NAMES.SUB_PROJECTS) for (let i = 1; i < rows.length; i++) {
+			const row = rows[i];
+			if (!row || !row[0] && !row[1]) continue;
+			const parsedProgress = Number.parseInt(row[6] || "0", 10);
+			subProjects.push({
+				rowNumber: i + 1,
+				subProjectId: (row[0] || "").trim(),
+				projectId: (row[1] || "").trim(),
+				mainProjectCode: (row[2] || "").trim().toUpperCase(),
+				subProjectCode: (row[3] || "").trim().toUpperCase(),
+				subProjectName: (row[4] || "").trim(),
+				status: normalizeStatus(row[5]),
+				progress: Number.isNaN(parsedProgress) ? 0 : Math.min(100, Math.max(0, parsedProgress)),
+				targetDate: (row[7] || "").trim(),
+				remarks: (row[8] || "").trim(),
+				updatedAt: (row[9] || "").trim()
+			});
+		}
+		else if (sheetTitle === SHEET_NAMES.CONTRACTORS) for (let i = 1; i < rows.length; i++) {
+			const row = rows[i];
+			if (!row || !row[0] && !row[1]) continue;
+			const activeRaw = (row[5] || "TRUE").trim().toUpperCase();
+			contractors.push({
+				rowNumber: i + 1,
+				contractorCode: (row[0] || "").trim().toUpperCase(),
+				contractorName: (row[1] || "").trim(),
+				specialty: (row[2] || "").trim(),
+				contactPerson: (row[3] || "").trim(),
+				contactInfo: (row[4] || "").trim(),
+				active: activeRaw !== "FALSE" && activeRaw !== "0" && activeRaw !== "NO",
+				createdAt: (row[6] || "").trim()
+			});
+		}
+		else if (sheetTitle === SHEET_NAMES.CONTRACTS_TCP) for (let i = 1; i < rows.length; i++) {
+			const row = rows[i];
+			if (!row || !row[0] && !row[1]) continue;
+			const dpPct = parseNumberSafe(row[14], 20);
+			const progPct = parseNumberSafe(row[15], 70);
+			const retPct = parseNumberSafe(row[16], 10);
+			const whtRaw = (row[17] || "TRUE").trim().toUpperCase();
+			const hasWht = whtRaw !== "FALSE" && whtRaw !== "0" && whtRaw !== "NO";
+			const whtPct = parseNumberSafe(row[18], hasWht ? 2 : 0);
+			const cId = (row[0] || "").trim();
+			const rawTcpId = (row[20] || "").trim();
+			const fallbackTcpId = cId ? `TCP-${cId.replace(/^CON-/i, "")}` : `TCP-${String(i).padStart(4, "0")}`;
+			let parsedBirTax = void 0;
+			if (row[22]) try {
+				parsedBirTax = JSON.parse(row[22]);
+			} catch {
+				parsedBirTax = void 0;
+			}
+			contractsTCP.push({
+				rowNumber: i + 1,
+				contractId: cId,
+				tcpId: rawTcpId || fallbackTcpId,
+				parentContractId: (row[21] || "").trim(),
+				subProjectId: (row[1] || "").trim(),
+				subProjectCode: (row[2] || "").trim().toUpperCase(),
+				subProjectName: (row[3] || "").trim(),
+				projectId: (row[4] || "").trim(),
+				mainProjectCode: (row[5] || "").trim().toUpperCase(),
+				tcpType: normalizeTCPType(row[6]),
+				tcpAmount: parseNumberSafe(row[7], 0),
+				contractorCode: (row[8] || "").trim().toUpperCase(),
+				contractorName: (row[9] || "").trim(),
+				contractStatus: normalizeContractStatus(row[10]),
+				awardDate: (row[11] || "").trim(),
+				remarks: (row[12] || "").trim(),
+				updatedAt: (row[13] || "").trim(),
+				dpPercent: dpPct,
+				progressBillingPercent: progPct,
+				retentionPercent: retPct,
+				hasWithholdingTax: hasWht,
+				withholdingTaxPercent: hasWht ? whtPct : 0,
+				paymentTermsNotes: (row[19] || "").trim(),
+				birTaxInfo: parsedBirTax
+			});
+		}
+		else if (sheetTitle === SHEET_NAMES.CONTRACT_PAYMENTS) for (let i = 1; i < rows.length; i++) {
+			const row = rows[i];
+			if (!row || !row[0] && !row[1]) continue;
+			contractPayments.push({
+				rowNumber: i + 1,
+				paymentId: (row[0] || "").trim(),
+				contractId: (row[1] || "").trim(),
+				subProjectId: (row[2] || "").trim(),
+				subProjectCode: (row[3] || "").trim().toUpperCase(),
+				mainProjectCode: (row[4] || "").trim().toUpperCase(),
+				contractorCode: (row[5] || "").trim().toUpperCase(),
+				contractorName: (row[6] || "").trim(),
+				billingType: normalizeBillingType(row[7]),
+				paymentStatus: normalizePaymentStatus(row[8]),
+				rfpNumber: (row[9] || "").trim().toUpperCase(),
+				rfpDate: (row[10] || "").trim(),
+				rfpAmount: parseNumberSafe(row[11], 0),
+				rfpPayee: (row[12] || "").trim(),
+				retentionDeducted: parseNumberSafe(row[13], 0),
+				rfpRemarks: (row[14] || "").trim(),
+				cvNumber: (row[15] || "").trim().toUpperCase(),
+				cvDate: (row[16] || "").trim(),
+				chequeAmount: parseNumberSafe(row[17], 0),
+				withheldAmount: parseNumberSafe(row[18], 0),
+				receiptType: (row[19] || "").trim(),
+				receiptNumber: (row[20] || "").trim().toUpperCase(),
+				receiptDate: (row[21] || "").trim(),
+				updatedAt: (row[22] || "").trim()
+			});
+		}
+		else if (sheetTitle === SHEET_NAMES.USER_ACCOUNTS) for (let i = 1; i < rows.length; i++) {
+			const row = rows[i];
+			if (!row || !row[0] && !row[1]) continue;
+			const st = (row[6] || "ACTIVE").trim().toUpperCase() === "SUSPENDED" ? "SUSPENDED" : "ACTIVE";
+			userAccounts.push({
+				rowNumber: i + 1,
+				userId: (row[0] || "").trim().toUpperCase(),
+				fullName: (row[1] || "").trim(),
+				email: (row[2] || "").trim(),
+				roleTitle: (row[3] || "").trim(),
+				department: (row[4] || "").trim(),
+				phone: (row[5] || "").trim(),
+				status: st,
+				bioNotes: (row[7] || "").trim(),
+				permissions: parsePermissionsSafe(row[8]),
+				createdAt: (row[9] || "").trim(),
+				updatedAt: (row[10] || "").trim()
+			});
+		}
+	}));
+	return {
+		spreadsheetId: cleanId,
+		title: "Google Sheet (Direct Shared Sync)",
+		spreadsheetUrl: `https://docs.google.com/spreadsheets/d/${cleanId}/edit`,
+		existingSheets,
+		missingSheets: [],
+		isSchemaReady: true,
 		sites,
 		projectTypes,
 		projects,
@@ -24502,6 +24794,22 @@ var Info = createLucideIcon("info", [
 		key: "e9boi3"
 	}]
 ]);
+/**
+* @license lucide-react v0.546.0 - ISC
+*
+* This source code is licensed under the ISC license.
+* See the LICENSE file in the root directory of this source tree.
+*/
+var KeyRound = createLucideIcon("key-round", [["path", {
+	d: "M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z",
+	key: "1s6t7t"
+}], ["circle", {
+	cx: "16.5",
+	cy: "7.5",
+	r: ".5",
+	fill: "currentColor",
+	key: "w0ekpg"
+}]]);
 /**
 * @license lucide-react v0.546.0 - ISC
 *
@@ -29480,6 +29788,7 @@ var PrintableDashboardView = ({ projects, subProjects, contractsTCP, contractPay
       }
       table {
         width: 100%;
+        table-layout: fixed;
         border-collapse: collapse;
         margin-bottom: 5px;
       }
@@ -29492,6 +29801,8 @@ var PrintableDashboardView = ({ projects, subProjects, contractsTCP, contractPay
         font-weight: 700;
         text-align: center;
         line-height: 1.15;
+        overflow-wrap: break-word;
+        word-break: break-word;
       }
       td, .printable-ledger-td {
         background-color: #FFFFFF !important;
@@ -29500,6 +29811,8 @@ var PrintableDashboardView = ({ projects, subProjects, contractsTCP, contractPay
         padding: ${cellPad};
         font-size: ${fontSizePx};
         line-height: 1.15;
+        overflow-wrap: break-word;
+        word-break: break-word;
       }
       .printable-ledger-tfoot-td {
         background-color: #F1F5F9 !important;
@@ -29509,18 +29822,42 @@ var PrintableDashboardView = ({ projects, subProjects, contractsTCP, contractPay
         font-size: ${fontSizePx};
         font-weight: 700 !important;
         line-height: 1.15;
+        overflow-wrap: break-word;
+        word-break: break-word;
+      }
+      .section-title-bar {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 6px;
+        margin: 4px 0 2px 0;
+        min-height: 14px;
       }
       .section-title {
         font-size: ${fontSizePx};
         font-weight: 700;
-        margin: 4px 0 2px 0;
+        margin: 0;
         color: #000000 !important;
+        white-space: nowrap;
+      }
+      .section-subtitle {
+        font-size: 8.5px;
+        color: #334155 !important;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
       .paired-grid {
         display: grid;
-        grid-template-columns: 56% 43%;
+        grid-template-columns: minmax(0, 58%) minmax(0, 41%);
         gap: 1%;
         align-items: start;
+        width: 100%;
+      }
+      .paired-grid > * {
+        min-width: 0;
+        max-width: 100%;
+        overflow: hidden;
       }
       .text-right { text-align: right; }
       .text-center { text-align: center; }
@@ -29566,26 +29903,26 @@ var PrintableDashboardView = ({ projects, subProjects, contractsTCP, contractPay
 		}));
 	};
 	const renderContractsTable = () => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-		className: "printable-section-block",
+		className: "printable-section-block min-w-0",
 		children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-			className: "flex items-center justify-between mb-1",
+			className: "section-title-bar flex items-baseline justify-between gap-2 mb-1 min-h-[18px]",
 			children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-				className: "section-title text-xs font-bold text-slate-900",
+				className: "section-title text-xs font-bold text-slate-900 shrink-0",
 				children: "Contracts"
 			}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-				className: "text-[10px] font-mono text-slate-600",
-				children: "Retention is TCP Hold Money (Subject to WHT on Release) · Safe Release = Balance − Unreleased Retention"
+				className: "section-subtitle text-[10px] font-mono text-slate-600 truncate",
+				children: "Safe Rel. = Balance − Ret. Held (Subj. to WHT on Release)"
 			})]
 		}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("table", {
-			className: "w-full border-collapse",
+			className: "w-full table-fixed border-collapse",
 			children: [
 				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("thead", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-						className: "printable-ledger-th w-[8%]",
+						className: "printable-ledger-th w-[7%]",
 						children: "Type"
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-						className: "printable-ledger-th w-[20%]",
+						className: "printable-ledger-th w-[19%]",
 						children: "Remarks"
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
@@ -29597,25 +29934,25 @@ var PrintableDashboardView = ({ projects, subProjects, contractsTCP, contractPay
 						children: "DP"
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-						className: "printable-ledger-th w-[14%]",
+						className: "printable-ledger-th w-[12%]",
 						title: "Retention Holdback (% and PHP amount held from TCP; subject to BIR WHT upon release)",
-						children: "Retention Holdback"
+						children: "Retention"
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-						className: "printable-ledger-th w-[12%]",
+						className: "printable-ledger-th w-[14%]",
 						children: "Contractor"
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-						className: "printable-ledger-th w-[9%]",
+						className: "printable-ledger-th w-[10%]",
 						children: "Paid"
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
 						className: "printable-ledger-th w-[9%]",
 						title: "Maximum amount that can be released on progress billings without eating into the Retention Holdback",
-						children: "Safe Release (Excl. Ret)"
+						children: "Safe Rel."
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-						className: "printable-ledger-th w-[8%]",
+						className: "printable-ledger-th w-[9%]",
 						children: "Balance"
 					})
 				] }) }),
@@ -29635,7 +29972,7 @@ var PrintableDashboardView = ({ projects, subProjects, contractsTCP, contractPay
 					const safeReleaseExclRet = isCancelled ? 0 : Math.max(0, Number((balance - unreleasedRetAmt).toFixed(2)));
 					const isEatingIntoRetention = !isCancelled && unreleasedRetAmt > 0 && balance + .009 < unreleasedRetAmt;
 					const dpDisplay = Number(contract.dpPercent) > 0 ? `${Number(contract.dpPercent).toFixed(2)}%` : "NA";
-					const retDisplay = retPct > 0 ? `${retPct}% (${formatNum(unreleasedRetAmt)})` : "0% (0.00)";
+					const retDisplay = retPct > 0 ? `${retPct}% (${formatNum(unreleasedRetAmt)})` : "NA";
 					return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [
 						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
 							className: "printable-ledger-td text-center font-mono",
@@ -29684,7 +30021,7 @@ var PrintableDashboardView = ({ projects, subProjects, contractsTCP, contractPay
 						children: [
 							"Total (",
 							projectContracts.length,
-							" Contracts)"
+							")"
 						]
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
@@ -29717,32 +30054,35 @@ var PrintableDashboardView = ({ projects, subProjects, contractsTCP, contractPay
 		})]
 	});
 	const renderTcpsTable = () => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-		className: "printable-section-block",
+		className: "printable-section-block min-w-0",
 		children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-			className: "section-title text-xs font-bold text-slate-900 mb-1",
-			children: "TCPs"
+			className: "section-title-bar flex items-baseline justify-between gap-2 mb-1 min-h-[18px]",
+			children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+				className: "section-title text-xs font-bold text-slate-900 shrink-0",
+				children: "TCPs"
+			})
 		}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("table", {
-			className: "w-full border-collapse",
+			className: "w-full table-fixed border-collapse",
 			children: [
 				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("thead", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-						className: "printable-ledger-th w-[28%]",
+						className: "printable-ledger-th w-[29%]",
 						children: "Project SubCode"
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-						className: "printable-ledger-th w-[15%]",
+						className: "printable-ledger-th w-[13%]",
 						children: "Type"
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-						className: "printable-ledger-th w-[27%]",
+						className: "printable-ledger-th w-[24%]",
 						children: "Remarks"
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-						className: "printable-ledger-th w-[15%]",
+						className: "printable-ledger-th w-[16%]",
 						children: "Amount"
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-						className: "printable-ledger-th w-[15%]",
+						className: "printable-ledger-th w-[18%]",
 						children: "Date"
 					})
 				] }) }),
@@ -29805,7 +30145,7 @@ var PrintableDashboardView = ({ projects, subProjects, contractsTCP, contractPay
 			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 				className: "printable-section-block",
 				children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("table", {
-					className: "w-full border-collapse",
+					className: "w-full table-fixed border-collapse",
 					children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tbody", { children: [
 						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
 							className: "printable-ledger-th w-[11%]",
@@ -29973,23 +30313,12 @@ var PrintableDashboardView = ({ projects, subProjects, contractsTCP, contractPay
 							}),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
 								className: "printable-ledger-th",
-								title: "Total Remaining TCP Balance (includes Protected Retention Holdback)",
+								title: "Total Remaining TCP Balance (includes Protected Retention Holdback shown in Row 5)",
 								children: "Balance"
 							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
 								className: "printable-ledger-td text-center font-mono font-bold tabular-nums",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { children: formatNum(projectSummaryMetrics.totalBalance) }), projectSummaryMetrics.totalUnreleasedRetention > 0 && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-									className: "text-[10px] font-normal text-slate-600",
-									children: [
-										"Ret Held:",
-										" ",
-										formatNum(projectSummaryMetrics.totalUnreleasedRetention),
-										" ",
-										"· Safe:",
-										" ",
-										formatNum(projectSummaryMetrics.totalSafeReleasableBalance)
-									]
-								})]
+								children: formatNum(projectSummaryMetrics.totalBalance)
 							}),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
 								className: "printable-ledger-th",
@@ -30058,22 +30387,25 @@ var PrintableDashboardView = ({ projects, subProjects, contractsTCP, contractPay
 				})
 			}),
 			presentationMode === "executive-paired" && sectionsVisibility.contracts && sectionsVisibility.tcps ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				className: "paired-grid grid grid-cols-1 lg:grid-cols-12 gap-4",
+				className: "paired-grid grid grid-cols-1 lg:grid-cols-12 gap-3 items-start",
 				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-					className: "lg:col-span-7",
+					className: "min-w-0 overflow-hidden lg:col-span-7",
 					children: renderContractsTable()
 				}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-					className: "lg:col-span-5",
+					className: "min-w-0 overflow-hidden lg:col-span-5",
 					children: renderTcpsTable()
 				})]
 			}) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [sectionsVisibility.contracts && renderContractsTable(), sectionsVisibility.tcps && renderTcpsTable()] }),
 			sectionsVisibility.rfps && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				className: "printable-section-block",
+				className: "printable-section-block min-w-0",
 				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-					className: "section-title text-xs font-bold text-slate-900 mb-1",
-					children: "RFPs"
+					className: "section-title-bar flex items-baseline justify-between gap-2 mb-1 min-h-[18px]",
+					children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+						className: "section-title text-xs font-bold text-slate-900",
+						children: "RFPs"
+					})
 				}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("table", {
-					className: "w-full border-collapse",
+					className: "w-full table-fixed border-collapse",
 					children: [
 						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("thead", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [
 							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
@@ -30162,12 +30494,15 @@ var PrintableDashboardView = ({ projects, subProjects, contractsTCP, contractPay
 				})]
 			}),
 			sectionsVisibility.payments && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				className: "printable-section-block",
+				className: "printable-section-block min-w-0",
 				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-					className: "section-title text-xs font-bold text-slate-900 mb-1",
-					children: "Payments"
+					className: "section-title-bar flex items-baseline justify-between gap-2 mb-1 min-h-[18px]",
+					children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+						className: "section-title text-xs font-bold text-slate-900",
+						children: "Payments"
+					})
 				}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("table", {
-					className: "w-full border-collapse",
+					className: "w-full table-fixed border-collapse",
 					children: [
 						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("thead", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [
 							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
@@ -30273,18 +30608,18 @@ var PrintableDashboardView = ({ projects, subProjects, contractsTCP, contractPay
 				})]
 			}),
 			sectionsVisibility.taxes && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				className: "printable-section-block",
+				className: "printable-section-block min-w-0",
 				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-					className: "flex items-center justify-between mb-1",
+					className: "section-title-bar flex items-baseline justify-between gap-2 mb-1 min-h-[18px]",
 					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-						className: "section-title text-xs font-bold text-slate-900",
+						className: "section-title text-xs font-bold text-slate-900 shrink-0",
 						children: "Taxes"
 					}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-						className: "text-[10px] font-mono text-slate-600",
-						children: "BIR EWT (2% Service/Labor · 1% Material) applies to full TCP including Retention Holdback upon release"
+						className: "section-subtitle text-[10px] font-mono text-slate-600 truncate",
+						children: "BIR EWT (2% Service/Labor · 1% Material) applies to full TCP incl. Retention upon release"
 					})]
 				}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("table", {
-					className: "w-full border-collapse",
+					className: "w-full table-fixed border-collapse",
 					children: [
 						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("thead", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [
 							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
@@ -36523,8 +36858,34 @@ function App() {
 		});
 		return () => unsubscribe();
 	}, [loadLiveGoogleSheetData]);
+	const [isSheetConnectModalOpen, setIsSheetConnectModalOpen] = (0, import_react.useState)(false);
+	const [unauthorizedHostname, setUnauthorizedHostname] = (0, import_react.useState)(typeof window !== "undefined" ? window.location.hostname : "");
+	const [manualOAuthTokenInput, setManualOAuthTokenInput] = (0, import_react.useState)("");
+	const [isSyncingPublicSheet, setIsSyncingPublicSheet] = (0, import_react.useState)(false);
+	const handleSyncPublicSharedSheet = (0, import_react.useCallback)(async (silentIfUnavailable = false) => {
+		setIsSyncingPublicSheet(true);
+		if (!silentIfUnavailable) setErrorMessage(null);
+		try {
+			const result = await inspectAndLoadSpreadsheetPublicGviz(spreadsheetId);
+			if (result) {
+				setSheetData(result);
+				try {
+					window.localStorage.setItem(PORTABLE_STORAGE_KEY, JSON.stringify(result));
+				} catch {}
+				showToast("Synced all 8 tabs directly from Google Sheet (Public / Link-Shared Direct Mode).");
+				return true;
+			}
+			if (!silentIfUnavailable) setErrorMessage("Direct Link-Shared Sync requires the Google Sheet to be shared as \"Anyone with the link can view\", or paste a Google Sheets OAuth Access Token below for private Read & Write access.");
+			return false;
+		} catch {
+			if (!silentIfUnavailable) setErrorMessage("Could not reach Google Sheet directly. Paste a Google Sheets OAuth Access Token or authorize this domain in Firebase Console.");
+			return false;
+		} finally {
+			setIsSyncingPublicSheet(false);
+		}
+	}, [spreadsheetId]);
 	(0, import_react.useEffect)(() => {
-		if (!isLiveGoogleSheetConnected || !sheetData || confirmConfig || isProfileModalOpen) return;
+		if (!isLiveGoogleSheetConnected || !sheetData || confirmConfig || isProfileModalOpen || isSheetConnectModalOpen) return;
 		const timer = window.setInterval(() => {
 			loadLiveGoogleSheetData(true);
 		}, 25e3);
@@ -36534,6 +36895,7 @@ function App() {
 		sheetData,
 		confirmConfig,
 		isProfileModalOpen,
+		isSheetConnectModalOpen,
 		loadLiveGoogleSheetData
 	]);
 	const handleConnectLiveGoogleSheet = async () => {
@@ -36547,17 +36909,49 @@ function App() {
 				showToast("Connected to live Google Sheets v4 API.");
 			}
 		} catch (err) {
-			const msg = err instanceof Error ? err.message : "Google Sign-In was cancelled. Continuing in Self-Contained Local Data mode.";
-			setErrorMessage(msg);
+			if (err instanceof UnauthorizedDomainError) {
+				setUnauthorizedHostname(err.hostname || window.location.hostname || "github.io");
+				const loadedPublic = await handleSyncPublicSharedSheet(true);
+				setIsSheetConnectModalOpen(true);
+				if (loadedPublic) showToast("Loaded latest data from shared Google Sheet! For full Read & Write on GitHub Pages, paste an OAuth token or authorize your domain.");
+			} else {
+				const msg = err instanceof Error ? err.message : "Google Sign-In was cancelled. Continuing in Self-Contained Local Data mode.";
+				setErrorMessage(msg);
+			}
 		} finally {
 			setIsLoggingIn(false);
+		}
+	};
+	const handleConnectWithPastedToken = async () => {
+		const clean = manualOAuthTokenInput.trim();
+		if (!clean) {
+			setErrorMessage("Please paste a valid Google OAuth 2.0 Access Token.");
+			return;
+		}
+		setManualAccessToken(clean);
+		setIsSheetConnectModalOpen(false);
+		setManualOAuthTokenInput("");
+		await loadLiveGoogleSheetData(false);
+		showToast("Connected to live Google Sheets v4 API using OAuth Access Token (Full Read & Write).");
+	};
+	const handleCopyActiveAccessToken = async () => {
+		const token = await getAccessToken();
+		if (!token) {
+			showToast("No active OAuth token found. Connect Google Sheet first.");
+			return;
+		}
+		try {
+			await navigator.clipboard.writeText(token);
+			showToast("Copied Google Sheets OAuth Access Token! Paste it in your GitHub Pages / Netlify app under \"Connect Google Sheet\".");
+		} catch {
+			showToast("Could not copy token to clipboard automatically.");
 		}
 	};
 	const handleLogoutLiveSheet = async () => {
 		await logout();
 		setUser(null);
 		setIsLiveGoogleSheetConnected(false);
-		showToast("Disconnected from live Google Sheet. Running in Self-Contained Local Data Mode (./data/data.json).");
+		showToast("Disconnected from live Google Sheet. Running in Self-Contained Local Data Mode (./data.json).");
 	};
 	const requestConfirmation = (config) => {
 		setConfirmConfig({
@@ -36571,7 +36965,7 @@ function App() {
 					if (isLiveGoogleSheetConnected) {
 						await loadLiveGoogleSheetData(true);
 						showToast("Successfully synced changes to live Google Sheets.");
-					} else showToast("Saved changes to local portable dataset (./data/data.json & localStorage).");
+					} else showToast("Saved changes to local portable dataset (./data.json & localStorage).");
 				} catch (err) {
 					if (err instanceof AuthRequiredError) {
 						setConfirmConfig(null);
@@ -36677,26 +37071,51 @@ function App() {
 								className: "inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-800 hover:bg-slate-50 transition-colors whitespace-nowrap",
 								title: "Download Self-Contained ZIP Exports (GitHub Pages, Netlify, Google Sites)",
 								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Download, { className: "h-3.5 w-3.5 text-slate-700" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Export ZIP Packages" })]
-							}), isLiveGoogleSheetConnected ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-								type: "button",
-								onClick: () => loadLiveGoogleSheetData(false),
-								disabled: isLoadingSheet,
-								className: "inline-flex items-center gap-1.5 rounded-md bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-800 transition-colors disabled:opacity-50 whitespace-nowrap shrink-0",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(RefreshCw, { className: `h-3.5 w-3.5 ${isLoadingSheet ? "animate-spin" : ""}` }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: isLoadingSheet ? "Syncing..." : "Sync Live Sheet" })]
-							}) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							}), isLiveGoogleSheetConnected ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 								className: "flex items-center gap-1.5",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-									className: "hidden xl:inline-flex items-center gap-1 rounded border border-emerald-300 bg-emerald-50 px-2 py-1 text-[11px] font-mono font-semibold text-emerald-900",
-									title: "Running 100% self-contained from ./data.json and browser localStorage",
-									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Database, { className: "h-3 w-3 text-emerald-700" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Local Data (./data.json)" })]
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+									type: "button",
+									onClick: () => loadLiveGoogleSheetData(false),
+									disabled: isLoadingSheet,
+									className: "inline-flex items-center gap-1.5 rounded-md bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-800 transition-colors disabled:opacity-50 whitespace-nowrap shrink-0",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(RefreshCw, { className: `h-3.5 w-3.5 ${isLoadingSheet ? "animate-spin" : ""}` }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: isLoadingSheet ? "Syncing..." : "Sync Live Sheet" })]
 								}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
 									type: "button",
-									onClick: handleConnectLiveGoogleSheet,
-									disabled: isLoggingIn,
-									className: "inline-flex items-center gap-1.5 rounded-md bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-800 transition-colors disabled:opacity-50 whitespace-nowrap shrink-0",
-									title: "Optional: Connect to external Google Sheets v4 API",
-									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Cloud, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: isLoggingIn ? "Connecting..." : "Connect Google Sheet (Optional)" })]
+									onClick: handleCopyActiveAccessToken,
+									className: "inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors whitespace-nowrap",
+									title: "Copy active Google Sheets OAuth Token to connect GitHub Pages / Netlify immediately",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(KeyRound, { className: "h-3.5 w-3.5 text-slate-600" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+										className: "hidden sm:inline",
+										children: "Copy Sheet Token"
+									})]
 								})]
+							}) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "flex items-center gap-1.5",
+								children: [
+									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+										className: "hidden xl:inline-flex items-center gap-1 rounded border border-emerald-300 bg-emerald-50 px-2 py-1 text-[11px] font-mono font-semibold text-emerald-900",
+										title: "Running 100% self-contained from ./data.json and browser localStorage",
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Database, { className: "h-3 w-3 text-emerald-700" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Local Data (./data.json)" })]
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+										type: "button",
+										onClick: handleConnectLiveGoogleSheet,
+										disabled: isLoggingIn,
+										className: "inline-flex items-center gap-1.5 rounded-md bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-800 transition-colors disabled:opacity-50 whitespace-nowrap shrink-0",
+										title: "Optional: Connect to external Google Sheets v4 API",
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Cloud, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: isLoggingIn ? "Connecting..." : "Connect Google Sheet (Optional)" })]
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+										type: "button",
+										onClick: () => {
+											setUnauthorizedHostname(window.location.hostname || "github.io");
+											setIsSheetConnectModalOpen(true);
+										},
+										className: "inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors",
+										title: "GitHub Pages / External Domain Google Sheet Connection Options (Direct Sync or OAuth Token)",
+										children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(KeyRound, { className: "h-3.5 w-3.5 text-slate-600" })
+									})
+								]
 							})]
 						})
 					]
@@ -37198,6 +37617,222 @@ function App() {
 				onClose: () => {
 					if (!isExecutingMutation) setConfirmConfig(null);
 				}
+			}),
+			isSheetConnectModalOpen && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+				className: "no-print fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-xs",
+				children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+					className: "w-full max-w-xl rounded-lg border border-slate-200 bg-white shadow-2xl overflow-hidden text-xs",
+					children: [
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "flex items-center justify-between border-b border-slate-200 bg-slate-50 px-5 py-3.5",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "flex items-center gap-2",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Cloud, { className: "h-4 w-4 text-slate-900" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", {
+									className: "text-sm font-bold text-slate-900",
+									children: "Connect Google Sheet on GitHub Pages / External Host"
+								}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
+									className: "text-[11px] text-slate-500",
+									children: [
+										"Host Domain:",
+										" ",
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+											className: "font-mono font-semibold text-slate-800",
+											children: unauthorizedHostname || window.location.hostname
+										}),
+										" ",
+										"· Sheet ID:",
+										" ",
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+											className: "font-mono",
+											children: spreadsheetId
+										})
+									]
+								})] })]
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+								type: "button",
+								onClick: () => setIsSheetConnectModalOpen(false),
+								className: "rounded p-1 text-slate-500 hover:bg-slate-200/60 hover:text-slate-800",
+								children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(X, { className: "h-4 w-4" })
+							})]
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "p-5 space-y-4 max-h-[80vh] overflow-y-auto",
+							children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "rounded-lg border border-emerald-200 bg-emerald-50/60 p-3.5 space-y-2",
+									children: [
+										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+											className: "flex items-center justify-between gap-2",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+												className: "font-bold text-emerald-950",
+												children: "Option 1 — Direct Shared Sheet Sync (No Domain Auth Needed)"
+											}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+												className: "rounded bg-emerald-100 px-2 py-0.5 font-mono text-[10px] font-semibold text-emerald-900",
+												children: "Instant on GitHub Pages"
+											})]
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
+											className: "text-slate-700 leading-relaxed",
+											children: [
+												"If your Google Sheet is shared as",
+												" ",
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "“Anyone with the link can view”" }),
+												", click below to pull all 8 tabs directly from Google Sheets into this browser without needing Firebase domain authorization."
+											]
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+											className: "flex flex-wrap items-center gap-2 pt-1",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+												type: "button",
+												disabled: isSyncingPublicSheet,
+												onClick: async () => {
+													if (await handleSyncPublicSharedSheet(false)) setIsSheetConnectModalOpen(false);
+												},
+												className: "inline-flex items-center gap-1.5 rounded bg-slate-900 px-3 py-1.5 font-semibold text-white hover:bg-slate-800 disabled:opacity-50",
+												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(RefreshCw, { className: `h-3.5 w-3.5 ${isSyncingPublicSheet ? "animate-spin" : ""}` }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: isSyncingPublicSheet ? "Syncing 8 Sheet Tabs..." : "Sync Shared Google Sheet Now" })]
+											}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("a", {
+												href: `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`,
+												target: "_blank",
+												rel: "noreferrer",
+												className: "inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2.5 py-1.5 font-medium text-slate-700 hover:bg-slate-50",
+												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Open Sheet Sharing Settings" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ExternalLink, { className: "h-3 w-3" })]
+											})]
+										})
+									]
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "rounded-lg border border-slate-200 bg-slate-50 p-3.5 space-y-2.5",
+									children: [
+										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+											className: "flex items-center justify-between gap-2",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+												className: "font-bold text-slate-900",
+												children: "Option 2 — Full Read & Write via Google Sheets OAuth Token"
+											}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+												className: "rounded bg-slate-200 px-2 py-0.5 font-mono text-[10px] font-semibold text-slate-800",
+												children: "Full Read & Write v4 API"
+											})]
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
+											className: "text-slate-600 leading-relaxed",
+											children: [
+												"To enable full two-way Google Sheets v4 API Read & Write immediately on GitHub Pages, click",
+												" ",
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Copy Sheet Token" }),
+												" in the top header of your main workspace (after connecting Google Sheet there), then paste the token below:"
+											]
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+											className: "flex flex-col sm:flex-row gap-2",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+												type: "password",
+												value: manualOAuthTokenInput,
+												onChange: (e) => setManualOAuthTokenInput(e.target.value),
+												placeholder: "Paste Google OAuth 2.0 Access Token (ya29.a0...)",
+												className: "flex-1 rounded border border-slate-300 bg-white px-3 py-1.5 font-mono text-xs text-slate-900 focus:border-slate-500 focus:outline-none"
+											}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+												type: "button",
+												onClick: handleConnectWithPastedToken,
+												className: "inline-flex items-center justify-center gap-1.5 rounded bg-slate-900 px-3.5 py-1.5 font-semibold text-white hover:bg-slate-800 shrink-0",
+												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(KeyRound, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Connect with Token" })]
+											})]
+										})
+									]
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "rounded-lg border border-slate-200 bg-white p-3.5 space-y-2",
+									children: [
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+											className: "font-bold text-slate-900",
+											children: "Option 3 — Enable Google Sign-In Popup on Your GitHub Pages Domain"
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
+											className: "text-slate-600 leading-relaxed",
+											children: [
+												"Why did",
+												" ",
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", {
+													className: "font-mono text-red-700",
+													children: "auth/unauthorized-domain"
+												}),
+												" ",
+												"appear? Firebase requires your custom hosting domain to be listed in your Firebase project's",
+												" ",
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Authorized Domains" }),
+												" before opening a Google Sign-In popup."
+											]
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+											className: "flex flex-wrap items-center justify-between gap-2 rounded border border-slate-200 bg-slate-50 px-3 py-2 font-mono",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+												className: "text-slate-500",
+												children: "Domain to Add: "
+											}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", {
+												className: "text-slate-900",
+												children: unauthorizedHostname || window.location.hostname
+											})] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+												type: "button",
+												onClick: async () => {
+													const host = unauthorizedHostname || window.location.hostname;
+													try {
+														await navigator.clipboard.writeText(host);
+														showToast(`Copied domain "${host}" to clipboard.`);
+													} catch {}
+												},
+												className: "inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2 py-1 text-[11px] font-sans font-semibold text-slate-700 hover:bg-slate-100",
+												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Copy, { className: "h-3 w-3" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Copy Domain" })]
+											})]
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("ol", {
+											className: "list-decimal list-inside space-y-1 text-slate-600 pt-1",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("li", { children: [
+												"Open",
+												" ",
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("a", {
+													href: `https://console.firebase.google.com/project/${getFirebaseProjectId()}/authentication/settings`,
+													target: "_blank",
+													rel: "noreferrer",
+													className: "font-semibold text-slate-900 underline hover:text-slate-700",
+													children: "Firebase Console → Authentication → Settings → Authorized domains"
+												}),
+												" ",
+												"(Project:",
+												" ",
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", {
+													className: "font-mono",
+													children: getFirebaseProjectId()
+												}),
+												")."
+											] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("li", { children: [
+												"Click ",
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Add domain" }),
+												" and paste",
+												" ",
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", {
+													className: "font-mono font-semibold",
+													children: unauthorizedHostname || window.location.hostname
+												}),
+												"."
+											] })]
+										})
+									]
+								})
+							]
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "flex items-center justify-between border-t border-slate-200 bg-slate-50 px-5 py-3",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+								className: "text-[11px] text-slate-500",
+								children: "Self-contained local dataset (./data.json) remains active offline at all times."
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+								type: "button",
+								onClick: () => setIsSheetConnectModalOpen(false),
+								className: "rounded border border-slate-300 bg-white px-3.5 py-1.5 font-semibold text-slate-700 hover:bg-slate-100",
+								children: "Close"
+							})]
+						})
+					]
+				})
 			})
 		]
 	});
