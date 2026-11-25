@@ -9,12 +9,750 @@
     <meta property="og:description" content="Self-contained construction project status tracker, sub-project TCP contract manager, BIR tax calculator, and printable ledger dashboard." />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
-    <link rel="icon" type="image/svg+xml" href="./assets/icons/favicon.svg" />
-    <link rel="stylesheet" href="./assets/fonts/fonts.css" />
-    <link rel="stylesheet" href="./css/style.css" />
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <link rel="stylesheet" href="./fonts.css" />
+    <link rel="stylesheet" href="./style.css" />
   </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="./js/app.js"></script>
+    <script>window.__SITETRACK_INITIAL_DATA__ = {
+  "spreadsheetId": "1HNmAdZe7POIzIm9mCUPxQJL7p9BoBZEO1hXq6PZNs5M",
+  "title": "SiteTrack Pro — Self-Contained Portable Construction & Contract TCP Ledger",
+  "spreadsheetUrl": "./data/data.json",
+  "existingSheets": [
+    "Sites",
+    "ProjectTypes",
+    "Projects",
+    "SubProjects",
+    "Contractors",
+    "ContractsTCP",
+    "ContractPayments",
+    "UserAccounts"
+  ],
+  "missingSheets": [],
+  "isSchemaReady": true,
+  "lastSyncedAt": "2026-11-24T00:00:00.000Z",
+  "sites": [
+    {
+      "rowNumber": 2,
+      "siteCode": "CRC3",
+      "siteName": "Camella Riverfront Phase 3",
+      "developer": "TNADC",
+      "location": "Bulacan / North Metro Hub",
+      "createdAt": "2025-10-01"
+    },
+    {
+      "rowNumber": 3,
+      "siteCode": "BGC01",
+      "siteName": "Bonifacio High Street North Tower",
+      "developer": "Ayala Land Premier",
+      "location": "Taguig City, Metro Manila",
+      "createdAt": "2025-10-05"
+    },
+    {
+      "rowNumber": 4,
+      "siteCode": "MKT02",
+      "siteName": "Makati Central Logistics Hub",
+      "developer": "Rockwell Land Corp",
+      "location": "Makati City, Metro Manila",
+      "createdAt": "2025-10-12"
+    },
+    {
+      "rowNumber": 5,
+      "siteCode": "CEB04",
+      "siteName": "Cebu IT Park Commercial Annex",
+      "developer": "Cebu Holdings Inc.",
+      "location": "Cebu City, Visayas",
+      "createdAt": "2025-11-01"
+    }
+  ],
+  "projectTypes": [
+    {
+      "rowNumber": 2,
+      "typeCode": "ST7",
+      "typeName": "Standard Model ST7 Housing & Power Package",
+      "description": "Residential unit electrical, MBase installation, service deposit, and utility connection",
+      "active": true,
+      "createdAt": "2025-10-01"
+    },
+    {
+      "rowNumber": 3,
+      "typeCode": "CIV",
+      "typeName": "Civil & Structural Works",
+      "description": "Foundation, structural framing, concrete works, and site grading",
+      "active": true,
+      "createdAt": "2025-10-01"
+    },
+    {
+      "rowNumber": 4,
+      "typeCode": "MEP",
+      "typeName": "Mechanical, Electrical & Plumbing (MEPF)",
+      "description": "HVAC, electrical distribution, fire protection, and plumbing networks",
+      "active": true,
+      "createdAt": "2025-10-01"
+    },
+    {
+      "rowNumber": 5,
+      "typeCode": "ARC",
+      "typeName": "Architectural & Fit-Out",
+      "description": "Interior partitions, masonry, facade glazing, and finishing works",
+      "active": true,
+      "createdAt": "2025-10-01"
+    }
+  ],
+  "contractors": [
+    {
+      "rowNumber": 2,
+      "contractorCode": "CTR-0001",
+      "contractorName": "One Power Pro Builders Inc",
+      "specialty": "Electrical Engineering, Sign & Seal, Load Schedule",
+      "contactPerson": "Engr. Marco Villanueva",
+      "contactInfo": "m.villanueva@onepowerbuilders.ph | +63 917 555 0142",
+      "active": true,
+      "createdAt": "2025-10-01"
+    },
+    {
+      "rowNumber": 3,
+      "contractorCode": "CTR-0002",
+      "contractorName": "CAOJ Construction & Electrical Services",
+      "specialty": "Meter Base Installation, Power Distribution & Civil Works",
+      "contactPerson": "Engr. Carlos O. Jimenez",
+      "contactInfo": "caoj.services@construction.ph | +63 918 555 0198",
+      "active": true,
+      "createdAt": "2025-10-01"
+    },
+    {
+      "rowNumber": 4,
+      "contractorCode": "CTR-0003",
+      "contractorName": "MERALCO",
+      "specialty": "Electric Utility Service Deposit & Cash Advance",
+      "contactPerson": "Corporate Utility Account Desk",
+      "contactInfo": "bizdesk@meralco.com.ph | 16211",
+      "active": true,
+      "createdAt": "2025-10-01"
+    },
+    {
+      "rowNumber": 5,
+      "contractorCode": "CTR-0004",
+      "contractorName": "Vanguard Structural & MEPF Corp.",
+      "specialty": "Heavy Structural & High-Voltage Switchgear",
+      "contactPerson": "Engr. Patricia Dizon",
+      "contactInfo": "pdizon@vanguardmepf.ph | +63 917 800 3311",
+      "active": true,
+      "createdAt": "2025-10-10"
+    }
+  ],
+  "projects": [
+    {
+      "rowNumber": 2,
+      "projectId": "PRJ-1001",
+      "mainProjectCode": "CRC3-ST7-1601",
+      "siteCode": "CRC3",
+      "siteName": "Camella Riverfront Phase 3",
+      "developer": "TNADC",
+      "typeCode": "ST7",
+      "typeName": "Standard Model ST7 Housing & Power Package",
+      "unitIdentifier": "1601",
+      "projectName": "B16 L01",
+      "status": "In Progress",
+      "createdAt": "2025-10-15",
+      "updatedAt": "2026-10-30"
+    },
+    {
+      "rowNumber": 3,
+      "projectId": "PRJ-1002",
+      "mainProjectCode": "BGC01-MEP-2204",
+      "siteCode": "BGC01",
+      "siteName": "Bonifacio High Street North Tower",
+      "developer": "Ayala Land Premier",
+      "typeCode": "MEP",
+      "typeName": "Mechanical, Electrical & Plumbing (MEPF)",
+      "unitIdentifier": "2204",
+      "projectName": "North Podium Main Feeder & Chiller Plant",
+      "status": "Started",
+      "createdAt": "2026-08-10",
+      "updatedAt": "2026-11-01"
+    }
+  ],
+  "subProjects": [
+    {
+      "rowNumber": 2,
+      "subProjectId": "SUB-2001",
+      "projectId": "PRJ-1001",
+      "mainProjectCode": "CRC3-ST7-1601",
+      "subProjectCode": "CRC3-ST7-1601-LoadSChed",
+      "subProjectName": "Sign and Seal of Mechanical & Electrical Load Schedule",
+      "status": "Completed",
+      "progress": 0,
+      "targetDate": "2025-10-30",
+      "remarks": "Sign and Seal of mech",
+      "updatedAt": "2025-10-29"
+    },
+    {
+      "rowNumber": 3,
+      "subProjectId": "SUB-2002",
+      "projectId": "PRJ-1001",
+      "mainProjectCode": "CRC3-ST7-1601",
+      "subProjectCode": "CRC3-ST7-1601-MBase-LabMat",
+      "subProjectName": "MBase Installation (Labor & Materials)",
+      "status": "In Progress",
+      "progress": 0,
+      "targetDate": "2026-11-15",
+      "remarks": "MBase Installation",
+      "updatedAt": "2026-10-30"
+    },
+    {
+      "rowNumber": 4,
+      "subProjectId": "SUB-2003",
+      "projectId": "PRJ-1001",
+      "mainProjectCode": "CRC3-ST7-1601",
+      "subProjectCode": "CRC3-ST7-1601-SD",
+      "subProjectName": "Utility Service Deposit",
+      "status": "Started",
+      "progress": 0,
+      "targetDate": "2026-11-30",
+      "remarks": "Service Deposit",
+      "updatedAt": "2026-09-02"
+    },
+    {
+      "rowNumber": 5,
+      "subProjectId": "SUB-2004",
+      "projectId": "PRJ-1001",
+      "mainProjectCode": "CRC3-ST7-1601",
+      "subProjectCode": "CRC3-ST7-1601-CA",
+      "subProjectName": "Utility Cash Advance for Line Extension",
+      "status": "Started",
+      "progress": 0,
+      "targetDate": "2026-12-15",
+      "remarks": "Cash Advance",
+      "updatedAt": "2026-09-02"
+    },
+    {
+      "rowNumber": 6,
+      "subProjectId": "SUB-2005",
+      "projectId": "PRJ-1002",
+      "mainProjectCode": "BGC01-MEP-2204",
+      "subProjectCode": "BGC01-MEP-2204-SWG",
+      "subProjectName": "Main Low-Voltage Switchgear Assembly",
+      "status": "In Progress",
+      "progress": 0,
+      "targetDate": "2026-12-20",
+      "remarks": "Switchgear supply and testing",
+      "updatedAt": "2026-11-01"
+    }
+  ],
+  "contractsTCP": [
+    {
+      "rowNumber": 2,
+      "contractId": "CON-3001",
+      "tcpId": "TCP-0001",
+      "parentContractId": "",
+      "subProjectId": "SUB-2001",
+      "subProjectCode": "CRC3-ST7-1601-LoadSChed",
+      "subProjectName": "Sign and Seal of Mechanical & Electrical Load Schedule",
+      "projectId": "PRJ-1001",
+      "mainProjectCode": "CRC3-ST7-1601",
+      "tcpType": "Original",
+      "tcpAmount": 976,
+      "contractorCode": "CTR-0001",
+      "contractorName": "One Power Pro Builders Inc",
+      "contractStatus": "CLOSED",
+      "awardDate": "2025-10-15",
+      "remarks": "Sign and Seal of mech",
+      "updatedAt": "2025-10-29",
+      "dpPercent": 0,
+      "progressBillingPercent": 100,
+      "retentionPercent": 0,
+      "hasWithholdingTax": true,
+      "withholdingTaxPercent": 8.9283,
+      "paymentTermsNotes": "100% upon completion with BIR 2307 WHT",
+      "birTaxInfo": {
+        "taxMode": "CUSTOM_MANUAL",
+        "isVatInclusive": true,
+        "vatRatePercent": 12,
+        "laborGrossAmount": 976,
+        "materialGrossAmount": 0,
+        "laborEwtPercent": 10,
+        "materialEwtPercent": 0,
+        "computedVatAmount": 104.57,
+        "computedLaborEwt": 87.14,
+        "computedMaterialEwt": 0,
+        "totalWithholdingAmount": 87.14,
+        "isManualOverride": true
+      }
+    },
+    {
+      "rowNumber": 3,
+      "contractId": "CON-3002",
+      "tcpId": "TCP-0002",
+      "parentContractId": "",
+      "subProjectId": "SUB-2002",
+      "subProjectCode": "CRC3-ST7-1601-MBase-LabMat",
+      "subProjectName": "MBase Installation (Labor & Materials)",
+      "projectId": "PRJ-1001",
+      "mainProjectCode": "CRC3-ST7-1601",
+      "tcpType": "Original",
+      "tcpAmount": 95500,
+      "contractorCode": "CTR-0002",
+      "contractorName": "CAOJ Construction & Electrical Services",
+      "contractStatus": "OPEN",
+      "awardDate": "2026-09-02",
+      "remarks": "MBase Installation",
+      "updatedAt": "2026-10-30",
+      "dpPercent": 50,
+      "progressBillingPercent": 45,
+      "retentionPercent": 5,
+      "hasWithholdingTax": false,
+      "withholdingTaxPercent": 0,
+      "paymentTermsNotes": "50% DP, 45% Progress, 5% Retention Holdback (PHP 4,775.00)",
+      "birTaxInfo": {
+        "taxMode": "NON_VAT_LUMP_OR_SEP",
+        "isVatInclusive": false,
+        "vatRatePercent": 0,
+        "laborGrossAmount": 95500,
+        "materialGrossAmount": 0,
+        "laborEwtPercent": 0,
+        "materialEwtPercent": 0,
+        "computedVatAmount": 0,
+        "computedLaborEwt": 0,
+        "computedMaterialEwt": 0,
+        "totalWithholdingAmount": 0,
+        "isManualOverride": false
+      }
+    },
+    {
+      "rowNumber": 4,
+      "contractId": "CON-3003",
+      "tcpId": "TCP-0003",
+      "parentContractId": "",
+      "subProjectId": "SUB-2003",
+      "subProjectCode": "CRC3-ST7-1601-SD",
+      "subProjectName": "Utility Service Deposit",
+      "projectId": "PRJ-1001",
+      "mainProjectCode": "CRC3-ST7-1601",
+      "tcpType": "Original",
+      "tcpAmount": 60240,
+      "contractorCode": "CTR-0003",
+      "contractorName": "MERALCO",
+      "contractStatus": "OPEN",
+      "awardDate": "2026-09-02",
+      "remarks": "Service Deposit",
+      "updatedAt": "2026-09-02",
+      "dpPercent": 0,
+      "progressBillingPercent": 100,
+      "retentionPercent": 0,
+      "hasWithholdingTax": false,
+      "withholdingTaxPercent": 0,
+      "paymentTermsNotes": "Direct utility deposit",
+      "birTaxInfo": {
+        "taxMode": "NON_VAT_LUMP_OR_SEP",
+        "isVatInclusive": false,
+        "vatRatePercent": 0,
+        "laborGrossAmount": 60240,
+        "materialGrossAmount": 0,
+        "laborEwtPercent": 0,
+        "materialEwtPercent": 0,
+        "computedVatAmount": 0,
+        "computedLaborEwt": 0,
+        "computedMaterialEwt": 0,
+        "totalWithholdingAmount": 0,
+        "isManualOverride": false
+      }
+    },
+    {
+      "rowNumber": 5,
+      "contractId": "CON-3004",
+      "tcpId": "TCP-0004",
+      "parentContractId": "",
+      "subProjectId": "SUB-2004",
+      "subProjectCode": "CRC3-ST7-1601-CA",
+      "subProjectName": "Utility Cash Advance for Line Extension",
+      "projectId": "PRJ-1001",
+      "mainProjectCode": "CRC3-ST7-1601",
+      "tcpType": "Original",
+      "tcpAmount": 307576.45,
+      "contractorCode": "CTR-0003",
+      "contractorName": "MERALCO",
+      "contractStatus": "OPEN",
+      "awardDate": "2026-09-02",
+      "remarks": "Cash Advance",
+      "updatedAt": "2026-09-02",
+      "dpPercent": 0,
+      "progressBillingPercent": 100,
+      "retentionPercent": 0,
+      "hasWithholdingTax": false,
+      "withholdingTaxPercent": 0,
+      "paymentTermsNotes": "Direct utility cash advance",
+      "birTaxInfo": {
+        "taxMode": "NON_VAT_LUMP_OR_SEP",
+        "isVatInclusive": false,
+        "vatRatePercent": 0,
+        "laborGrossAmount": 307576.45,
+        "materialGrossAmount": 0,
+        "laborEwtPercent": 0,
+        "materialEwtPercent": 0,
+        "computedVatAmount": 0,
+        "computedLaborEwt": 0,
+        "computedMaterialEwt": 0,
+        "totalWithholdingAmount": 0,
+        "isManualOverride": false
+      }
+    },
+    {
+      "rowNumber": 6,
+      "contractId": "CON-3005",
+      "tcpId": "TCP-0005",
+      "parentContractId": "",
+      "subProjectId": "SUB-2005",
+      "subProjectCode": "BGC01-MEP-2204-SWG",
+      "subProjectName": "Main Low-Voltage Switchgear Assembly",
+      "projectId": "PRJ-1002",
+      "mainProjectCode": "BGC01-MEP-2204",
+      "tcpType": "Original",
+      "tcpAmount": 450000,
+      "contractorCode": "CTR-0004",
+      "contractorName": "Vanguard Structural & MEPF Corp.",
+      "contractStatus": "OPEN",
+      "awardDate": "2026-10-01",
+      "remarks": "Switchgear assembly & testing",
+      "updatedAt": "2026-11-01",
+      "dpPercent": 30,
+      "progressBillingPercent": 60,
+      "retentionPercent": 10,
+      "hasWithholdingTax": true,
+      "withholdingTaxPercent": 1.3393,
+      "paymentTermsNotes": "30% DP, 60% Progress, 10% Retention Holdback",
+      "birTaxInfo": {
+        "taxMode": "VAT_SEPARATED_LABOR_MAT",
+        "isVatInclusive": true,
+        "vatRatePercent": 12,
+        "laborGrossAmount": 180000,
+        "materialGrossAmount": 270000,
+        "laborEwtPercent": 2,
+        "materialEwtPercent": 1,
+        "computedVatAmount": 48214.29,
+        "computedLaborEwt": 3214.29,
+        "computedMaterialEwt": 2410.71,
+        "totalWithholdingAmount": 5625,
+        "isManualOverride": false
+      }
+    }
+  ],
+  "contractPayments": [
+    {
+      "rowNumber": 2,
+      "paymentId": "PAY-4001",
+      "contractId": "CON-3001",
+      "subProjectId": "SUB-2001",
+      "subProjectCode": "CRC3-ST7-1601-LoadSChed",
+      "mainProjectCode": "CRC3-ST7-1601",
+      "contractorCode": "CTR-0001",
+      "contractorName": "One Power Pro Builders Inc",
+      "billingType": "Final Billing",
+      "paymentStatus": "RECEIVED",
+      "rfpNumber": "2025-10-0000909",
+      "rfpDate": "2025-10-15",
+      "rfpAmount": 976,
+      "rfpPayee": "One Power Pro Builders Inc",
+      "retentionDeducted": 0,
+      "rfpRemarks": "Sign and Seal",
+      "cvNumber": "340573",
+      "cvDate": "2025-10-22",
+      "chequeAmount": 888.86,
+      "withheldAmount": 87.14,
+      "receiptType": "OR (Official Receipt)",
+      "receiptNumber": "0086",
+      "receiptDate": "2025-10-29",
+      "updatedAt": "2025-10-29"
+    },
+    {
+      "rowNumber": 3,
+      "paymentId": "PAY-4002",
+      "contractId": "CON-3002",
+      "subProjectId": "SUB-2002",
+      "subProjectCode": "CRC3-ST7-1601-MBase-LabMat",
+      "mainProjectCode": "CRC3-ST7-1601",
+      "contractorCode": "CTR-0002",
+      "contractorName": "CAOJ Construction & Electrical Services",
+      "billingType": "Downpayment (DP)",
+      "paymentStatus": "RECEIVED",
+      "rfpNumber": "2026-09-0000149",
+      "rfpDate": "2026-09-02",
+      "rfpAmount": 47750,
+      "rfpPayee": "CAOJ",
+      "retentionDeducted": 0,
+      "rfpRemarks": "MBase Installation - 50% DP",
+      "cvNumber": "363892",
+      "cvDate": "2026-09-10",
+      "chequeAmount": 47750,
+      "withheldAmount": 0,
+      "receiptType": "OR (Official Receipt)",
+      "receiptNumber": "1490",
+      "receiptDate": "2026-09-16",
+      "updatedAt": "2026-09-16"
+    },
+    {
+      "rowNumber": 4,
+      "paymentId": "PAY-4003",
+      "contractId": "CON-3004",
+      "subProjectId": "SUB-2004",
+      "subProjectCode": "CRC3-ST7-1601-CA",
+      "mainProjectCode": "CRC3-ST7-1601",
+      "contractorCode": "CTR-0003",
+      "contractorName": "MERALCO",
+      "billingType": "Progress Billing",
+      "paymentStatus": "CHEQUE_RELEASED",
+      "rfpNumber": "2026-09-0000158",
+      "rfpDate": "2026-09-02",
+      "rfpAmount": 307576.45,
+      "rfpPayee": "MERALCO",
+      "retentionDeducted": 0,
+      "rfpRemarks": "Cash Advance",
+      "cvNumber": "363855",
+      "cvDate": "2026-09-09",
+      "chequeAmount": 307576.45,
+      "withheldAmount": 0,
+      "receiptType": "",
+      "receiptNumber": "",
+      "receiptDate": "",
+      "updatedAt": "2026-09-09"
+    },
+    {
+      "rowNumber": 5,
+      "paymentId": "PAY-4004",
+      "contractId": "CON-3003",
+      "subProjectId": "SUB-2003",
+      "subProjectCode": "CRC3-ST7-1601-SD",
+      "mainProjectCode": "CRC3-ST7-1601",
+      "contractorCode": "CTR-0003",
+      "contractorName": "MERALCO",
+      "billingType": "Progress Billing",
+      "paymentStatus": "CHEQUE_RELEASED",
+      "rfpNumber": "2026-09-0000157",
+      "rfpDate": "2026-09-02",
+      "rfpAmount": 60240,
+      "rfpPayee": "MERALCO",
+      "retentionDeducted": 0,
+      "rfpRemarks": "Service Deposit",
+      "cvNumber": "363854",
+      "cvDate": "2026-09-09",
+      "chequeAmount": 60240,
+      "withheldAmount": 0,
+      "receiptType": "",
+      "receiptNumber": "",
+      "receiptDate": "",
+      "updatedAt": "2026-09-09"
+    },
+    {
+      "rowNumber": 6,
+      "paymentId": "PAY-4005",
+      "contractId": "CON-3002",
+      "subProjectId": "SUB-2002",
+      "subProjectCode": "CRC3-ST7-1601-MBase-LabMat",
+      "mainProjectCode": "CRC3-ST7-1601",
+      "contractorCode": "CTR-0002",
+      "contractorName": "CAOJ Construction & Electrical Services",
+      "billingType": "Progress Billing",
+      "paymentStatus": "CHEQUE_RELEASED",
+      "rfpNumber": "2026-10-0001820",
+      "rfpDate": "2026-10-30",
+      "rfpAmount": 42975,
+      "rfpPayee": "CAOJ",
+      "retentionDeducted": 0,
+      "rfpRemarks": "95% Progress (5% Retention Holdback PHP 4,775.00 retained)",
+      "cvNumber": "368185",
+      "cvDate": "2026-10-31",
+      "chequeAmount": 42975,
+      "withheldAmount": 0,
+      "receiptType": "",
+      "receiptNumber": "",
+      "receiptDate": "",
+      "updatedAt": "2026-10-31"
+    }
+  ],
+  "userAccounts": [
+    {
+      "rowNumber": 2,
+      "userId": "USR-0001",
+      "fullName": "Louie Sarmiento",
+      "email": "louie.sarmiento@sitetrackpro.com",
+      "roleTitle": "System Administrator",
+      "department": "Executive & Project Controls",
+      "phone": "+63 917 100 0001",
+      "status": "ACTIVE",
+      "bioNotes": "Full system access across projects, contracts, payments, and user account permissions.",
+      "permissions": {
+        "projects": {
+          "view": true,
+          "add": true,
+          "edit": true
+        },
+        "contracts": {
+          "view": true,
+          "add": true,
+          "edit": true
+        },
+        "payments": {
+          "view": true,
+          "add": true,
+          "edit": true
+        },
+        "contractors": {
+          "view": true,
+          "add": true,
+          "edit": true
+        },
+        "sites": {
+          "view": true,
+          "add": true,
+          "edit": true
+        },
+        "admin": {
+          "view": true,
+          "add": true,
+          "edit": true
+        }
+      },
+      "createdAt": "2025-10-01",
+      "updatedAt": "2026-11-24"
+    },
+    {
+      "rowNumber": 3,
+      "userId": "USR-0002",
+      "fullName": "Engr. Camille Mendoza",
+      "email": "c.mendoza@sitetrackpro.com",
+      "roleTitle": "Senior Project Manager",
+      "department": "Engineering & Site Operations",
+      "phone": "+63 917 200 0042",
+      "status": "ACTIVE",
+      "bioNotes": "Manages main projects, sub-projects, and contract TCP awarding.",
+      "permissions": {
+        "projects": {
+          "view": true,
+          "add": true,
+          "edit": true
+        },
+        "contracts": {
+          "view": true,
+          "add": true,
+          "edit": true
+        },
+        "payments": {
+          "view": true,
+          "add": true,
+          "edit": false
+        },
+        "contractors": {
+          "view": true,
+          "add": true,
+          "edit": true
+        },
+        "sites": {
+          "view": true,
+          "add": true,
+          "edit": false
+        },
+        "admin": {
+          "view": true,
+          "add": false,
+          "edit": false
+        }
+      },
+      "createdAt": "2025-10-01",
+      "updatedAt": "2026-11-24"
+    },
+    {
+      "rowNumber": 4,
+      "userId": "USR-0003",
+      "fullName": "Rafael Villanueva",
+      "email": "r.villanueva@sitetrackpro.com",
+      "roleTitle": "Finance & Disbursement Officer",
+      "department": "Finance & Accounting",
+      "phone": "+63 918 330 0088",
+      "status": "ACTIVE",
+      "bioNotes": "Processes RFP submissions, Cheque Vouchers (CV), withholding tax, and contractor OR/CR receipts.",
+      "permissions": {
+        "projects": {
+          "view": true,
+          "add": false,
+          "edit": false
+        },
+        "contracts": {
+          "view": true,
+          "add": false,
+          "edit": false
+        },
+        "payments": {
+          "view": true,
+          "add": true,
+          "edit": true
+        },
+        "contractors": {
+          "view": true,
+          "add": false,
+          "edit": true
+        },
+        "sites": {
+          "view": true,
+          "add": false,
+          "edit": false
+        },
+        "admin": {
+          "view": false,
+          "add": false,
+          "edit": false
+        }
+      },
+      "createdAt": "2025-10-01",
+      "updatedAt": "2026-11-24"
+    },
+    {
+      "rowNumber": 5,
+      "userId": "USR-0004",
+      "fullName": "Patricia Lim",
+      "email": "p.lim@sitetrackpro.com",
+      "roleTitle": "Executive Auditor (Read-Only)",
+      "department": "Internal Audit",
+      "phone": "+63 917 440 0199",
+      "status": "ACTIVE",
+      "bioNotes": "Read-only audit access across all project and contract payment modules.",
+      "permissions": {
+        "projects": {
+          "view": true,
+          "add": false,
+          "edit": false
+        },
+        "contracts": {
+          "view": true,
+          "add": false,
+          "edit": false
+        },
+        "payments": {
+          "view": true,
+          "add": false,
+          "edit": false
+        },
+        "contractors": {
+          "view": true,
+          "add": false,
+          "edit": false
+        },
+        "sites": {
+          "view": true,
+          "add": false,
+          "edit": false
+        },
+        "admin": {
+          "view": true,
+          "add": false,
+          "edit": false
+        }
+      },
+      "createdAt": "2025-10-01",
+      "updatedAt": "2026-11-24"
+    }
+  ]
+};</script>
+    <script defer src="./app.js"></script>
   </body>
 </html>
