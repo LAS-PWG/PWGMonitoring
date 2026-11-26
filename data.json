@@ -1,9 +1,8 @@
 {
   "spreadsheetId": "1HNmAdZe7POIzIm9mCUPxQJL7p9BoBZEO1hXq6PZNs5M",
-  "title": "PWG Monitoring v2026",
-  "spreadsheetUrl": "https://docs.google.com/spreadsheets/d/1HNmAdZe7POIzIm9mCUPxQJL7p9BoBZEO1hXq6PZNs5M/edit",
+  "title": "SiteTrack Pro — Dev Sandbox Synthetic Dataset (Not Live Production Data)",
+  "spreadsheetUrl": "./data.json",
   "existingSheets": [
-    "Sheet1",
     "Sites",
     "ProjectTypes",
     "Projects",
@@ -15,824 +14,621 @@
   ],
   "missingSheets": [],
   "isSchemaReady": true,
+  "lastSyncedAt": "2026-11-24T00:00:00.000Z",
   "sites": [
     {
       "rowNumber": 2,
-      "siteCode": "AHC1",
-      "siteName": "ARABELLA HOMES",
-      "developer": "TNADC",
-      "location": "Cabuyao",
-      "createdAt": "2026-11-21 3:00:31"
+      "siteCode": "SITE1",
+      "siteName": "Northgate Residential Phase 1 (Sample)",
+      "developer": "Sample Development Corp",
+      "location": "North Metro District",
+      "createdAt": "2025-10-01"
     },
     {
       "rowNumber": 3,
-      "siteCode": "AHC2",
-      "siteName": "ARABELLA HOMES II",
-      "developer": "TNADC",
-      "location": "Cabuyao",
-      "createdAt": "2026-11-21 3:00:31"
+      "siteCode": "SITE2",
+      "siteName": "Central Commercial Annex (Sample)",
+      "developer": "Example Estates Inc.",
+      "location": "Central Business District",
+      "createdAt": "2025-10-05"
     },
     {
       "rowNumber": 4,
-      "siteCode": "BHI",
-      "siteName": "BOSTON HEIGHTS",
-      "developer": "TNADC",
-      "location": "",
-      "createdAt": "2026-11-21 3:00:31"
-    },
-    {
-      "rowNumber": 5,
-      "siteCode": "BRC1",
-      "siteName": "",
-      "developer": "TNADC",
-      "location": "",
-      "createdAt": "2026-11-21 3:00:31"
-    },
-    {
-      "rowNumber": 6,
-      "siteCode": "BRC2",
-      "siteName": "",
-      "developer": "TNADC",
-      "location": "",
-      "createdAt": "2026-11-21 3:00:31"
-    },
-    {
-      "rowNumber": 7,
-      "siteCode": "BVC",
-      "siteName": "BIRMINGHAM VILLAGE CABUYAO",
-      "developer": "TNADC",
-      "location": "Cabuyao",
-      "createdAt": "2026-11-21 3:00:31"
-    },
-    {
-      "rowNumber": 8,
-      "siteCode": "BVC3",
-      "siteName": "BIRMINGHAM VILLAGE PHASE 3",
-      "developer": "TNADC",
-      "location": "Cabuyao",
-      "createdAt": "2026-11-21 3:00:31"
-    },
-    {
-      "rowNumber": 9,
-      "siteCode": "CDC1",
-      "siteName": "Centennial de Calamba",
-      "developer": "CDC",
-      "location": "Calamba",
-      "createdAt": "2026-11-21 3:00:31"
-    },
-    {
-      "rowNumber": 10,
-      "siteCode": "CDC2",
-      "siteName": "Centennial De Calamba 2",
-      "developer": "CDC",
-      "location": "Calamba",
-      "createdAt": "2026-11-21 3:00:31"
-    },
-    {
-      "rowNumber": 11,
-      "siteCode": "CEC",
-      "siteName": "Casa Esperanza Cabuyao",
-      "developer": "TNADC",
-      "location": "Cabuyao",
-      "createdAt": "2026-11-21 3:00:31"
-    },
-    {
-      "rowNumber": 12,
-      "siteCode": "CH1",
-      "siteName": "CENTENNIAL HOMES 1",
-      "developer": "CDC",
-      "location": "Cabuyao",
-      "createdAt": "2026-11-21 3:00:31"
-    },
-    {
-      "rowNumber": 13,
-      "siteCode": "CH2",
-      "siteName": "CENTENNIAL HOMES 2",
-      "developer": "CDC",
-      "location": "Cabuyao",
-      "createdAt": "2026-11-21 3:00:31"
-    },
-    {
-      "rowNumber": 14,
-      "siteCode": "CHC1",
-      "siteName": "CENTENNIAL HOMES 1",
-      "developer": "CDC",
-      "location": "Cabuyao",
-      "createdAt": "2026-11-21 3:00:31"
-    },
-    {
-      "rowNumber": 15,
-      "siteCode": "CHC2",
-      "siteName": "CENTENNIAL HOMES 2",
-      "developer": "CDC",
-      "location": "Cabuyao",
-      "createdAt": "2026-11-21 3:00:31"
-    },
-    {
-      "rowNumber": 16,
-      "siteCode": "CPS",
-      "siteName": "",
-      "developer": "TNADC",
-      "location": "",
-      "createdAt": "2026-11-21 3:00:31"
-    },
-    {
-      "rowNumber": 17,
-      "siteCode": "CRC",
-      "siteName": "Citadel Residences Calamba",
-      "developer": "TNADC",
-      "location": "Calamba",
-      "createdAt": "2026-11-21 3:00:31"
-    },
-    {
-      "rowNumber": 18,
-      "siteCode": "CRC2",
-      "siteName": "Citadel Residences 2",
-      "developer": "TNADC",
-      "location": "Calamba",
-      "createdAt": "2026-11-21 3:00:31"
-    },
-    {
-      "rowNumber": 19,
-      "siteCode": "CRC3",
-      "siteName": "Citadel Residences 3",
-      "developer": "TNADC",
-      "location": "Calamba",
-      "createdAt": "2026-11-21 3:00:31"
-    },
-    {
-      "rowNumber": 20,
-      "siteCode": "CRS1",
-      "siteName": "Carlton Residences 1",
-      "developer": "CDC",
-      "location": "Sta Rosa",
-      "createdAt": "2026-11-21 3:00:31"
-    },
-    {
-      "rowNumber": 21,
-      "siteCode": "CRS2",
-      "siteName": "Carlton Residences 2",
-      "developer": "CDC",
-      "location": "Sta Rosa",
-      "createdAt": "2026-11-21 3:00:31"
-    },
-    {
-      "rowNumber": 22,
-      "siteCode": "CTH1",
-      "siteName": "CENTENNIAL TOWNHOMES 1",
-      "developer": "TNADC",
-      "location": "Cabuyao",
-      "createdAt": "2026-11-21 3:00:31"
-    },
-    {
-      "rowNumber": 23,
-      "siteCode": "CTH2",
-      "siteName": "CENTENNIAL TOWNHOMES 2",
-      "developer": "TNADC",
-      "location": "Cabuyao",
-      "createdAt": "2026-11-21 3:00:31"
-    },
-    {
-      "rowNumber": 24,
-      "siteCode": "EHS",
-      "siteName": "Elizabeth Heights",
-      "developer": "CDC",
-      "location": "Santa Rosa",
-      "createdAt": "2026-11-21 3:00:31"
-    },
-    {
-      "rowNumber": 25,
-      "siteCode": "HVS1",
-      "siteName": "Howard Village Phase 1",
-      "developer": "CDC",
-      "location": "Sta Rosa",
-      "createdAt": "2026-11-21 3:00:31"
-    },
-    {
-      "rowNumber": 26,
-      "siteCode": "HVS2",
-      "siteName": "Howard Village Phase 2",
-      "developer": "CDC",
-      "location": "Sta Rosa",
-      "createdAt": "2026-11-21 3:00:31"
-    },
-    {
-      "rowNumber": 27,
-      "siteCode": "ITS",
-      "siteName": "",
-      "developer": "CDC",
-      "location": "Rizal",
-      "createdAt": "2026-11-21 3:00:31"
-    },
-    {
-      "rowNumber": 28,
-      "siteCode": "MHC",
-      "siteName": "MONTANA HEIGHTS",
-      "developer": "ALC",
-      "location": "Calamba",
-      "createdAt": "2026-11-21 3:00:31"
-    },
-    {
-      "rowNumber": 29,
-      "siteCode": "MPP1",
-      "siteName": "Marco Polo Place 1",
-      "developer": "CDC",
-      "location": "Sta Rosa",
-      "createdAt": "2026-11-21 3:00:31"
-    },
-    {
-      "rowNumber": 30,
-      "siteCode": "MPP2",
-      "siteName": "Marco Polo Place 2",
-      "developer": "CDC",
-      "location": "Sta Rosa",
-      "createdAt": "2026-11-21 3:00:31"
-    },
-    {
-      "rowNumber": 31,
-      "siteCode": "MPP3",
-      "siteName": "Marco Polo Place 3",
-      "developer": "CDC",
-      "location": "Sta Rosa",
-      "createdAt": "2026-11-21 3:00:31"
-    },
-    {
-      "rowNumber": 32,
-      "siteCode": "MPP4",
-      "siteName": "Marco Polo Place 4",
-      "developer": "CDC",
-      "location": "Sta Rosa",
-      "createdAt": "2026-11-21 3:00:31"
-    },
-    {
-      "rowNumber": 33,
-      "siteCode": "MTS",
-      "siteName": "Mosaic Townhomes",
-      "developer": "CDC",
-      "location": "San Pablo",
-      "createdAt": "2026-11-21 3:00:31"
-    },
-    {
-      "rowNumber": 34,
-      "siteCode": "NHB",
-      "siteName": "NEWTON HEIGHTS",
-      "developer": "TNADC",
-      "location": "Binan",
-      "createdAt": "2026-11-21 3:00:31"
-    },
-    {
-      "rowNumber": 35,
-      "siteCode": "PHL",
-      "siteName": "Pasadenia Homes",
-      "developer": "ALC",
-      "location": "Sta Rosa",
-      "createdAt": "2026-11-21 3:00:31"
-    },
-    {
-      "rowNumber": 36,
-      "siteCode": "PRS",
-      "siteName": "Pontedera Residences",
-      "developer": "CDC",
-      "location": "San Pablo",
-      "createdAt": "2026-11-21 3:00:31"
-    },
-    {
-      "rowNumber": 37,
-      "siteCode": "RHS",
-      "siteName": "Riviera Heights",
-      "developer": "ALC",
-      "location": "Sta Rosa",
-      "createdAt": "2026-11-21 3:00:31"
-    },
-    {
-      "rowNumber": 38,
-      "siteCode": "RHSX",
-      "siteName": "RIVIERA HEIGHTS EXTENSION - SAN PABLO",
-      "developer": "ALC",
-      "location": "San Pablo",
-      "createdAt": "2026-11-21 3:00:31"
-    },
-    {
-      "rowNumber": 39,
-      "siteCode": "SHC",
-      "siteName": "Somerset Homes",
-      "developer": "TNADC",
-      "location": "Cabuyao",
-      "createdAt": "2026-11-21 3:00:31"
-    },
-    {
-      "rowNumber": 40,
-      "siteCode": "SIH1",
-      "siteName": "San Isidro Heights",
-      "developer": "TNADC",
-      "location": "Cabuyao",
-      "createdAt": "2026-11-21 3:00:31"
-    },
-    {
-      "rowNumber": 41,
-      "siteCode": "SIH2",
-      "siteName": "San Isidro Heights PH 2",
-      "developer": "TNADC",
-      "location": "Cabuyao",
-      "createdAt": "2026-11-21 3:00:31"
-    },
-    {
-      "rowNumber": 42,
-      "siteCode": "VCS",
-      "siteName": "Villa De Charlotte",
-      "developer": "CDC",
-      "location": "Sta Rosa",
-      "createdAt": "2026-11-21 3:00:31"
-    },
-    {
-      "rowNumber": 43,
-      "siteCode": "VTS",
-      "siteName": "Victoria Townhomes",
-      "developer": "CDC",
-      "location": "Sta Rosa",
-      "createdAt": "2026-11-21 3:00:31"
-    },
-    {
-      "rowNumber": 44,
-      "siteCode": "WVC",
-      "siteName": "",
-      "developer": "TNADC",
-      "location": "Cabuyao",
-      "createdAt": "2026-11-21 3:00:31"
-    },
-    {
-      "rowNumber": 45,
-      "siteCode": "WVC1",
-      "siteName": "Whistler Village Ph1",
-      "developer": "TNADC",
-      "location": "Cabuyao",
-      "createdAt": "2026-11-21 3:00:31"
-    },
-    {
-      "rowNumber": 46,
-      "siteCode": "WVC2",
-      "siteName": "Whistler Village Ph2",
-      "developer": "TNADC",
-      "location": "Cabuyao",
-      "createdAt": "2026-11-21 3:00:31"
-    },
-    {
-      "rowNumber": 47,
-      "siteCode": "WVC3",
-      "siteName": "Whistler Village Ph3",
-      "developer": "TNADC",
-      "location": "Cabuyao",
-      "createdAt": "2026-11-21 3:00:31"
+      "siteCode": "SITE3",
+      "siteName": "South Logistics Hub (Sample)",
+      "developer": "Demo Industrial Holdings",
+      "location": "South Corridor",
+      "createdAt": "2025-10-12"
     }
   ],
   "projectTypes": [
     {
       "rowNumber": 2,
-      "typeCode": "RELOC",
-      "typeName": "Pole Reloc",
-      "description": "Electrical pole relocation or modification",
-      "active": true,
-      "createdAt": "2026-11-21 3:00:31"
-    },
-    {
-      "rowNumber": 3,
-      "typeCode": "SECO",
-      "typeName": "Secondary Facility",
-      "description": "[old] Extension of electrical facilities",
-      "active": true,
-      "createdAt": "2026-11-21 3:00:31"
-    },
-    {
-      "rowNumber": 4,
-      "typeCode": "EXFAC",
-      "typeName": "Extension of Facilities",
-      "description": "Meralco extension of facilities",
-      "active": true,
-      "createdAt": "2026-11-21 3:00:31"
-    },
-    {
-      "rowNumber": 5,
-      "typeCode": "PERMSL",
-      "typeName": "Permanent Streetlights",
-      "description": "Permanent Street Lights",
-      "active": true,
-      "createdAt": "2026-11-21 3:00:31"
-    },
-    {
-      "rowNumber": 6,
-      "typeCode": "ST5",
-      "typeName": "ST5",
-      "description": "[old] Single Phase Temporary power",
-      "active": true,
-      "createdAt": "2026-11-21 3:00:31"
-    },
-    {
-      "rowNumber": 7,
       "typeCode": "ST7",
-      "typeName": "ST7",
-      "description": "[old] Three Phase power",
+      "typeName": "Standard Unit Utility & Power Package",
+      "description": "Unit electrical load schedule, meter base installation, service deposit, and line extension",
       "active": true,
-      "createdAt": "2026-11-21 3:00:31"
-    },
-    {
-      "rowNumber": 8,
-      "typeCode": "WATAPP",
-      "typeName": "Water Application",
-      "description": "[old] Application for water supply",
-      "active": true,
-      "createdAt": "2026-11-21 3:00:31"
-    },
-    {
-      "rowNumber": 9,
-      "typeCode": "UTILAPP",
-      "typeName": "Utiliry Application",
-      "description": "Application for utilies",
-      "active": true,
-      "createdAt": "2026-11-21 3:00:31"
-    },
-    {
-      "rowNumber": 10,
-      "typeCode": "POWER1P",
-      "typeName": "Temporary Power Supply 1P",
-      "description": "1P Power Supply",
-      "active": true,
-      "createdAt": "2026-11-21 3:00:31"
-    },
-    {
-      "rowNumber": 11,
-      "typeCode": "POWER3P",
-      "typeName": "3P Power Supply",
-      "description": "3P Power Supply",
-      "active": true,
-      "createdAt": "2026-11-21 3:00:31"
-    }
-  ],
-  "projects": [
-    {
-      "rowNumber": 2,
-      "projectId": "PRJ-0001",
-      "mainProjectCode": "CRC3-POWER3P-1601",
-      "siteCode": "CRC3",
-      "siteName": "Citadel Residences 3",
-      "developer": "TNADC",
-      "typeCode": "POWER3P",
-      "typeName": "3P Power Supply",
-      "unitIdentifier": "1601",
-      "projectName": "Permanent Power Supply B16 L01",
-      "status": "In Progress",
-      "createdAt": "2026-11-21 8:27:23",
-      "updatedAt": "2026-11-21 8:27:23"
-    }
-  ],
-  "subProjects": [
-    {
-      "rowNumber": 2,
-      "subProjectId": "SUB-0001",
-      "projectId": "PRJ-0001",
-      "mainProjectCode": "CRC3-POWER3P-1601",
-      "subProjectCode": "MBASE",
-      "subProjectName": "All in SE Installation",
-      "status": "In Progress",
-      "progress": 0,
-      "targetDate": "",
-      "remarks": "",
-      "updatedAt": "2026-11-21 8:27:23"
+      "createdAt": "2025-10-01"
     },
     {
       "rowNumber": 3,
-      "subProjectId": "SUB-0002",
-      "projectId": "PRJ-0001",
-      "mainProjectCode": "CRC3-POWER3P-1601",
-      "subProjectCode": "LOADSCHED",
-      "subProjectName": "Sign and Seal of Load Schedule",
-      "status": "Started",
-      "progress": 0,
-      "targetDate": "",
-      "remarks": "",
-      "updatedAt": "2026-11-24 7:37:58"
+      "typeCode": "CIV",
+      "typeName": "Civil & Structural Works",
+      "description": "Foundation, structural framing, concrete works, and site grading",
+      "active": true,
+      "createdAt": "2025-10-01"
     },
     {
       "rowNumber": 4,
-      "subProjectId": "SUB-0003",
-      "projectId": "PRJ-0001",
-      "mainProjectCode": "CRC3-POWER3P-1601",
-      "subProjectCode": "SD",
-      "subProjectName": "Service Deposit",
-      "status": "Started",
-      "progress": 0,
-      "targetDate": "",
-      "remarks": "",
-      "updatedAt": "2026-11-24 7:38:35"
+      "typeCode": "MEP",
+      "typeName": "Mechanical, Electrical & Plumbing (MEPF)",
+      "description": "HVAC, electrical distribution, fire protection, and plumbing networks",
+      "active": true,
+      "createdAt": "2025-10-01"
     },
     {
       "rowNumber": 5,
-      "subProjectId": "SUB-0004",
-      "projectId": "PRJ-0001",
-      "mainProjectCode": "CRC3-POWER3P-1601",
-      "subProjectCode": "CA",
-      "subProjectName": "Project Cash Advance",
-      "status": "Started",
-      "progress": 0,
-      "targetDate": "",
-      "remarks": "",
-      "updatedAt": "2026-11-24 7:38:53"
+      "typeCode": "ARC",
+      "typeName": "Architectural & Fit-Out",
+      "description": "Interior partitions, masonry, facade glazing, and finishing works",
+      "active": true,
+      "createdAt": "2025-10-01"
     }
   ],
   "contractors": [
     {
       "rowNumber": 2,
-      "contractorCode": "MDC01",
-      "contractorName": "Makati Development Corp.",
-      "specialty": "General Civil & Structural Works",
-      "contactPerson": "Engr. Marco Villanueva",
-      "contactInfo": "mvillanueva@mdc.com.ph",
+      "contractorCode": "CTR-0001",
+      "contractorName": "Sample Power Engineering Services",
+      "specialty": "Electrical Engineering, Sign & Seal, Load Schedule",
+      "contactPerson": "Sample Contact A",
+      "contactInfo": "contact.a@example.com | +63 900 000 0001",
       "active": true,
-      "createdAt": "2026-11-21 3:22:33"
+      "createdAt": "2025-10-01"
     },
     {
       "rowNumber": 3,
-      "contractorCode": "EEI02",
-      "contractorName": "EEI Corporation",
-      "specialty": "Electromechanical & MEPFS",
-      "contactPerson": "Engr. Clarissa Santos",
-      "contactInfo": "csantos@eei.com.ph",
+      "contractorCode": "CTR-0002",
+      "contractorName": "Demo Electrical & Civil Builders",
+      "specialty": "Meter Base Installation, Power Distribution & Civil Works",
+      "contactPerson": "Sample Contact B",
+      "contactInfo": "contact.b@example.com | +63 900 000 0002",
       "active": true,
-      "createdAt": "2026-11-21 3:22:33"
+      "createdAt": "2025-10-01"
     },
     {
       "rowNumber": 4,
-      "contractorCode": "DMCI03",
-      "contractorName": "D.M. Consunji, Inc.",
-      "specialty": "High-Rise Building & Foundation",
-      "contactPerson": "Engr. Rafael Consunji",
-      "contactInfo": "tenders@dmcihomes.com",
+      "contractorCode": "CTR-0003",
+      "contractorName": "Sample Electric Utility Co.",
+      "specialty": "Electric Utility Service Deposit & Line Advance",
+      "contactPerson": "Utility Account Desk",
+      "contactInfo": "utility@example.com | +63 900 000 0003",
       "active": true,
-      "createdAt": "2026-11-21 3:22:33"
+      "createdAt": "2025-10-01"
     },
     {
       "rowNumber": 5,
-      "contractorCode": "DATEM04",
-      "contractorName": "DATEM Incorporated",
-      "specialty": "Precast & Architectural Fit-Out",
-      "contactPerson": "Ar. Patricia Gomez",
-      "contactInfo": "pgomez@datem.com.ph",
+      "contractorCode": "CTR-0004",
+      "contractorName": "Example MEPF Systems Inc.",
+      "specialty": "Heavy Structural & High-Voltage Switchgear",
+      "contactPerson": "Sample Contact D",
+      "contactInfo": "contact.d@example.com | +63 900 000 0004",
       "active": true,
-      "createdAt": "2026-11-21 3:22:33"
+      "createdAt": "2025-10-10"
+    }
+  ],
+  "projects": [
+    {
+      "rowNumber": 2,
+      "projectId": "PRJ-1001",
+      "mainProjectCode": "SITE1-ST7-1601",
+      "siteCode": "SITE1",
+      "siteName": "Northgate Residential Phase 1 (Sample)",
+      "developer": "Sample Development Corp",
+      "typeCode": "ST7",
+      "typeName": "Standard Unit Utility & Power Package",
+      "unitIdentifier": "1601",
+      "projectName": "Sample Block 16 Lot 01",
+      "status": "In Progress",
+      "createdAt": "2025-10-15",
+      "updatedAt": "2026-10-30"
+    },
+    {
+      "rowNumber": 3,
+      "projectId": "PRJ-1002",
+      "mainProjectCode": "SITE2-MEP-2204",
+      "siteCode": "SITE2",
+      "siteName": "Central Commercial Annex (Sample)",
+      "developer": "Example Estates Inc.",
+      "typeCode": "MEP",
+      "typeName": "Mechanical, Electrical & Plumbing (MEPF)",
+      "unitIdentifier": "2204",
+      "projectName": "Sample North Podium Feeder & Switchgear",
+      "status": "Started",
+      "createdAt": "2026-08-10",
+      "updatedAt": "2026-11-01"
+    }
+  ],
+  "subProjects": [
+    {
+      "rowNumber": 2,
+      "subProjectId": "SUB-2001",
+      "projectId": "PRJ-1001",
+      "mainProjectCode": "SITE1-ST7-1601",
+      "subProjectCode": "SITE1-ST7-1601-LoadSched",
+      "subProjectName": "Sign and Seal of Electrical Load Schedule",
+      "status": "Completed",
+      "progress": 100,
+      "targetDate": "2025-10-30",
+      "remarks": "Sign and Seal sample scope",
+      "updatedAt": "2025-10-29"
+    },
+    {
+      "rowNumber": 3,
+      "subProjectId": "SUB-2002",
+      "projectId": "PRJ-1001",
+      "mainProjectCode": "SITE1-ST7-1601",
+      "subProjectCode": "SITE1-ST7-1601-MBase",
+      "subProjectName": "Meter Base Installation (Labor & Materials)",
+      "status": "In Progress",
+      "progress": 95,
+      "targetDate": "2026-11-15",
+      "remarks": "MBase Installation with 5% retention holdback",
+      "updatedAt": "2026-10-30"
+    },
+    {
+      "rowNumber": 4,
+      "subProjectId": "SUB-2003",
+      "projectId": "PRJ-1001",
+      "mainProjectCode": "SITE1-ST7-1601",
+      "subProjectCode": "SITE1-ST7-1601-SD",
+      "subProjectName": "Utility Service Deposit",
+      "status": "Started",
+      "progress": 50,
+      "targetDate": "2026-11-30",
+      "remarks": "Service Deposit sample",
+      "updatedAt": "2026-09-02"
+    },
+    {
+      "rowNumber": 5,
+      "subProjectId": "SUB-2004",
+      "projectId": "PRJ-1001",
+      "mainProjectCode": "SITE1-ST7-1601",
+      "subProjectCode": "SITE1-ST7-1601-CA",
+      "subProjectName": "Utility Line Extension Advance",
+      "status": "Started",
+      "progress": 50,
+      "targetDate": "2026-12-15",
+      "remarks": "Utility line advance sample",
+      "updatedAt": "2026-09-02"
     },
     {
       "rowNumber": 6,
-      "contractorCode": "CTR-0005",
-      "contractorName": "Conrado Onofre Jr",
-      "specialty": "General Contracting",
-      "contactPerson": "Conrado Onofre Jr",
-      "contactInfo": "",
-      "active": true,
-      "createdAt": "2026-11-24 7:41:15"
-    },
-    {
-      "rowNumber": 7,
-      "contractorCode": "CTR-0006",
-      "contractorName": "Meralco",
-      "specialty": "General Contracting",
-      "contactPerson": "",
-      "contactInfo": "",
-      "active": true,
-      "createdAt": "2026-11-24 7:41:28"
-    },
-    {
-      "rowNumber": 8,
-      "contractorCode": "CTR-0007",
-      "contractorName": "One Power Pro Builders Inc",
-      "specialty": "General Contracting",
-      "contactPerson": "Yves Gonzales",
-      "contactInfo": "",
-      "active": true,
-      "createdAt": "2026-11-24 7:43:21"
+      "subProjectId": "SUB-2005",
+      "projectId": "PRJ-1002",
+      "mainProjectCode": "SITE2-MEP-2204",
+      "subProjectCode": "SITE2-MEP-2204-SWG",
+      "subProjectName": "Main Low-Voltage Switchgear Assembly",
+      "status": "In Progress",
+      "progress": 30,
+      "targetDate": "2026-12-20",
+      "remarks": "Switchgear supply and testing",
+      "updatedAt": "2026-11-01"
     }
   ],
   "contractsTCP": [
     {
       "rowNumber": 2,
-      "contractId": "CON-0001",
+      "contractId": "CON-3001",
       "tcpId": "TCP-0001",
       "parentContractId": "",
-      "subProjectId": "SUB-0001",
-      "subProjectCode": "MBASE",
-      "subProjectName": "All in SE Installation",
-      "projectId": "PRJ-0001",
-      "mainProjectCode": "CRC3-POWER3P-1601",
+      "subProjectId": "SUB-2001",
+      "subProjectCode": "SITE1-ST7-1601-LoadSched",
+      "subProjectName": "Sign and Seal of Electrical Load Schedule",
+      "projectId": "PRJ-1001",
+      "mainProjectCode": "SITE1-ST7-1601",
       "tcpType": "Original",
-      "tcpAmount": 95500,
-      "contractorCode": "CTR-0005",
-      "contractorName": "Conrado Onofre Jr",
+      "tcpAmount": 1120.00,
+      "contractorCode": "CTR-0001",
+      "contractorName": "Sample Power Engineering Services",
+      "contractStatus": "CLOSED",
+      "awardDate": "2025-10-15",
+      "remarks": "Sign and Seal sample contract",
+      "updatedAt": "2025-10-29",
+      "dpPercent": 0,
+      "progressBillingPercent": 100,
+      "retentionPercent": 0,
+      "hasWithholdingTax": true,
+      "withholdingTaxPercent": 8.9286,
+      "paymentTermsNotes": "100% upon completion with BIR 2307 WHT",
+      "birTaxInfo": {
+        "taxMode": "CUSTOM_MANUAL",
+        "isVatInclusive": true,
+        "vatRatePercent": 12,
+        "laborGrossAmount": 1120.00,
+        "materialGrossAmount": 0,
+        "laborEwtPercent": 10,
+        "materialEwtPercent": 0,
+        "computedVatAmount": 120.00,
+        "computedLaborEwt": 100.00,
+        "computedMaterialEwt": 0,
+        "totalWithholdingAmount": 100.00,
+        "isManualOverride": true
+      }
+    },
+    {
+      "rowNumber": 3,
+      "contractId": "CON-3002",
+      "tcpId": "TCP-0002",
+      "parentContractId": "",
+      "subProjectId": "SUB-2002",
+      "subProjectCode": "SITE1-ST7-1601-MBase",
+      "subProjectName": "Meter Base Installation (Labor & Materials)",
+      "projectId": "PRJ-1001",
+      "mainProjectCode": "SITE1-ST7-1601",
+      "tcpType": "Original",
+      "tcpAmount": 100000.00,
+      "contractorCode": "CTR-0002",
+      "contractorName": "Demo Electrical & Civil Builders",
       "contractStatus": "OPEN",
       "awardDate": "2026-09-02",
-      "remarks": "",
-      "updatedAt": "2026-11-24 8:05:05",
+      "remarks": "MBase Installation",
+      "updatedAt": "2026-10-30",
       "dpPercent": 50,
       "progressBillingPercent": 45,
       "retentionPercent": 5,
-      "hasWithholdingTax": true,
+      "hasWithholdingTax": false,
       "withholdingTaxPercent": 0,
-      "paymentTermsNotes": "DP: 50% | Prog: 45% | Ret: 5% | BIR: CUSTOM_MANUAL (WHT ₱0.00)",
+      "paymentTermsNotes": "50% DP, 45% Progress, 5% Retention Holdback (PHP 5,000.00)",
       "birTaxInfo": {
-        "taxMode": "CUSTOM_MANUAL",
+        "taxMode": "NON_VAT_LUMP_OR_SEP",
         "isVatInclusive": false,
-        "vatRatePercent": 12,
-        "laborGrossAmount": 95500,
+        "vatRatePercent": 0,
+        "laborGrossAmount": 100000.00,
         "materialGrossAmount": 0,
         "laborEwtPercent": 0,
-        "materialEwtPercent": 1,
-        "computedVatAmount": 11460,
+        "materialEwtPercent": 0,
+        "computedVatAmount": 0,
         "computedLaborEwt": 0,
         "computedMaterialEwt": 0,
         "totalWithholdingAmount": 0,
-        "isManualOverride": true
+        "isManualOverride": false
+      }
+    },
+    {
+      "rowNumber": 4,
+      "contractId": "CON-3003",
+      "tcpId": "TCP-0003",
+      "parentContractId": "",
+      "subProjectId": "SUB-2003",
+      "subProjectCode": "SITE1-ST7-1601-SD",
+      "subProjectName": "Utility Service Deposit",
+      "projectId": "PRJ-1001",
+      "mainProjectCode": "SITE1-ST7-1601",
+      "tcpType": "Original",
+      "tcpAmount": 60000.00,
+      "contractorCode": "CTR-0003",
+      "contractorName": "Sample Electric Utility Co.",
+      "contractStatus": "OPEN",
+      "awardDate": "2026-09-02",
+      "remarks": "Service Deposit",
+      "updatedAt": "2026-09-02",
+      "dpPercent": 0,
+      "progressBillingPercent": 100,
+      "retentionPercent": 0,
+      "hasWithholdingTax": false,
+      "withholdingTaxPercent": 0,
+      "paymentTermsNotes": "Direct utility deposit",
+      "birTaxInfo": {
+        "taxMode": "NON_VAT_LUMP_OR_SEP",
+        "isVatInclusive": false,
+        "vatRatePercent": 0,
+        "laborGrossAmount": 60000.00,
+        "materialGrossAmount": 0,
+        "laborEwtPercent": 0,
+        "materialEwtPercent": 0,
+        "computedVatAmount": 0,
+        "computedLaborEwt": 0,
+        "computedMaterialEwt": 0,
+        "totalWithholdingAmount": 0,
+        "isManualOverride": false
+      }
+    },
+    {
+      "rowNumber": 5,
+      "contractId": "CON-3004",
+      "tcpId": "TCP-0004",
+      "parentContractId": "",
+      "subProjectId": "SUB-2004",
+      "subProjectCode": "SITE1-ST7-1601-CA",
+      "subProjectName": "Utility Line Extension Advance",
+      "projectId": "PRJ-1001",
+      "mainProjectCode": "SITE1-ST7-1601",
+      "tcpType": "Original",
+      "tcpAmount": 250000.00,
+      "contractorCode": "CTR-0003",
+      "contractorName": "Sample Electric Utility Co.",
+      "contractStatus": "OPEN",
+      "awardDate": "2026-09-02",
+      "remarks": "Utility line advance",
+      "updatedAt": "2026-09-02",
+      "dpPercent": 0,
+      "progressBillingPercent": 100,
+      "retentionPercent": 0,
+      "hasWithholdingTax": false,
+      "withholdingTaxPercent": 0,
+      "paymentTermsNotes": "Direct utility cash advance",
+      "birTaxInfo": {
+        "taxMode": "NON_VAT_LUMP_OR_SEP",
+        "isVatInclusive": false,
+        "vatRatePercent": 0,
+        "laborGrossAmount": 250000.00,
+        "materialGrossAmount": 0,
+        "laborEwtPercent": 0,
+        "materialEwtPercent": 0,
+        "computedVatAmount": 0,
+        "computedLaborEwt": 0,
+        "computedMaterialEwt": 0,
+        "totalWithholdingAmount": 0,
+        "isManualOverride": false
+      }
+    },
+    {
+      "rowNumber": 6,
+      "contractId": "CON-3005",
+      "tcpId": "TCP-0005",
+      "parentContractId": "",
+      "subProjectId": "SUB-2005",
+      "subProjectCode": "SITE2-MEP-2204-SWG",
+      "subProjectName": "Main Low-Voltage Switchgear Assembly",
+      "projectId": "PRJ-1002",
+      "mainProjectCode": "SITE2-MEP-2204",
+      "tcpType": "Original",
+      "tcpAmount": 448000.00,
+      "contractorCode": "CTR-0004",
+      "contractorName": "Example MEPF Systems Inc.",
+      "contractStatus": "OPEN",
+      "awardDate": "2026-10-01",
+      "remarks": "Switchgear assembly & testing",
+      "updatedAt": "2026-11-01",
+      "dpPercent": 30,
+      "progressBillingPercent": 60,
+      "retentionPercent": 10,
+      "hasWithholdingTax": true,
+      "withholdingTaxPercent": 1.3393,
+      "paymentTermsNotes": "30% DP, 60% Progress, 10% Retention Holdback (PHP 44,800.00)",
+      "birTaxInfo": {
+        "taxMode": "VAT_SEPARATED_LABOR_MAT",
+        "isVatInclusive": true,
+        "vatRatePercent": 12,
+        "laborGrossAmount": 179200.00,
+        "materialGrossAmount": 268800.00,
+        "laborEwtPercent": 2,
+        "materialEwtPercent": 1,
+        "computedVatAmount": 48000.00,
+        "computedLaborEwt": 3200.00,
+        "computedMaterialEwt": 2400.00,
+        "totalWithholdingAmount": 5600.00,
+        "isManualOverride": false
       }
     }
   ],
-  "contractPayments": [],
+  "contractPayments": [
+    {
+      "rowNumber": 2,
+      "paymentId": "PAY-4001",
+      "contractId": "CON-3001",
+      "subProjectId": "SUB-2001",
+      "subProjectCode": "SITE1-ST7-1601-LoadSched",
+      "mainProjectCode": "SITE1-ST7-1601",
+      "contractorCode": "CTR-0001",
+      "contractorName": "Sample Power Engineering Services",
+      "billingType": "Final Billing",
+      "paymentStatus": "RECEIVED",
+      "rfpNumber": "RFP-2025-0001",
+      "rfpDate": "2025-10-15",
+      "rfpAmount": 1120.00,
+      "rfpPayee": "Sample Power Engineering Services",
+      "retentionDeducted": 0,
+      "rfpRemarks": "Sign and Seal completion billing",
+      "cvNumber": "CV-10001",
+      "cvDate": "2025-10-22",
+      "chequeAmount": 1020.00,
+      "withheldAmount": 100.00,
+      "receiptType": "OR (Official Receipt)",
+      "receiptNumber": "OR-0001",
+      "receiptDate": "2025-10-29",
+      "updatedAt": "2025-10-29"
+    },
+    {
+      "rowNumber": 3,
+      "paymentId": "PAY-4002",
+      "contractId": "CON-3002",
+      "subProjectId": "SUB-2002",
+      "subProjectCode": "SITE1-ST7-1601-MBase",
+      "mainProjectCode": "SITE1-ST7-1601",
+      "contractorCode": "CTR-0002",
+      "contractorName": "Demo Electrical & Civil Builders",
+      "billingType": "Downpayment (DP)",
+      "paymentStatus": "RECEIVED",
+      "rfpNumber": "RFP-2026-0002",
+      "rfpDate": "2026-09-02",
+      "rfpAmount": 50000.00,
+      "rfpPayee": "Demo Electrical & Civil Builders",
+      "retentionDeducted": 0,
+      "rfpRemarks": "50% Downpayment",
+      "cvNumber": "CV-10002",
+      "cvDate": "2026-09-10",
+      "chequeAmount": 50000.00,
+      "withheldAmount": 0,
+      "receiptType": "OR (Official Receipt)",
+      "receiptNumber": "OR-0002",
+      "receiptDate": "2026-09-16",
+      "updatedAt": "2026-09-16"
+    },
+    {
+      "rowNumber": 4,
+      "paymentId": "PAY-4003",
+      "contractId": "CON-3004",
+      "subProjectId": "SUB-2004",
+      "subProjectCode": "SITE1-ST7-1601-CA",
+      "mainProjectCode": "SITE1-ST7-1601",
+      "contractorCode": "CTR-0003",
+      "contractorName": "Sample Electric Utility Co.",
+      "billingType": "Progress Billing",
+      "paymentStatus": "CHEQUE_RELEASED",
+      "rfpNumber": "RFP-2026-0003",
+      "rfpDate": "2026-09-02",
+      "rfpAmount": 250000.00,
+      "rfpPayee": "Sample Electric Utility Co.",
+      "retentionDeducted": 0,
+      "rfpRemarks": "Utility Line Advance",
+      "cvNumber": "CV-10003",
+      "cvDate": "2026-09-09",
+      "chequeAmount": 250000.00,
+      "withheldAmount": 0,
+      "receiptType": "",
+      "receiptNumber": "",
+      "receiptDate": "",
+      "updatedAt": "2026-09-09"
+    },
+    {
+      "rowNumber": 5,
+      "paymentId": "PAY-4004",
+      "contractId": "CON-3003",
+      "subProjectId": "SUB-2003",
+      "subProjectCode": "SITE1-ST7-1601-SD",
+      "mainProjectCode": "SITE1-ST7-1601",
+      "contractorCode": "CTR-0003",
+      "contractorName": "Sample Electric Utility Co.",
+      "billingType": "Progress Billing",
+      "paymentStatus": "CHEQUE_RELEASED",
+      "rfpNumber": "RFP-2026-0004",
+      "rfpDate": "2026-09-02",
+      "rfpAmount": 60000.00,
+      "rfpPayee": "Sample Electric Utility Co.",
+      "retentionDeducted": 0,
+      "rfpRemarks": "Service Deposit",
+      "cvNumber": "CV-10004",
+      "cvDate": "2026-09-09",
+      "chequeAmount": 60000.00,
+      "withheldAmount": 0,
+      "receiptType": "",
+      "receiptNumber": "",
+      "receiptDate": "",
+      "updatedAt": "2026-09-09"
+    },
+    {
+      "rowNumber": 6,
+      "paymentId": "PAY-4005",
+      "contractId": "CON-3002",
+      "subProjectId": "SUB-2002",
+      "subProjectCode": "SITE1-ST7-1601-MBase",
+      "mainProjectCode": "SITE1-ST7-1601",
+      "contractorCode": "CTR-0002",
+      "contractorName": "Demo Electrical & Civil Builders",
+      "billingType": "Progress Billing",
+      "paymentStatus": "CHEQUE_RELEASED",
+      "rfpNumber": "RFP-2026-0005",
+      "rfpDate": "2026-10-30",
+      "rfpAmount": 45000.00,
+      "rfpPayee": "Demo Electrical & Civil Builders",
+      "retentionDeducted": 0,
+      "rfpRemarks": "45% Progress (5% Retention Holdback PHP 5,000.00 preserved)",
+      "cvNumber": "CV-10005",
+      "cvDate": "2026-10-31",
+      "chequeAmount": 45000.00,
+      "withheldAmount": 0,
+      "receiptType": "",
+      "receiptNumber": "",
+      "receiptDate": "",
+      "updatedAt": "2026-10-31"
+    }
+  ],
   "userAccounts": [
     {
       "rowNumber": 2,
       "userId": "USR-0001",
-      "fullName": "Louie Sarmiento",
-      "email": "lasarmiento.apec@gmail.com",
+      "fullName": "Dev System Administrator",
+      "email": "admin.dev@example.com",
       "roleTitle": "System Administrator",
-      "department": "Executive & Project Controls",
-      "phone": "#ERROR!",
+      "department": "Project Controls",
+      "phone": "+63 900 000 0001",
       "status": "ACTIVE",
-      "bioNotes": "Full administrative access across all project, contract, payment, and backend modules.",
+      "bioNotes": "Placeholder dev profile with full access across all modules.",
       "permissions": {
-        "projects": {
-          "view": true,
-          "add": true,
-          "edit": true
-        },
-        "contracts": {
-          "view": true,
-          "add": true,
-          "edit": true
-        },
-        "payments": {
-          "view": true,
-          "add": true,
-          "edit": true
-        },
-        "contractors": {
-          "view": true,
-          "add": true,
-          "edit": true
-        },
-        "sites": {
-          "view": true,
-          "add": true,
-          "edit": true
-        },
-        "admin": {
-          "view": true,
-          "add": true,
-          "edit": true
-        }
+        "projects": { "view": true, "add": true, "edit": true },
+        "contracts": { "view": true, "add": true, "edit": true },
+        "payments": { "view": true, "add": true, "edit": true },
+        "contractors": { "view": true, "add": true, "edit": true },
+        "sites": { "view": true, "add": true, "edit": true },
+        "admin": { "view": true, "add": true, "edit": true }
       },
-      "createdAt": "2026-11-21 6:27:16",
-      "updatedAt": "2026-11-21 6:27:16"
+      "createdAt": "2025-10-01",
+      "updatedAt": "2026-11-24"
     },
     {
       "rowNumber": 3,
       "userId": "USR-0002",
-      "fullName": "Engr. Mateo Cruz",
-      "email": "mcruz.ops@apec.com",
-      "roleTitle": "Lead Project Engineer",
-      "department": "Site Engineering & Operations",
-      "phone": "#ERROR!",
+      "fullName": "Sample Project Manager",
+      "email": "pm.dev@example.com",
+      "roleTitle": "Project Manager",
+      "department": "Engineering & Site Operations",
+      "phone": "+63 900 000 0002",
       "status": "ACTIVE",
-      "bioNotes": "Manages main project creation, linked sub-projects, and site directories.",
+      "bioNotes": "Placeholder dev profile for project creation and contract awarding.",
       "permissions": {
-        "projects": {
-          "view": true,
-          "add": true,
-          "edit": true
-        },
-        "contracts": {
-          "view": true,
-          "add": false,
-          "edit": false
-        },
-        "payments": {
-          "view": true,
-          "add": false,
-          "edit": false
-        },
-        "contractors": {
-          "view": true,
-          "add": true,
-          "edit": false
-        },
-        "sites": {
-          "view": true,
-          "add": true,
-          "edit": true
-        },
-        "admin": {
-          "view": false,
-          "add": false,
-          "edit": false
-        }
+        "projects": { "view": true, "add": true, "edit": true },
+        "contracts": { "view": true, "add": true, "edit": true },
+        "payments": { "view": true, "add": true, "edit": false },
+        "contractors": { "view": true, "add": true, "edit": true },
+        "sites": { "view": true, "add": true, "edit": false },
+        "admin": { "view": true, "add": false, "edit": false }
       },
-      "createdAt": "2026-11-21 6:27:16",
-      "updatedAt": "2026-11-21 6:27:16"
+      "createdAt": "2025-10-01",
+      "updatedAt": "2026-11-24"
     },
     {
       "rowNumber": 4,
       "userId": "USR-0003",
-      "fullName": "Bianca Reyes, CPA",
-      "email": "breyes.fin@apec.com",
-      "roleTitle": "Contracts & Finance Officer",
-      "department": "Quantity Surveying & Treasury",
-      "phone": "#ERROR!",
+      "fullName": "Sample Finance Officer",
+      "email": "finance.dev@example.com",
+      "roleTitle": "Finance & Disbursement Officer",
+      "department": "Finance & Accounting",
+      "phone": "+63 900 000 0003",
       "status": "ACTIVE",
-      "bioNotes": "Handles Sub-Project TCP contract awards, RFPs, Cheque Vouchers (CV), and OR/CR receipts.",
+      "bioNotes": "Placeholder dev profile for RFP, CV, BIR 2307, and Receipt tracking.",
       "permissions": {
-        "projects": {
-          "view": true,
-          "add": false,
-          "edit": false
-        },
-        "contracts": {
-          "view": true,
-          "add": true,
-          "edit": true
-        },
-        "payments": {
-          "view": true,
-          "add": true,
-          "edit": true
-        },
-        "contractors": {
-          "view": true,
-          "add": true,
-          "edit": true
-        },
-        "sites": {
-          "view": true,
-          "add": false,
-          "edit": false
-        },
-        "admin": {
-          "view": false,
-          "add": false,
-          "edit": false
-        }
+        "projects": { "view": true, "add": false, "edit": false },
+        "contracts": { "view": true, "add": false, "edit": false },
+        "payments": { "view": true, "add": true, "edit": true },
+        "contractors": { "view": true, "add": false, "edit": true },
+        "sites": { "view": true, "add": false, "edit": false },
+        "admin": { "view": false, "add": false, "edit": false }
       },
-      "createdAt": "2026-11-21 6:27:16",
-      "updatedAt": "2026-11-21 6:27:16"
+      "createdAt": "2025-10-01",
+      "updatedAt": "2026-11-24"
     },
     {
       "rowNumber": 5,
       "userId": "USR-0004",
-      "fullName": "Arthur Lim",
-      "email": "alim.audit@apec.com",
-      "roleTitle": "Internal Auditor (View-Only)",
-      "department": "Compliance & Audit",
-      "phone": "#ERROR!",
+      "fullName": "Sample Read-Only Auditor",
+      "email": "auditor.dev@example.com",
+      "roleTitle": "Auditor (Read-Only)",
+      "department": "Internal Audit",
+      "phone": "+63 900 000 0004",
       "status": "ACTIVE",
-      "bioNotes": "Read-only monitoring access across projects, contracts, and payment ledgers.",
+      "bioNotes": "Placeholder dev profile with read-only audit visibility.",
       "permissions": {
-        "projects": {
-          "view": true,
-          "add": false,
-          "edit": false
-        },
-        "contracts": {
-          "view": true,
-          "add": false,
-          "edit": false
-        },
-        "payments": {
-          "view": true,
-          "add": false,
-          "edit": false
-        },
-        "contractors": {
-          "view": true,
-          "add": false,
-          "edit": false
-        },
-        "sites": {
-          "view": true,
-          "add": false,
-          "edit": false
-        },
-        "admin": {
-          "view": false,
-          "add": false,
-          "edit": false
-        }
+        "projects": { "view": true, "add": false, "edit": false },
+        "contracts": { "view": true, "add": false, "edit": false },
+        "payments": { "view": true, "add": false, "edit": false },
+        "contractors": { "view": true, "add": false, "edit": false },
+        "sites": { "view": true, "add": false, "edit": false },
+        "admin": { "view": true, "add": false, "edit": false }
       },
-      "createdAt": "2026-11-21 6:27:16",
-      "updatedAt": "2026-11-21 6:27:16"
+      "createdAt": "2025-10-01",
+      "updatedAt": "2026-11-24"
     }
-  ],
-  "lastSyncedAt": "2026-11-25T23:44:45.882Z"
+  ]
 }

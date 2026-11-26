@@ -11455,7 +11455,6 @@ var require_client = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 // src/types/schema.ts
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_client = require_client();
-var DEFAULT_SPREADSHEET_ID = "1HNmAdZe7POIzIm9mCUPxQJL7p9BoBZEO1hXq6PZNs5M";
 var SHEET_NAMES = {
 	SITES: "Sites",
 	PROJECT_TYPES: "ProjectTypes",
@@ -11546,9948 +11545,226 @@ var RECEIPT_DOCUMENT_TYPE_OPTIONS = [
 	"AR (Acknowledgement Receipt)",
 	"Other"
 ];
-// node_modules/@firebase/util/dist/postinstall.mjs
-/**
-* @license
-* Copyright 2025 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-var getDefaultsFromPostinstall = () => void 0;
-// node_modules/@firebase/util/dist/index.esm.js
-/**
-* @license
-* Copyright 2017 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* @license
-* Copyright 2017 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* @license
-* Copyright 2017 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-var stringToByteArray$1 = function(str) {
-	const out = [];
-	let p = 0;
-	for (let i = 0; i < str.length; i++) {
-		let c = str.charCodeAt(i);
-		if (c < 128) out[p++] = c;
-		else if (c < 2048) {
-			out[p++] = c >> 6 | 192;
-			out[p++] = c & 63 | 128;
-		} else if ((c & 64512) === 55296 && i + 1 < str.length && (str.charCodeAt(i + 1) & 64512) === 56320) {
-			c = 65536 + ((c & 1023) << 10) + (str.charCodeAt(++i) & 1023);
-			out[p++] = c >> 18 | 240;
-			out[p++] = c >> 12 & 63 | 128;
-			out[p++] = c >> 6 & 63 | 128;
-			out[p++] = c & 63 | 128;
-		} else {
-			out[p++] = c >> 12 | 224;
-			out[p++] = c >> 6 & 63 | 128;
-			out[p++] = c & 63 | 128;
-		}
-	}
-	return out;
-};
-/**
-* Turns an array of numbers into the string given by the concatenation of the
-* characters to which the numbers correspond.
-* @param bytes Array of numbers representing characters.
-* @return Stringification of the array.
-*/
-var byteArrayToString = function(bytes) {
-	const out = [];
-	let pos = 0, c = 0;
-	while (pos < bytes.length) {
-		const c1 = bytes[pos++];
-		if (c1 < 128) out[c++] = String.fromCharCode(c1);
-		else if (c1 > 191 && c1 < 224) {
-			const c2 = bytes[pos++];
-			out[c++] = String.fromCharCode((c1 & 31) << 6 | c2 & 63);
-		} else if (c1 > 239 && c1 < 365) {
-			const c2 = bytes[pos++];
-			const c3 = bytes[pos++];
-			const c4 = bytes[pos++];
-			const u = ((c1 & 7) << 18 | (c2 & 63) << 12 | (c3 & 63) << 6 | c4 & 63) - 65536;
-			out[c++] = String.fromCharCode(55296 + (u >> 10));
-			out[c++] = String.fromCharCode(56320 + (u & 1023));
-		} else {
-			const c2 = bytes[pos++];
-			const c3 = bytes[pos++];
-			out[c++] = String.fromCharCode((c1 & 15) << 12 | (c2 & 63) << 6 | c3 & 63);
-		}
-	}
-	return out.join("");
-};
-var base64 = {
-	/**
-	* Maps bytes to characters.
-	*/
-	byteToCharMap_: null,
-	/**
-	* Maps characters to bytes.
-	*/
-	charToByteMap_: null,
-	/**
-	* Maps bytes to websafe characters.
-	* @private
-	*/
-	byteToCharMapWebSafe_: null,
-	/**
-	* Maps websafe characters to bytes.
-	* @private
-	*/
-	charToByteMapWebSafe_: null,
-	/**
-	* Our default alphabet, shared between
-	* ENCODED_VALS and ENCODED_VALS_WEBSAFE
-	*/
-	ENCODED_VALS_BASE: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789",
-	/**
-	* Our default alphabet. Value 64 (=) is special; it means "nothing."
-	*/
-	get ENCODED_VALS() {
-		return this.ENCODED_VALS_BASE + "+/=";
-	},
-	/**
-	* Our websafe alphabet.
-	*/
-	get ENCODED_VALS_WEBSAFE() {
-		return this.ENCODED_VALS_BASE + "-_.";
-	},
-	/**
-	* Whether this browser supports the atob and btoa functions. This extension
-	* started at Mozilla but is now implemented by many browsers. We use the
-	* ASSUME_* variables to avoid pulling in the full useragent detection library
-	* but still allowing the standard per-browser compilations.
-	*
-	*/
-	HAS_NATIVE_SUPPORT: typeof atob === "function",
-	/**
-	* Base64-encode an array of bytes.
-	*
-	* @param input An array of bytes (numbers with
-	*     value in [0, 255]) to encode.
-	* @param webSafe Boolean indicating we should use the
-	*     alternative alphabet.
-	* @return The base64 encoded string.
-	*/
-	encodeByteArray(input, webSafe) {
-		if (!Array.isArray(input)) throw Error("encodeByteArray takes an array as a parameter");
-		this.init_();
-		const byteToCharMap = webSafe ? this.byteToCharMapWebSafe_ : this.byteToCharMap_;
-		const output = [];
-		for (let i = 0; i < input.length; i += 3) {
-			const byte1 = input[i];
-			const haveByte2 = i + 1 < input.length;
-			const byte2 = haveByte2 ? input[i + 1] : 0;
-			const haveByte3 = i + 2 < input.length;
-			const byte3 = haveByte3 ? input[i + 2] : 0;
-			const outByte1 = byte1 >> 2;
-			const outByte2 = (byte1 & 3) << 4 | byte2 >> 4;
-			let outByte3 = (byte2 & 15) << 2 | byte3 >> 6;
-			let outByte4 = byte3 & 63;
-			if (!haveByte3) {
-				outByte4 = 64;
-				if (!haveByte2) outByte3 = 64;
-			}
-			output.push(byteToCharMap[outByte1], byteToCharMap[outByte2], byteToCharMap[outByte3], byteToCharMap[outByte4]);
-		}
-		return output.join("");
-	},
-	/**
-	* Base64-encode a string.
-	*
-	* @param input A string to encode.
-	* @param webSafe If true, we should use the
-	*     alternative alphabet.
-	* @return The base64 encoded string.
-	*/
-	encodeString(input, webSafe) {
-		if (this.HAS_NATIVE_SUPPORT && !webSafe) return btoa(input);
-		return this.encodeByteArray(stringToByteArray$1(input), webSafe);
-	},
-	/**
-	* Base64-decode a string.
-	*
-	* @param input to decode.
-	* @param webSafe True if we should use the
-	*     alternative alphabet.
-	* @return string representing the decoded value.
-	*/
-	decodeString(input, webSafe) {
-		if (this.HAS_NATIVE_SUPPORT && !webSafe) return atob(input);
-		return byteArrayToString(this.decodeStringToByteArray(input, webSafe));
-	},
-	/**
-	* Base64-decode a string.
-	*
-	* In base-64 decoding, groups of four characters are converted into three
-	* bytes.  If the encoder did not apply padding, the input length may not
-	* be a multiple of 4.
-	*
-	* In this case, the last group will have fewer than 4 characters, and
-	* padding will be inferred.  If the group has one or two characters, it decodes
-	* to one byte.  If the group has three characters, it decodes to two bytes.
-	*
-	* @param input Input to decode.
-	* @param webSafe True if we should use the web-safe alphabet.
-	* @return bytes representing the decoded value.
-	*/
-	decodeStringToByteArray(input, webSafe) {
-		this.init_();
-		const charToByteMap = webSafe ? this.charToByteMapWebSafe_ : this.charToByteMap_;
-		const output = [];
-		for (let i = 0; i < input.length;) {
-			const byte1 = charToByteMap[input.charAt(i++)];
-			const byte2 = i < input.length ? charToByteMap[input.charAt(i)] : 0;
-			++i;
-			const byte3 = i < input.length ? charToByteMap[input.charAt(i)] : 64;
-			++i;
-			const byte4 = i < input.length ? charToByteMap[input.charAt(i)] : 64;
-			++i;
-			if (byte1 == null || byte2 == null || byte3 == null || byte4 == null) throw new DecodeBase64StringError();
-			const outByte1 = byte1 << 2 | byte2 >> 4;
-			output.push(outByte1);
-			if (byte3 !== 64) {
-				const outByte2 = byte2 << 4 & 240 | byte3 >> 2;
-				output.push(outByte2);
-				if (byte4 !== 64) {
-					const outByte3 = byte3 << 6 & 192 | byte4;
-					output.push(outByte3);
-				}
-			}
-		}
-		return output;
-	},
-	/**
-	* Lazy static initialization function. Called before
-	* accessing any of the static map variables.
-	* @private
-	*/
-	init_() {
-		if (!this.byteToCharMap_) {
-			this.byteToCharMap_ = {};
-			this.charToByteMap_ = {};
-			this.byteToCharMapWebSafe_ = {};
-			this.charToByteMapWebSafe_ = {};
-			for (let i = 0; i < this.ENCODED_VALS.length; i++) {
-				this.byteToCharMap_[i] = this.ENCODED_VALS.charAt(i);
-				this.charToByteMap_[this.byteToCharMap_[i]] = i;
-				this.byteToCharMapWebSafe_[i] = this.ENCODED_VALS_WEBSAFE.charAt(i);
-				this.charToByteMapWebSafe_[this.byteToCharMapWebSafe_[i]] = i;
-				if (i >= this.ENCODED_VALS_BASE.length) {
-					this.charToByteMap_[this.ENCODED_VALS_WEBSAFE.charAt(i)] = i;
-					this.charToByteMapWebSafe_[this.ENCODED_VALS.charAt(i)] = i;
-				}
-			}
-		}
-	}
-};
-/**
-* An error encountered while decoding base64 string.
-*/
-var DecodeBase64StringError = class extends Error {
-	constructor() {
-		super(...arguments);
-		this.name = "DecodeBase64StringError";
-	}
-};
-/**
-* URL-safe base64 encoding
-*/
-var base64Encode = function(str) {
-	const utf8Bytes = stringToByteArray$1(str);
-	return base64.encodeByteArray(utf8Bytes, true);
-};
-/**
-* URL-safe base64 encoding (without "." padding in the end).
-* e.g. Used in JSON Web Token (JWT) parts.
-*/
-var base64urlEncodeWithoutPadding = function(str) {
-	return base64Encode(str).replace(/\./g, "");
-};
-/**
-* URL-safe base64 decoding
-*
-* NOTE: DO NOT use the global atob() function - it does NOT support the
-* base64Url variant encoding.
-*
-* @param str To be decoded
-* @return Decoded result, if possible
-*/
-var base64Decode = function(str) {
-	try {
-		return base64.decodeString(str, true);
-	} catch (e) {
-		console.error("base64Decode failed: ", e);
-	}
-	return null;
-};
-/**
-* @license
-* Copyright 2017 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* @license
-* Copyright 2022 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* Polyfill for `globalThis` object.
-* @returns the `globalThis` object for the given environment.
-* @public
-*/
-function getGlobal() {
-	if (typeof self !== "undefined") return self;
-	if (typeof window !== "undefined") return window;
-	if (typeof global !== "undefined") return global;
-	throw new Error("Unable to locate global object.");
-}
-/**
-* @license
-* Copyright 2022 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-var getDefaultsFromGlobal = () => getGlobal().__FIREBASE_DEFAULTS__;
-/**
-* Attempt to read defaults from a JSON string provided to
-* process(.)env(.)__FIREBASE_DEFAULTS__ or a JSON file whose path is in
-* process(.)env(.)__FIREBASE_DEFAULTS_PATH__
-* The dots are in parens because certain compilers (Vite?) cannot
-* handle seeing that variable in comments.
-* See https://github.com/firebase/firebase-js-sdk/issues/6838
-*/
-var getDefaultsFromEnvVariable = () => {
-	if (typeof process === "undefined" || false) return;
-	const defaultsJsonString = {}.__FIREBASE_DEFAULTS__;
-	if (defaultsJsonString) return JSON.parse(defaultsJsonString);
-};
-var getDefaultsFromCookie = () => {
-	if (typeof document === "undefined") return;
-	let match;
-	try {
-		match = document.cookie.match(/__FIREBASE_DEFAULTS__=([^;]+)/);
-	} catch (e) {
-		return;
-	}
-	const decoded = match && base64Decode(match[1]);
-	return decoded && JSON.parse(decoded);
-};
-/**
-* Get the __FIREBASE_DEFAULTS__ object. It checks in order:
-* (1) if such an object exists as a property of `globalThis`
-* (2) if such an object was provided on a shell environment variable
-* (3) if such an object exists in a cookie
-* @public
-*/
-var getDefaults = () => {
-	try {
-		return getDefaultsFromPostinstall() || getDefaultsFromGlobal() || getDefaultsFromEnvVariable() || getDefaultsFromCookie();
-	} catch (e) {
-		/**
-		* Catch-all for being unable to get __FIREBASE_DEFAULTS__ due
-		* to any environment case we have not accounted for. Log to
-		* info instead of swallowing so we can find these unknown cases
-		* and add paths for them if needed.
-		*/
-		console.info(`Unable to get __FIREBASE_DEFAULTS__ due to: ${e}`);
-		return;
-	}
-};
-/**
-* Returns emulator host stored in the __FIREBASE_DEFAULTS__ object
-* for the given product.
-* @returns a URL host formatted like `127.0.0.1:9999` or `[::1]:4000` if available
-* @public
-*/
-var getDefaultEmulatorHost = (productName) => getDefaults()?.emulatorHosts?.[productName];
-/**
-* Returns Firebase app config stored in the __FIREBASE_DEFAULTS__ object.
-* @public
-*/
-var getDefaultAppConfig = () => getDefaults()?.config;
-/**
-* Returns an experimental setting on the __FIREBASE_DEFAULTS__ object (properties
-* prefixed by "_")
-* @public
-*/
-var getExperimentalSetting = (name) => getDefaults()?.[`_${name}`];
-/**
-* @license
-* Copyright 2017 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-var Deferred = class {
-	constructor() {
-		this.reject = () => {};
-		this.resolve = () => {};
-		this.promise = new Promise((resolve, reject) => {
-			this.resolve = resolve;
-			this.reject = reject;
-		});
-	}
-	/**
-	* Our API internals are not promisified and cannot because our callback APIs have subtle expectations around
-	* invoking promises inline, which Promises are forbidden to do. This method accepts an optional node-style callback
-	* and returns a node-style callback which will resolve or reject the Deferred's promise.
-	*/
-	wrapCallback(callback) {
-		return (error, value) => {
-			if (error) this.reject(error);
-			else this.resolve(value);
-			if (typeof callback === "function") {
-				this.promise.catch(() => {});
-				if (callback.length === 1) callback(error);
-				else callback(error, value);
-			}
-		};
-	}
-};
-/**
-* @license
-* Copyright 2021 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* @license
-* Copyright 2017 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* Returns navigator.userAgent string or '' if it's not defined.
-* @return user agent string
-*/
-function getUA() {
-	if (typeof navigator !== "undefined" && typeof navigator["userAgent"] === "string") return navigator["userAgent"];
-	else return "";
-}
-/**
-* Detect Cordova / PhoneGap / Ionic frameworks on a mobile device.
-*
-* Deliberately does not rely on checking `file://` URLs (as this fails PhoneGap
-* in the Ripple emulator) nor Cordova `onDeviceReady`, which would normally
-* wait for a callback.
-*/
-function isMobileCordova() {
-	return typeof window !== "undefined" && !!(window["cordova"] || window["phonegap"] || window["PhoneGap"]) && /ios|iphone|ipod|ipad|android|blackberry|iemobile/i.test(getUA());
-}
-/**
-* Detect Cloudflare Worker context.
-*/
-function isCloudflareWorker() {
-	return typeof navigator !== "undefined" && navigator.userAgent === "Cloudflare-Workers";
-}
-function isBrowserExtension() {
-	const runtime = typeof chrome === "object" ? chrome.runtime : typeof browser === "object" ? browser.runtime : void 0;
-	return typeof runtime === "object" && runtime.id !== void 0;
-}
-/**
-* Detect React Native.
-*
-* @return true if ReactNative environment is detected.
-*/
-function isReactNative() {
-	return typeof navigator === "object" && navigator["product"] === "ReactNative";
-}
-/** Detects Internet Explorer. */
-function isIE() {
-	const ua = getUA();
-	return ua.indexOf("MSIE ") >= 0 || ua.indexOf("Trident/") >= 0;
-}
-/**
-* This method checks if indexedDB is supported by current browser/service worker context
-* @return true if indexedDB is supported by current browser/service worker context
-*/
-function isIndexedDBAvailable() {
-	try {
-		return typeof indexedDB === "object";
-	} catch (e) {
-		return false;
-	}
-}
-/**
-* This method validates browser/sw context for indexedDB by opening a dummy indexedDB database and reject
-* if errors occur during the database open operation.
-*
-* @throws exception if current browser/sw context can't run idb.open (ex: Safari iframe, Firefox
-* private browsing)
-*/
-function validateIndexedDBOpenable() {
-	return new Promise((resolve, reject) => {
-		try {
-			let preExist = true;
-			const DB_CHECK_NAME = "validate-browser-context-for-indexeddb-analytics-module";
-			const request = self.indexedDB.open(DB_CHECK_NAME);
-			request.onsuccess = () => {
-				request.result.close();
-				if (!preExist) self.indexedDB.deleteDatabase(DB_CHECK_NAME);
-				resolve(true);
-			};
-			request.onupgradeneeded = () => {
-				preExist = false;
-			};
-			request.onerror = () => {
-				reject(request.error?.message || "");
-			};
-		} catch (error) {
-			reject(error);
-		}
-	});
-}
-/**
-* @license
-* Copyright 2017 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* @fileoverview Standardized Firebase Error.
-*
-* Usage:
-*
-*   // TypeScript string literals for type-safe codes
-*   type Err =
-*     'unknown' |
-*     'object-not-found'
-*     ;
-*
-*   // Closure enum for type-safe error codes
-*   // at-enum {string}
-*   var Err = {
-*     UNKNOWN: 'unknown',
-*     OBJECT_NOT_FOUND: 'object-not-found',
-*   }
-*
-*   let errors: Map<Err, string> = {
-*     'generic-error': "Unknown error",
-*     'file-not-found': "Could not find file: {$file}",
-*   };
-*
-*   // Type-safe function - must pass a valid error code as param.
-*   let error = new ErrorFactory<Err>('service', 'Service', errors);
-*
-*   ...
-*   throw error.create(Err.GENERIC);
-*   ...
-*   throw error.create(Err.FILE_NOT_FOUND, {'file': fileName});
-*   ...
-*   // Service: Could not file file: foo.txt (service/file-not-found).
-*
-*   catch (e) {
-*     assert(e.message === "Could not find file: foo.txt.");
-*     if ((e as FirebaseError)?.code === 'service/file-not-found') {
-*       console.log("Could not read file: " + e['file']);
-*     }
-*   }
-*/
-var ERROR_NAME = "FirebaseError";
-var FirebaseError = class FirebaseError extends Error {
-	constructor(code, message, customData) {
-		super(message);
-		this.code = code;
-		this.customData = customData;
-		/** The custom name for all FirebaseErrors. */
-		this.name = ERROR_NAME;
-		Object.setPrototypeOf(this, FirebaseError.prototype);
-		if (Error.captureStackTrace) Error.captureStackTrace(this, ErrorFactory.prototype.create);
-	}
-};
-var ErrorFactory = class {
-	constructor(service, serviceName, errors) {
-		this.service = service;
-		this.serviceName = serviceName;
-		this.errors = errors;
-	}
-	create(code, ...data) {
-		const customData = data[0] || {};
-		const fullCode = `${this.service}/${code}`;
-		const template = this.errors[code];
-		const message = template ? replaceTemplate(template, customData) : "Error";
-		return new FirebaseError(fullCode, `${this.serviceName}: ${message} (${fullCode}).`, customData);
-	}
-};
-function replaceTemplate(template, data) {
-	try {
-		let ptr = 0;
-		let result = "";
-		while (ptr < template.length) {
-			const start = template.indexOf("{$", ptr);
-			if (start === -1) {
-				result += template.substring(ptr);
-				break;
-			}
-			const end = template.indexOf("}", start + 2);
-			if (end === -1) {
-				result += template.substring(ptr);
-				break;
-			}
-			const key = template.substring(start + 2, end);
-			const value = data[key];
-			result += template.substring(ptr, start) + (value != null ? String(value) : `<${key}?>`);
-			ptr = end + 1;
-		}
-		return result;
-	} catch (e) {
-		return template;
-	}
-}
-/**
-* @license
-* Copyright 2017 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* @license
-* Copyright 2017 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* @license
-* Copyright 2017 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-function isEmpty(obj) {
-	for (const key in obj) if (Object.prototype.hasOwnProperty.call(obj, key)) return false;
-	return true;
-}
-/**
-* Deep equal two objects. Support Arrays and Objects.
-*/
-function deepEqual(a, b) {
-	if (a === b) return true;
-	const aKeys = Object.keys(a);
-	const bKeys = Object.keys(b);
-	for (const k of aKeys) {
-		if (!bKeys.includes(k)) return false;
-		const aProp = a[k];
-		const bProp = b[k];
-		if (isObject(aProp) && isObject(bProp)) {
-			if (!deepEqual(aProp, bProp)) return false;
-		} else if (aProp !== bProp) return false;
-	}
-	for (const k of bKeys) if (!aKeys.includes(k)) return false;
-	return true;
-}
-function isObject(thing) {
-	return thing !== null && typeof thing === "object";
-}
-/**
-* @license
-* Copyright 2022 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* @license
-* Copyright 2017 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* Returns a querystring-formatted string (e.g. &arg=val&arg2=val2) from a
-* params object (e.g. {arg: 'val', arg2: 'val2'})
-* Note: You must prepend it with ? when adding it to a URL.
-*/
-function querystring(querystringParams) {
-	const params = [];
-	for (const [key, value] of Object.entries(querystringParams)) if (Array.isArray(value)) value.forEach((arrayVal) => {
-		params.push(encodeURIComponent(key) + "=" + encodeURIComponent(arrayVal));
-	});
-	else params.push(encodeURIComponent(key) + "=" + encodeURIComponent(value));
-	return params.length ? "&" + params.join("&") : "";
-}
-/**
-* Decodes a querystring (e.g. ?arg=val&arg2=val2) into a params object
-* (e.g. {arg: 'val', arg2: 'val2'})
-*/
-function querystringDecode(querystring) {
-	const obj = {};
-	querystring.replace(/^\?/, "").split("&").forEach((token) => {
-		if (token) {
-			const [key, value] = token.split("=");
-			obj[decodeURIComponent(key)] = decodeURIComponent(value);
-		}
-	});
-	return obj;
-}
-/**
-* Extract the query string part of a URL, including the leading question mark (if present).
-*/
-function extractQuerystring(url) {
-	const queryStart = url.indexOf("?");
-	if (!queryStart) return "";
-	const fragmentStart = url.indexOf("#", queryStart);
-	return url.substring(queryStart, fragmentStart > 0 ? fragmentStart : void 0);
-}
-/**
-* @license
-* Copyright 2017 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* Helper to make a Subscribe function (just like Promise helps make a
-* Thenable).
-*
-* @param executor Function which can make calls to a single Observer
-*     as a proxy.
-* @param onNoObservers Callback when count of Observers goes to zero.
-*/
-function createSubscribe(executor, onNoObservers) {
-	const proxy = new ObserverProxy(executor, onNoObservers);
-	return proxy.subscribe.bind(proxy);
-}
-/**
-* Implement fan-out for any number of Observers attached via a subscribe
-* function.
-*/
-var ObserverProxy = class {
-	/**
-	* @param executor Function which can make calls to a single Observer
-	*     as a proxy.
-	* @param onNoObservers Callback when count of Observers goes to zero.
-	*/
-	constructor(executor, onNoObservers) {
-		this.observers = [];
-		this.unsubscribes = [];
-		this.observerCount = 0;
-		this.task = Promise.resolve();
-		this.finalized = false;
-		this.onNoObservers = onNoObservers;
-		this.task.then(() => {
-			executor(this);
-		}).catch((e) => {
-			this.error(e);
-		});
-	}
-	next(value) {
-		this.forEachObserver((observer) => {
-			observer.next(value);
-		});
-	}
-	error(error) {
-		this.forEachObserver((observer) => {
-			observer.error(error);
-		});
-		this.close(error);
-	}
-	complete() {
-		this.forEachObserver((observer) => {
-			observer.complete();
-		});
-		this.close();
-	}
-	/**
-	* Subscribe function that can be used to add an Observer to the fan-out list.
-	*
-	* - We require that no event is sent to a subscriber synchronously to their
-	*   call to subscribe().
-	*/
-	subscribe(nextOrObserver, error, complete) {
-		let observer;
-		if (nextOrObserver === void 0 && error === void 0 && complete === void 0) throw new Error("Missing Observer.");
-		if (implementsAnyMethods(nextOrObserver, [
-			"next",
-			"error",
-			"complete"
-		])) observer = nextOrObserver;
-		else observer = {
-			next: nextOrObserver,
-			error,
-			complete
-		};
-		if (observer.next === void 0) observer.next = noop;
-		if (observer.error === void 0) observer.error = noop;
-		if (observer.complete === void 0) observer.complete = noop;
-		const unsub = this.unsubscribeOne.bind(this, this.observers.length);
-		if (this.finalized) this.task.then(() => {
-			try {
-				if (this.finalError) observer.error(this.finalError);
-				else observer.complete();
-			} catch (e) {}
-		});
-		this.observers.push(observer);
-		return unsub;
-	}
-	unsubscribeOne(i) {
-		if (this.observers === void 0 || this.observers[i] === void 0) return;
-		delete this.observers[i];
-		this.observerCount -= 1;
-		if (this.observerCount === 0 && this.onNoObservers !== void 0) this.onNoObservers(this);
-	}
-	forEachObserver(fn) {
-		if (this.finalized) return;
-		for (let i = 0; i < this.observers.length; i++) this.sendOne(i, fn);
-	}
-	sendOne(i, fn) {
-		this.task.then(() => {
-			if (this.observers !== void 0 && this.observers[i] !== void 0) try {
-				fn(this.observers[i]);
-			} catch (e) {
-				if (typeof console !== "undefined" && console.error) console.error(e);
-			}
-		});
-	}
-	close(err) {
-		if (this.finalized) return;
-		this.finalized = true;
-		if (err !== void 0) this.finalError = err;
-		this.task.then(() => {
-			this.observers = void 0;
-			this.onNoObservers = void 0;
-		});
-	}
-};
-/**
-* Return true if the object passed in implements any of the named methods.
-*/
-function implementsAnyMethods(obj, methods) {
-	if (typeof obj !== "object" || obj === null) return false;
-	for (const method of methods) if (method in obj && typeof obj[method] === "function") return true;
-	return false;
-}
-function noop() {}
-/**
-* @license
-* Copyright 2017 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* @license
-* Copyright 2017 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* @license
-* Copyright 2019 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* @license
-* Copyright 2021 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-function getModularInstance(service) {
-	if (service && service._delegate) return service._delegate;
-	else return service;
-}
-/**
-* @license
-* Copyright 2025 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* Checks whether host is a cloud workstation or not.
-* @public
-*/
-function isCloudWorkstation(url) {
-	try {
-		return (url.startsWith("http://") || url.startsWith("https://") ? new URL(url).hostname : url).endsWith(".cloudworkstations.dev");
-	} catch {
-		return false;
-	}
-}
-/**
-* Makes a fetch request to the given server.
-* Mostly used for forwarding cookies in Firebase Studio.
-* @public
-*/
-async function pingServer(endpoint) {
-	return (await fetch(endpoint, { credentials: "include" })).ok;
-}
-/**
-* @license
-* Copyright 2025 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-// node_modules/@firebase/component/dist/esm/index.esm.js
-/**
-* Component for service name T, e.g. `auth`, `auth-internal`
-*/
-var Component = class {
-	/**
-	*
-	* @param name The public service name, e.g. app, auth, firestore, database
-	* @param instanceFactory Service factory responsible for creating the public interface
-	* @param type whether the service provided by the component is public or private
-	*/
-	constructor(name, instanceFactory, type) {
-		this.name = name;
-		this.instanceFactory = instanceFactory;
-		this.type = type;
-		this.multipleInstances = false;
-		/**
-		* Properties to be added to the service namespace
-		*/
-		this.serviceProps = {};
-		this.instantiationMode = "LAZY";
-		this.onInstanceCreated = null;
-	}
-	setInstantiationMode(mode) {
-		this.instantiationMode = mode;
-		return this;
-	}
-	setMultipleInstances(multipleInstances) {
-		this.multipleInstances = multipleInstances;
-		return this;
-	}
-	setServiceProps(props) {
-		this.serviceProps = props;
-		return this;
-	}
-	setInstanceCreatedCallback(callback) {
-		this.onInstanceCreated = callback;
-		return this;
-	}
-};
-/**
-* @license
-* Copyright 2019 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-var DEFAULT_ENTRY_NAME$1 = "[DEFAULT]";
-/**
-* @license
-* Copyright 2019 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* Provider for instance for service name T, e.g. 'auth', 'auth-internal'
-* NameServiceMapping[T] is an alias for the type of the instance
-*/
-var Provider = class {
-	constructor(name, container) {
-		this.name = name;
-		this.container = container;
-		this.component = null;
-		this.instances = /* @__PURE__ */ new Map();
-		this.instancesDeferred = /* @__PURE__ */ new Map();
-		this.instancesOptions = /* @__PURE__ */ new Map();
-		this.onInitCallbacks = /* @__PURE__ */ new Map();
-	}
-	/**
-	* @param identifier A provider can provide multiple instances of a service
-	* if this.component.multipleInstances is true.
-	*/
-	get(identifier) {
-		const normalizedIdentifier = this.normalizeInstanceIdentifier(identifier);
-		if (!this.instancesDeferred.has(normalizedIdentifier)) {
-			const deferred = new Deferred();
-			this.instancesDeferred.set(normalizedIdentifier, deferred);
-			if (this.isInitialized(normalizedIdentifier) || this.shouldAutoInitialize()) try {
-				const instance = this.getOrInitializeService({ instanceIdentifier: normalizedIdentifier });
-				if (instance) deferred.resolve(instance);
-			} catch (e) {}
-		}
-		return this.instancesDeferred.get(normalizedIdentifier).promise;
-	}
-	getImmediate(options) {
-		const normalizedIdentifier = this.normalizeInstanceIdentifier(options?.identifier);
-		const optional = options?.optional ?? false;
-		if (this.isInitialized(normalizedIdentifier) || this.shouldAutoInitialize()) try {
-			return this.getOrInitializeService({ instanceIdentifier: normalizedIdentifier });
-		} catch (e) {
-			if (optional) return null;
-			else throw e;
-		}
-		else if (optional) return null;
-		else throw Error(`Service ${this.name} is not available`);
-	}
-	getComponent() {
-		return this.component;
-	}
-	setComponent(component) {
-		if (component.name !== this.name) throw Error(`Mismatching Component ${component.name} for Provider ${this.name}.`);
-		if (this.component) throw Error(`Component for ${this.name} has already been provided`);
-		this.component = component;
-		if (!this.shouldAutoInitialize()) return;
-		if (isComponentEager(component)) try {
-			this.getOrInitializeService({ instanceIdentifier: DEFAULT_ENTRY_NAME$1 });
-		} catch (e) {}
-		for (const [instanceIdentifier, instanceDeferred] of this.instancesDeferred.entries()) {
-			const normalizedIdentifier = this.normalizeInstanceIdentifier(instanceIdentifier);
-			try {
-				const instance = this.getOrInitializeService({ instanceIdentifier: normalizedIdentifier });
-				instanceDeferred.resolve(instance);
-			} catch (e) {}
-		}
-	}
-	clearInstance(identifier = DEFAULT_ENTRY_NAME$1) {
-		this.instancesDeferred.delete(identifier);
-		this.instancesOptions.delete(identifier);
-		this.instances.delete(identifier);
-	}
-	async delete() {
-		const services = Array.from(this.instances.values());
-		await Promise.all([...services.filter((service) => "INTERNAL" in service).map((service) => service.INTERNAL.delete()), ...services.filter((service) => "_delete" in service).map((service) => service._delete())]);
-	}
-	isComponentSet() {
-		return this.component != null;
-	}
-	isInitialized(identifier = DEFAULT_ENTRY_NAME$1) {
-		return this.instances.has(identifier);
-	}
-	getOptions(identifier = DEFAULT_ENTRY_NAME$1) {
-		return this.instancesOptions.get(identifier) || {};
-	}
-	initialize(opts = {}) {
-		const { options = {} } = opts;
-		const normalizedIdentifier = this.normalizeInstanceIdentifier(opts.instanceIdentifier);
-		if (this.isInitialized(normalizedIdentifier)) throw Error(`${this.name}(${normalizedIdentifier}) has already been initialized`);
-		if (!this.isComponentSet()) throw Error(`Component ${this.name} has not been registered yet`);
-		const instance = this.getOrInitializeService({
-			instanceIdentifier: normalizedIdentifier,
-			options
-		});
-		for (const [instanceIdentifier, instanceDeferred] of this.instancesDeferred.entries()) if (normalizedIdentifier === this.normalizeInstanceIdentifier(instanceIdentifier)) instanceDeferred.resolve(instance);
-		return instance;
-	}
-	/**
-	*
-	* @param callback - a function that will be invoked  after the provider has been initialized by calling provider.initialize().
-	* The function is invoked SYNCHRONOUSLY, so it should not execute any longrunning tasks in order to not block the program.
-	*
-	* @param identifier An optional instance identifier
-	* @returns a function to unregister the callback
-	*/
-	onInit(callback, identifier) {
-		const normalizedIdentifier = this.normalizeInstanceIdentifier(identifier);
-		const existingCallbacks = this.onInitCallbacks.get(normalizedIdentifier) ?? /* @__PURE__ */ new Set();
-		existingCallbacks.add(callback);
-		this.onInitCallbacks.set(normalizedIdentifier, existingCallbacks);
-		const existingInstance = this.instances.get(normalizedIdentifier);
-		if (existingInstance) callback(existingInstance, normalizedIdentifier);
-		return () => {
-			existingCallbacks.delete(callback);
-		};
-	}
-	/**
-	* Invoke onInit callbacks synchronously
-	* @param instance the service instance`
-	*/
-	invokeOnInitCallbacks(instance, identifier) {
-		const callbacks = this.onInitCallbacks.get(identifier);
-		if (!callbacks) return;
-		for (const callback of callbacks) try {
-			callback(instance, identifier);
-		} catch {}
-	}
-	getOrInitializeService({ instanceIdentifier, options = {} }) {
-		let instance = this.instances.get(instanceIdentifier);
-		if (!instance && this.component) {
-			instance = this.component.instanceFactory(this.container, {
-				instanceIdentifier: normalizeIdentifierForFactory(instanceIdentifier),
-				options
-			});
-			this.instances.set(instanceIdentifier, instance);
-			this.instancesOptions.set(instanceIdentifier, options);
-			/**
-			* Invoke onInit listeners.
-			* Note this.component.onInstanceCreated is different, which is used by the component creator,
-			* while onInit listeners are registered by consumers of the provider.
-			*/
-			this.invokeOnInitCallbacks(instance, instanceIdentifier);
-			/**
-			* Order is important
-			* onInstanceCreated() should be called after this.instances.set(instanceIdentifier, instance); which
-			* makes `isInitialized()` return true.
-			*/
-			if (this.component.onInstanceCreated) try {
-				this.component.onInstanceCreated(this.container, instanceIdentifier, instance);
-			} catch {}
-		}
-		return instance || null;
-	}
-	normalizeInstanceIdentifier(identifier = DEFAULT_ENTRY_NAME$1) {
-		if (this.component) return this.component.multipleInstances ? identifier : DEFAULT_ENTRY_NAME$1;
-		else return identifier;
-	}
-	shouldAutoInitialize() {
-		return !!this.component && this.component.instantiationMode !== "EXPLICIT";
-	}
-};
-function normalizeIdentifierForFactory(identifier) {
-	return identifier === DEFAULT_ENTRY_NAME$1 ? void 0 : identifier;
-}
-function isComponentEager(component) {
-	return component.instantiationMode === "EAGER";
-}
-/**
-* @license
-* Copyright 2019 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* ComponentContainer that provides Providers for service name T, e.g. `auth`, `auth-internal`
-*/
-var ComponentContainer = class {
-	constructor(name) {
-		this.name = name;
-		this.providers = /* @__PURE__ */ new Map();
-	}
-	/**
-	*
-	* @param component Component being added
-	* @param overwrite When a component with the same name has already been registered,
-	* if overwrite is true: overwrite the existing component with the new component and create a new
-	* provider with the new component. It can be useful in tests where you want to use different mocks
-	* for different tests.
-	* if overwrite is false: throw an exception
-	*/
-	addComponent(component) {
-		const provider = this.getProvider(component.name);
-		if (provider.isComponentSet()) throw new Error(`Component ${component.name} has already been registered with ${this.name}`);
-		provider.setComponent(component);
-	}
-	addOrOverwriteComponent(component) {
-		if (this.getProvider(component.name).isComponentSet()) this.providers.delete(component.name);
-		this.addComponent(component);
-	}
-	/**
-	* getProvider provides a type safe interface where it can only be called with a field name
-	* present in NameServiceMapping interface.
-	*
-	* Firebase SDKs providing services should extend NameServiceMapping interface to register
-	* themselves.
-	*/
-	getProvider(name) {
-		if (this.providers.has(name)) return this.providers.get(name);
-		const provider = new Provider(name, this);
-		this.providers.set(name, provider);
-		return provider;
-	}
-	getProviders() {
-		return Array.from(this.providers.values());
-	}
-};
-// node_modules/@firebase/logger/dist/esm/index.esm.js
-/**
-* @license
-* Copyright 2017 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* A container for all of the Logger instances
-*/
-var instances = [];
-/**
-* The JS SDK supports 5 log levels and also allows a user the ability to
-* silence the logs altogether.
-*
-* The order is a follows:
-* DEBUG < VERBOSE < INFO < WARN < ERROR
-*
-* All of the log types above the current log level will be captured (i.e. if
-* you set the log level to `INFO`, errors will still be logged, but `DEBUG` and
-* `VERBOSE` logs will not)
-*/
-var LogLevel;
-(function(LogLevel) {
-	LogLevel[LogLevel["DEBUG"] = 0] = "DEBUG";
-	LogLevel[LogLevel["VERBOSE"] = 1] = "VERBOSE";
-	LogLevel[LogLevel["INFO"] = 2] = "INFO";
-	LogLevel[LogLevel["WARN"] = 3] = "WARN";
-	LogLevel[LogLevel["ERROR"] = 4] = "ERROR";
-	LogLevel[LogLevel["SILENT"] = 5] = "SILENT";
-})(LogLevel || (LogLevel = {}));
-var levelStringToEnum = {
-	"debug": LogLevel.DEBUG,
-	"verbose": LogLevel.VERBOSE,
-	"info": LogLevel.INFO,
-	"warn": LogLevel.WARN,
-	"error": LogLevel.ERROR,
-	"silent": LogLevel.SILENT
-};
-/**
-* The default log level
-*/
-var defaultLogLevel = LogLevel.INFO;
-/**
-* By default, `console.debug` is not displayed in the developer console (in
-* chrome). To avoid forcing users to have to opt-in to these logs twice
-* (i.e. once for firebase, and once in the console), we are sending `DEBUG`
-* logs to the `console.log` function.
-*/
-var ConsoleMethod = {
-	[LogLevel.DEBUG]: "log",
-	[LogLevel.VERBOSE]: "log",
-	[LogLevel.INFO]: "info",
-	[LogLevel.WARN]: "warn",
-	[LogLevel.ERROR]: "error"
-};
-/**
-* The default log handler will forward DEBUG, VERBOSE, INFO, WARN, and ERROR
-* messages on to their corresponding console counterparts (if the log method
-* is supported by the current log level)
-*/
-var defaultLogHandler = (instance, logType, ...args) => {
-	if (logType < instance.logLevel) return;
-	const now = (/* @__PURE__ */ new Date()).toISOString();
-	const method = ConsoleMethod[logType];
-	if (method) console[method](`[${now}]  ${instance.name}:`, ...args);
-	else throw new Error(`Attempted to log a message with an invalid logType (value: ${logType})`);
-};
-var Logger = class {
-	/**
-	* Gives you an instance of a Logger to capture messages according to
-	* Firebase's logging scheme.
-	*
-	* @param name The name that the logs will be associated with
-	*/
-	constructor(name) {
-		this.name = name;
-		/**
-		* The log level of the given Logger instance.
-		*/
-		this._logLevel = defaultLogLevel;
-		/**
-		* The main (internal) log handler for the Logger instance.
-		* Can be set to a new function in internal package code but not by user.
-		*/
-		this._logHandler = defaultLogHandler;
-		/**
-		* The optional, additional, user-defined log handler for the Logger instance.
-		*/
-		this._userLogHandler = null;
-		/**
-		* Capture the current instance for later use
-		*/
-		instances.push(this);
-	}
-	get logLevel() {
-		return this._logLevel;
-	}
-	set logLevel(val) {
-		if (!(val in LogLevel)) throw new TypeError(`Invalid value "${val}" assigned to \`logLevel\``);
-		this._logLevel = val;
-	}
-	setLogLevel(val) {
-		this._logLevel = typeof val === "string" ? levelStringToEnum[val] : val;
-	}
-	get logHandler() {
-		return this._logHandler;
-	}
-	set logHandler(val) {
-		if (typeof val !== "function") throw new TypeError("Value assigned to `logHandler` must be a function");
-		this._logHandler = val;
-	}
-	get userLogHandler() {
-		return this._userLogHandler;
-	}
-	set userLogHandler(val) {
-		this._userLogHandler = val;
-	}
-	/**
-	* The functions below are all based on the `console` interface
-	*/
-	debug(...args) {
-		this._userLogHandler && this._userLogHandler(this, LogLevel.DEBUG, ...args);
-		this._logHandler(this, LogLevel.DEBUG, ...args);
-	}
-	log(...args) {
-		this._userLogHandler && this._userLogHandler(this, LogLevel.VERBOSE, ...args);
-		this._logHandler(this, LogLevel.VERBOSE, ...args);
-	}
-	info(...args) {
-		this._userLogHandler && this._userLogHandler(this, LogLevel.INFO, ...args);
-		this._logHandler(this, LogLevel.INFO, ...args);
-	}
-	warn(...args) {
-		this._userLogHandler && this._userLogHandler(this, LogLevel.WARN, ...args);
-		this._logHandler(this, LogLevel.WARN, ...args);
-	}
-	error(...args) {
-		this._userLogHandler && this._userLogHandler(this, LogLevel.ERROR, ...args);
-		this._logHandler(this, LogLevel.ERROR, ...args);
-	}
-};
-// node_modules/idb/build/wrap-idb-value.js
-var instanceOfAny = (object, constructors) => constructors.some((c) => object instanceof c);
-var idbProxyableTypes;
-var cursorAdvanceMethods;
-function getIdbProxyableTypes() {
-	return idbProxyableTypes || (idbProxyableTypes = [
-		IDBDatabase,
-		IDBObjectStore,
-		IDBIndex,
-		IDBCursor,
-		IDBTransaction
-	]);
-}
-function getCursorAdvanceMethods() {
-	return cursorAdvanceMethods || (cursorAdvanceMethods = [
-		IDBCursor.prototype.advance,
-		IDBCursor.prototype.continue,
-		IDBCursor.prototype.continuePrimaryKey
-	]);
-}
-var cursorRequestMap = /* @__PURE__ */ new WeakMap();
-var transactionDoneMap = /* @__PURE__ */ new WeakMap();
-var transactionStoreNamesMap = /* @__PURE__ */ new WeakMap();
-var transformCache = /* @__PURE__ */ new WeakMap();
-var reverseTransformCache = /* @__PURE__ */ new WeakMap();
-function promisifyRequest(request) {
-	const promise = new Promise((resolve, reject) => {
-		const unlisten = () => {
-			request.removeEventListener("success", success);
-			request.removeEventListener("error", error);
-		};
-		const success = () => {
-			resolve(wrap(request.result));
-			unlisten();
-		};
-		const error = () => {
-			reject(request.error);
-			unlisten();
-		};
-		request.addEventListener("success", success);
-		request.addEventListener("error", error);
-	});
-	promise.then((value) => {
-		if (value instanceof IDBCursor) cursorRequestMap.set(value, request);
-	}).catch(() => {});
-	reverseTransformCache.set(promise, request);
-	return promise;
-}
-function cacheDonePromiseForTransaction(tx) {
-	if (transactionDoneMap.has(tx)) return;
-	const done = new Promise((resolve, reject) => {
-		const unlisten = () => {
-			tx.removeEventListener("complete", complete);
-			tx.removeEventListener("error", error);
-			tx.removeEventListener("abort", error);
-		};
-		const complete = () => {
-			resolve();
-			unlisten();
-		};
-		const error = () => {
-			reject(tx.error || new DOMException("AbortError", "AbortError"));
-			unlisten();
-		};
-		tx.addEventListener("complete", complete);
-		tx.addEventListener("error", error);
-		tx.addEventListener("abort", error);
-	});
-	transactionDoneMap.set(tx, done);
-}
-var idbProxyTraps = {
-	get(target, prop, receiver) {
-		if (target instanceof IDBTransaction) {
-			if (prop === "done") return transactionDoneMap.get(target);
-			if (prop === "objectStoreNames") return target.objectStoreNames || transactionStoreNamesMap.get(target);
-			if (prop === "store") return receiver.objectStoreNames[1] ? void 0 : receiver.objectStore(receiver.objectStoreNames[0]);
-		}
-		return wrap(target[prop]);
-	},
-	set(target, prop, value) {
-		target[prop] = value;
-		return true;
-	},
-	has(target, prop) {
-		if (target instanceof IDBTransaction && (prop === "done" || prop === "store")) return true;
-		return prop in target;
-	}
-};
-function replaceTraps(callback) {
-	idbProxyTraps = callback(idbProxyTraps);
-}
-function wrapFunction(func) {
-	if (func === IDBDatabase.prototype.transaction && !("objectStoreNames" in IDBTransaction.prototype)) return function(storeNames, ...args) {
-		const tx = func.call(unwrap(this), storeNames, ...args);
-		transactionStoreNamesMap.set(tx, storeNames.sort ? storeNames.sort() : [storeNames]);
-		return wrap(tx);
-	};
-	if (getCursorAdvanceMethods().includes(func)) return function(...args) {
-		func.apply(unwrap(this), args);
-		return wrap(cursorRequestMap.get(this));
-	};
-	return function(...args) {
-		return wrap(func.apply(unwrap(this), args));
-	};
-}
-function transformCachableValue(value) {
-	if (typeof value === "function") return wrapFunction(value);
-	if (value instanceof IDBTransaction) cacheDonePromiseForTransaction(value);
-	if (instanceOfAny(value, getIdbProxyableTypes())) return new Proxy(value, idbProxyTraps);
-	return value;
-}
-function wrap(value) {
-	if (value instanceof IDBRequest) return promisifyRequest(value);
-	if (transformCache.has(value)) return transformCache.get(value);
-	const newValue = transformCachableValue(value);
-	if (newValue !== value) {
-		transformCache.set(value, newValue);
-		reverseTransformCache.set(newValue, value);
-	}
-	return newValue;
-}
-var unwrap = (value) => reverseTransformCache.get(value);
-// node_modules/idb/build/index.js
-/**
-* Open a database.
-*
-* @param name Name of the database.
-* @param version Schema version.
-* @param callbacks Additional callbacks.
-*/
-function openDB(name, version, { blocked, upgrade, blocking, terminated } = {}) {
-	const request = indexedDB.open(name, version);
-	const openPromise = wrap(request);
-	if (upgrade) request.addEventListener("upgradeneeded", (event) => {
-		upgrade(wrap(request.result), event.oldVersion, event.newVersion, wrap(request.transaction), event);
-	});
-	if (blocked) request.addEventListener("blocked", (event) => blocked(event.oldVersion, event.newVersion, event));
-	openPromise.then((db) => {
-		if (terminated) db.addEventListener("close", () => terminated());
-		if (blocking) db.addEventListener("versionchange", (event) => blocking(event.oldVersion, event.newVersion, event));
-	}).catch(() => {});
-	return openPromise;
-}
-var readMethods = [
-	"get",
-	"getKey",
-	"getAll",
-	"getAllKeys",
-	"count"
-];
-var writeMethods = [
-	"put",
-	"add",
-	"delete",
-	"clear"
-];
-var cachedMethods = /* @__PURE__ */ new Map();
-function getMethod(target, prop) {
-	if (!(target instanceof IDBDatabase && !(prop in target) && typeof prop === "string")) return;
-	if (cachedMethods.get(prop)) return cachedMethods.get(prop);
-	const targetFuncName = prop.replace(/FromIndex$/, "");
-	const useIndex = prop !== targetFuncName;
-	const isWrite = writeMethods.includes(targetFuncName);
-	if (!(targetFuncName in (useIndex ? IDBIndex : IDBObjectStore).prototype) || !(isWrite || readMethods.includes(targetFuncName))) return;
-	const method = async function(storeName, ...args) {
-		const tx = this.transaction(storeName, isWrite ? "readwrite" : "readonly");
-		let target = tx.store;
-		if (useIndex) target = target.index(args.shift());
-		return (await Promise.all([target[targetFuncName](...args), isWrite && tx.done]))[0];
-	};
-	cachedMethods.set(prop, method);
-	return method;
-}
-replaceTraps((oldTraps) => ({
-	...oldTraps,
-	get: (target, prop, receiver) => getMethod(target, prop) || oldTraps.get(target, prop, receiver),
-	has: (target, prop) => !!getMethod(target, prop) || oldTraps.has(target, prop)
-}));
-// node_modules/@firebase/app/dist/esm/index.esm.js
-/**
-* @license
-* Copyright 2019 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-var PlatformLoggerServiceImpl = class {
-	constructor(container) {
-		this.container = container;
-	}
-	getPlatformInfoString() {
-		return this.container.getProviders().map((provider) => {
-			if (isVersionServiceProvider(provider)) {
-				const service = provider.getImmediate();
-				return `${service.library}/${service.version}`;
-			} else return null;
-		}).filter((logString) => logString).join(" ");
-	}
-};
-/**
-*
-* @param provider check if this provider provides a VersionService
-*
-* NOTE: Using Provider<'app-version'> is a hack to indicate that the provider
-* provides VersionService. The provider is not necessarily a 'app-version'
-* provider.
-*/
-function isVersionServiceProvider(provider) {
-	return provider.getComponent()?.type === "VERSION";
-}
-var name$r = "@firebase/app";
-var version$1 = "0.16.7";
-/**
-* @license
-* Copyright 2019 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-var logger = new Logger("@firebase/app");
-var name$q = "@firebase/app-compat";
-var name$p = "@firebase/analytics-compat";
-var name$o = "@firebase/analytics";
-var name$n = "@firebase/app-check-compat";
-var name$m = "@firebase/app-check";
-var name$l = "@firebase/auth";
-var name$k = "@firebase/auth-compat";
-var name$j = "@firebase/crashlytics";
-var name$i = "@firebase/database";
-var name$h = "@firebase/data-connect";
-var name$g = "@firebase/database-compat";
-var name$f = "@firebase/functions";
-var name$e = "@firebase/functions-compat";
-var name$d = "@firebase/installations";
-var name$c = "@firebase/installations-compat";
-var name$b = "@firebase/messaging";
-var name$a = "@firebase/messaging-compat";
-var name$9 = "@firebase/performance";
-var name$8 = "@firebase/performance-compat";
-var name$7 = "@firebase/remote-config";
-var name$6 = "@firebase/remote-config-compat";
-var name$5 = "@firebase/storage";
-var name$4 = "@firebase/storage-compat";
-var name$3 = "@firebase/firestore";
-var name$2 = "@firebase/ai";
-var name$1 = "@firebase/firestore-compat";
-var name$10 = "firebase";
-var version$2 = "13.4.0";
-/**
-* @license
-* Copyright 2019 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* The default app name
-*
-* @internal
-*/
-var DEFAULT_ENTRY_NAME = "[DEFAULT]";
-var PLATFORM_LOG_STRING = {
-	[name$r]: "fire-core",
-	[name$q]: "fire-core-compat",
-	[name$o]: "fire-analytics",
-	[name$p]: "fire-analytics-compat",
-	[name$m]: "fire-app-check",
-	[name$n]: "fire-app-check-compat",
-	[name$l]: "fire-auth",
-	[name$k]: "fire-auth-compat",
-	[name$j]: "fire-cls",
-	[name$i]: "fire-rtdb",
-	[name$h]: "fire-data-connect",
-	[name$g]: "fire-rtdb-compat",
-	[name$f]: "fire-fn",
-	[name$e]: "fire-fn-compat",
-	[name$d]: "fire-iid",
-	[name$c]: "fire-iid-compat",
-	[name$b]: "fire-fcm",
-	[name$a]: "fire-fcm-compat",
-	[name$9]: "fire-perf",
-	[name$8]: "fire-perf-compat",
-	[name$7]: "fire-rc",
-	[name$6]: "fire-rc-compat",
-	[name$5]: "fire-gcs",
-	[name$4]: "fire-gcs-compat",
-	[name$3]: "fire-fst",
-	[name$1]: "fire-fst-compat",
-	[name$2]: "fire-vertex",
-	"fire-js": "fire-js",
-	[name$10]: "fire-js-all"
-};
-/**
-* @license
-* Copyright 2019 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* @internal
-*/
-var _apps = /* @__PURE__ */ new Map();
-/**
-* @internal
-*/
-var _serverApps = /* @__PURE__ */ new Map();
-/**
-* Registered components.
-*
-* @internal
-*/
-var _components = /* @__PURE__ */ new Map();
-/**
-* @param component - the component being added to this app's container
-*
-* @internal
-*/
-function _addComponent(app, component) {
-	try {
-		app.container.addComponent(component);
-	} catch (e) {
-		logger.debug(`Component ${component.name} failed to register with FirebaseApp ${app.name}`, e);
-	}
-}
-/**
-*
-* @param component - the component to register
-* @returns whether or not the component is registered successfully
-*
-* @internal
-*/
-function _registerComponent(component) {
-	const componentName = component.name;
-	if (_components.has(componentName)) {
-		logger.debug(`There were multiple attempts to register component ${componentName}.`);
-		return false;
-	}
-	_components.set(componentName, component);
-	for (const app of _apps.values()) _addComponent(app, component);
-	for (const serverApp of _serverApps.values()) _addComponent(serverApp, component);
-	return true;
-}
-/**
-*
-* @param app - FirebaseApp instance
-* @param name - service name
-*
-* @returns the provider for the service with the matching name
-*
-* @internal
-*/
-function _getProvider(app, name) {
-	const heartbeatController = app.container.getProvider("heartbeat").getImmediate({ optional: true });
-	if (heartbeatController) heartbeatController.triggerHeartbeat();
-	return app.container.getProvider(name);
-}
-/**
-*
-* @param obj - an object of type FirebaseApp.
-*
-* @returns true if the provided object is of type FirebaseServerAppImpl.
-*
-* @internal
-*/
-function _isFirebaseServerApp(obj) {
-	if (obj === null || obj === void 0) return false;
-	return obj.settings !== void 0;
-}
-/**
-* @license
-* Copyright 2019 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-var ERROR_FACTORY = new ErrorFactory("app", "Firebase", {
-	["no-app"]: "No Firebase App '{$appName}' has been created - call initializeApp() first",
-	["bad-app-name"]: "Illegal App name: '{$appName}'",
-	["duplicate-app"]: "Firebase App named '{$appName}' already exists with different {$mismatchedParam}. Existing: '{$oldValue}'. New: '{$newValue}'.",
-	["app-deleted"]: "Firebase App named '{$appName}' already deleted",
-	["server-app-deleted"]: "Firebase Server App has been deleted",
-	["no-options"]: "Need to provide options, when not being deployed to hosting via source.",
-	["invalid-app-argument"]: "firebase.{$appName}() takes either no argument or a Firebase App instance.",
-	["invalid-log-argument"]: "First argument to `onLog` must be null or a function.",
-	["idb-open"]: "Error thrown when opening IndexedDB. Original error: {$originalErrorMessage}.",
-	["idb-get"]: "Error thrown when reading from IndexedDB. Original error: {$originalErrorMessage}.",
-	["idb-set"]: "Error thrown when writing to IndexedDB. Original error: {$originalErrorMessage}.",
-	["idb-delete"]: "Error thrown when deleting from IndexedDB. Original error: {$originalErrorMessage}.",
-	["finalization-registry-not-supported"]: "FirebaseServerApp deleteOnDeref field defined but the JS runtime does not support FinalizationRegistry.",
-	["invalid-server-app-environment"]: "FirebaseServerApp is not for use in browser environments."
-});
-/**
-* @license
-* Copyright 2019 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-var FirebaseAppImpl = class {
-	constructor(options, config, container) {
-		this._isDeleted = false;
-		this._options = { ...options };
-		this._config = { ...config };
-		this._name = config.name;
-		this._automaticDataCollectionEnabled = config.automaticDataCollectionEnabled;
-		this._container = container;
-		this.container.addComponent(new Component("app", () => this, "PUBLIC"));
-	}
-	get automaticDataCollectionEnabled() {
-		this.checkDestroyed();
-		return this._automaticDataCollectionEnabled;
-	}
-	set automaticDataCollectionEnabled(val) {
-		this.checkDestroyed();
-		this._automaticDataCollectionEnabled = val;
-	}
-	get name() {
-		this.checkDestroyed();
-		return this._name;
-	}
-	get options() {
-		this.checkDestroyed();
-		return this._options;
-	}
-	get config() {
-		this.checkDestroyed();
-		return this._config;
-	}
-	get container() {
-		return this._container;
-	}
-	get isDeleted() {
-		return this._isDeleted;
-	}
-	set isDeleted(val) {
-		this._isDeleted = val;
-	}
-	/**
-	* This function will throw an Error if the App has already been deleted -
-	* use before performing API actions on the App.
-	*/
-	checkDestroyed() {
-		if (this.isDeleted) throw ERROR_FACTORY.create("app-deleted", { appName: this._name });
-	}
-};
-/**
-* @license
-* Copyright 2023 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* @license
-* Copyright 2019 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* The current SDK version.
-*
-* @public
-*/
-var SDK_VERSION = version$2;
-function initializeApp(_options, rawConfig = {}) {
-	let options = _options;
-	if (typeof rawConfig !== "object") rawConfig = { name: rawConfig };
-	const config = {
-		name: DEFAULT_ENTRY_NAME,
-		automaticDataCollectionEnabled: true,
-		...rawConfig
-	};
-	const name = config.name;
-	if (typeof name !== "string" || !name) throw ERROR_FACTORY.create("bad-app-name", { appName: String(name) });
-	options || (options = getDefaultAppConfig());
-	if (!options) throw ERROR_FACTORY.create("no-options");
-	const existingApp = _apps.get(name);
-	if (existingApp) {
-		if (!deepEqual(options, existingApp.options)) throw ERROR_FACTORY.create("duplicate-app", {
-			appName: name,
-			mismatchedParam: "options",
-			oldValue: JSON.stringify(existingApp.options),
-			newValue: JSON.stringify(options)
-		});
-		else if (!deepEqual(config, existingApp.config)) throw ERROR_FACTORY.create("duplicate-app", {
-			appName: name,
-			mismatchedParam: "config",
-			oldValue: JSON.stringify(existingApp.config),
-			newValue: JSON.stringify(config)
-		});
-		else return existingApp;
-	}
-	const container = new ComponentContainer(name);
-	for (const component of _components.values()) container.addComponent(component);
-	const newApp = new FirebaseAppImpl(options, config, container);
-	_apps.set(name, newApp);
-	return newApp;
-}
-/**
-* Retrieves a {@link @firebase/app#FirebaseApp} instance.
-*
-* When called with no arguments, the default app is returned. When an app name
-* is provided, the app corresponding to that name is returned.
-*
-* An exception is thrown if the app being retrieved has not yet been
-* initialized.
-*
-* @example
-* ```javascript
-* // Return the default app
-* const app = getApp();
-* ```
-*
-* @example
-* ```javascript
-* // Return a named app
-* const otherApp = getApp("otherApp");
-* ```
-*
-* @param name - Optional name of the app to return. If no name is
-*   provided, the default is `"[DEFAULT]"`.
-*
-* @returns The app corresponding to the provided app name.
-*   If no app name is provided, the default app is returned.
-*
-* @public
-*/
-function getApp(name = DEFAULT_ENTRY_NAME) {
-	const app = _apps.get(name);
-	if (!app && name === "[DEFAULT]" && getDefaultAppConfig()) return initializeApp();
-	if (!app) throw ERROR_FACTORY.create("no-app", { appName: name });
-	return app;
-}
-/**
-* A (read-only) array of all initialized apps.
-* @public
-*/
-function getApps() {
-	return Array.from(_apps.values());
-}
-/**
-* Registers a library's name and version for platform logging purposes.
-* @param library - Name of 1p or 3p library (e.g. firestore, angularfire)
-* @param version - Current version of that library.
-* @param variant - Bundle variant, e.g., node, rn, etc.
-*
-* @public
-*/
-function registerVersion(libraryKeyOrName, version, variant) {
-	let library = PLATFORM_LOG_STRING[libraryKeyOrName] ?? libraryKeyOrName;
-	if (variant) library += `-${variant}`;
-	const libraryMismatch = library.match(/\s|\//);
-	const versionMismatch = version.match(/\s|\//);
-	if (libraryMismatch || versionMismatch) {
-		const warning = [`Unable to register library "${library}" with version "${version}":`];
-		if (libraryMismatch) warning.push(`library name "${library}" contains illegal characters (whitespace or "/")`);
-		if (libraryMismatch && versionMismatch) warning.push("and");
-		if (versionMismatch) warning.push(`version name "${version}" contains illegal characters (whitespace or "/")`);
-		logger.warn(warning.join(" "));
-		return;
-	}
-	_registerComponent(new Component(`${library}-version`, () => ({
-		library,
-		version
-	}), "VERSION"));
-}
-/**
-* @license
-* Copyright 2021 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-var DB_NAME$1 = "firebase-heartbeat-database";
-var DB_VERSION$1 = 1;
-var STORE_NAME = "firebase-heartbeat-store";
-var dbPromise = null;
-function getDbPromise() {
-	if (!dbPromise) dbPromise = openDB(DB_NAME$1, DB_VERSION$1, { upgrade: (db, oldVersion) => {
-		switch (oldVersion) {
-			case 0: try {
-				db.createObjectStore(STORE_NAME);
-			} catch (e) {
-				console.warn(e);
-			}
-		}
-	} }).catch((e) => {
-		throw ERROR_FACTORY.create("idb-open", { originalErrorMessage: e.message });
-	});
-	return dbPromise;
-}
-async function readHeartbeatsFromIndexedDB(app) {
-	try {
-		const tx = (await getDbPromise()).transaction(STORE_NAME);
-		const result = await tx.objectStore(STORE_NAME).get(computeKey(app));
-		await tx.done;
-		return result;
-	} catch (e) {
-		if (e instanceof FirebaseError) logger.warn(e.message);
-		else {
-			const idbGetError = ERROR_FACTORY.create("idb-get", { originalErrorMessage: e?.message });
-			logger.warn(idbGetError.message);
-		}
-	}
-}
-async function writeHeartbeatsToIndexedDB(app, heartbeatObject) {
-	try {
-		const tx = (await getDbPromise()).transaction(STORE_NAME, "readwrite");
-		await tx.objectStore(STORE_NAME).put(heartbeatObject, computeKey(app));
-		await tx.done;
-	} catch (e) {
-		if (e instanceof FirebaseError) logger.warn(e.message);
-		else {
-			const idbGetError = ERROR_FACTORY.create("idb-set", { originalErrorMessage: e?.message });
-			logger.warn(idbGetError.message);
-		}
-	}
-}
-function computeKey(app) {
-	return `${app.name}!${app.options.appId}`;
-}
-/**
-* @license
-* Copyright 2021 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-var MAX_HEADER_BYTES = 1024;
-var MAX_NUM_STORED_HEARTBEATS = 30;
-var HeartbeatServiceImpl = class {
-	constructor(container) {
-		this.container = container;
-		/**
-		* In-memory cache for heartbeats, used by getHeartbeatsHeader() to generate
-		* the header string.
-		* Stores one record per date. This will be consolidated into the standard
-		* format of one record per user agent string before being sent as a header.
-		* Populated from indexedDB when the controller is instantiated and should
-		* be kept in sync with indexedDB.
-		* Leave public for easier testing.
-		*/
-		this._heartbeatsCache = null;
-		const app = this.container.getProvider("app").getImmediate();
-		this._storage = new HeartbeatStorageImpl(app);
-		this._heartbeatsCachePromise = this._storage.read().then((result) => {
-			this._heartbeatsCache = result;
-			return result;
-		});
-	}
-	/**
-	* Called to report a heartbeat. The function will generate
-	* a HeartbeatsByUserAgent object, update heartbeatsCache, and persist it
-	* to IndexedDB.
-	* Note that we only store one heartbeat per day. So if a heartbeat for today is
-	* already logged, subsequent calls to this function in the same day will be ignored.
-	*/
-	async triggerHeartbeat() {
-		try {
-			const agent = this.container.getProvider("platform-logger").getImmediate().getPlatformInfoString();
-			const date = getUTCDateString();
-			if (this._heartbeatsCache?.heartbeats == null) {
-				this._heartbeatsCache = await this._heartbeatsCachePromise;
-				if (this._heartbeatsCache?.heartbeats == null) return;
-			}
-			if (this._heartbeatsCache.lastSentHeartbeatDate === date || this._heartbeatsCache.heartbeats.some((singleDateHeartbeat) => singleDateHeartbeat.date === date)) return;
-			else {
-				this._heartbeatsCache.heartbeats.push({
-					date,
-					agent
-				});
-				if (this._heartbeatsCache.heartbeats.length > MAX_NUM_STORED_HEARTBEATS) {
-					const earliestHeartbeatIdx = getEarliestHeartbeatIdx(this._heartbeatsCache.heartbeats);
-					this._heartbeatsCache.heartbeats.splice(earliestHeartbeatIdx, 1);
-				}
-			}
-			return this._storage.overwrite(this._heartbeatsCache);
-		} catch (e) {
-			logger.warn(e);
-		}
-	}
-	/**
-	* Returns a base64 encoded string which can be attached to the heartbeat-specific header directly.
-	* It also clears all heartbeats from memory as well as in IndexedDB.
-	*
-	* NOTE: Consuming product SDKs should not send the header if this method
-	* returns an empty string.
-	*/
-	async getHeartbeatsHeader() {
-		try {
-			if (this._heartbeatsCache === null) await this._heartbeatsCachePromise;
-			if (this._heartbeatsCache?.heartbeats == null || this._heartbeatsCache.heartbeats.length === 0) return "";
-			const date = getUTCDateString();
-			const { heartbeatsToSend, unsentEntries } = extractHeartbeatsForHeader(this._heartbeatsCache.heartbeats);
-			const headerString = base64urlEncodeWithoutPadding(JSON.stringify({
-				version: 2,
-				heartbeats: heartbeatsToSend
-			}));
-			this._heartbeatsCache.lastSentHeartbeatDate = date;
-			if (unsentEntries.length > 0) {
-				this._heartbeatsCache.heartbeats = unsentEntries;
-				await this._storage.overwrite(this._heartbeatsCache);
-			} else {
-				this._heartbeatsCache.heartbeats = [];
-				this._storage.overwrite(this._heartbeatsCache);
-			}
-			return headerString;
-		} catch (e) {
-			logger.warn(e);
-			return "";
-		}
-	}
-};
-function getUTCDateString() {
-	return (/* @__PURE__ */ new Date()).toISOString().substring(0, 10);
-}
-function extractHeartbeatsForHeader(heartbeatsCache, maxSize = MAX_HEADER_BYTES) {
-	const heartbeatsToSend = [];
-	let unsentEntries = heartbeatsCache.slice();
-	for (const singleDateHeartbeat of heartbeatsCache) {
-		const heartbeatEntry = heartbeatsToSend.find((hb) => hb.agent === singleDateHeartbeat.agent);
-		if (!heartbeatEntry) {
-			heartbeatsToSend.push({
-				agent: singleDateHeartbeat.agent,
-				dates: [singleDateHeartbeat.date]
-			});
-			if (countBytes(heartbeatsToSend) > maxSize) {
-				heartbeatsToSend.pop();
-				break;
-			}
-		} else {
-			heartbeatEntry.dates.push(singleDateHeartbeat.date);
-			if (countBytes(heartbeatsToSend) > maxSize) {
-				heartbeatEntry.dates.pop();
-				break;
-			}
-		}
-		unsentEntries = unsentEntries.slice(1);
-	}
-	return {
-		heartbeatsToSend,
-		unsentEntries
-	};
-}
-var HeartbeatStorageImpl = class {
-	constructor(app) {
-		this.app = app;
-		this._canUseIndexedDBPromise = this.runIndexedDBEnvironmentCheck();
-	}
-	async runIndexedDBEnvironmentCheck() {
-		if (!isIndexedDBAvailable()) return false;
-		else return validateIndexedDBOpenable().then(() => true).catch(() => false);
-	}
-	/**
-	* Read all heartbeats.
-	*/
-	async read() {
-		if (!await this._canUseIndexedDBPromise) return { heartbeats: [] };
-		else {
-			const idbHeartbeatObject = await readHeartbeatsFromIndexedDB(this.app);
-			if (idbHeartbeatObject?.heartbeats) return idbHeartbeatObject;
-			else return { heartbeats: [] };
-		}
-	}
-	async overwrite(heartbeatsObject) {
-		if (!await this._canUseIndexedDBPromise) return;
-		else {
-			const existingHeartbeatsObject = await this.read();
-			return writeHeartbeatsToIndexedDB(this.app, {
-				lastSentHeartbeatDate: heartbeatsObject.lastSentHeartbeatDate ?? existingHeartbeatsObject.lastSentHeartbeatDate,
-				heartbeats: heartbeatsObject.heartbeats
-			});
-		}
-	}
-	async add(heartbeatsObject) {
-		if (!await this._canUseIndexedDBPromise) return;
-		else {
-			const existingHeartbeatsObject = await this.read();
-			return writeHeartbeatsToIndexedDB(this.app, {
-				lastSentHeartbeatDate: heartbeatsObject.lastSentHeartbeatDate ?? existingHeartbeatsObject.lastSentHeartbeatDate,
-				heartbeats: [...existingHeartbeatsObject.heartbeats, ...heartbeatsObject.heartbeats]
-			});
-		}
-	}
-};
-/**
-* Calculate bytes of a HeartbeatsByUserAgent array after being wrapped
-* in a platform logging header JSON object, stringified, and converted
-* to base 64.
-*/
-function countBytes(heartbeatsCache) {
-	return base64urlEncodeWithoutPadding(JSON.stringify({
-		version: 2,
-		heartbeats: heartbeatsCache
-	})).length;
-}
-/**
-* Returns the index of the heartbeat with the earliest date.
-* If the heartbeats array is empty, -1 is returned.
-*/
-function getEarliestHeartbeatIdx(heartbeats) {
-	if (heartbeats.length === 0) return -1;
-	let earliestHeartbeatIdx = 0;
-	let earliestHeartbeatDate = heartbeats[0].date;
-	for (let i = 1; i < heartbeats.length; i++) if (heartbeats[i].date < earliestHeartbeatDate) {
-		earliestHeartbeatDate = heartbeats[i].date;
-		earliestHeartbeatIdx = i;
-	}
-	return earliestHeartbeatIdx;
-}
-/**
-* @license
-* Copyright 2019 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-function registerCoreComponents(variant) {
-	_registerComponent(new Component("platform-logger", (container) => new PlatformLoggerServiceImpl(container), "PRIVATE"));
-	_registerComponent(new Component("heartbeat", (container) => new HeartbeatServiceImpl(container), "PRIVATE"));
-	registerVersion(name$r, version$1, variant);
-	registerVersion(name$r, version$1, "esm2020");
-	registerVersion("fire-js", "");
-}
-/**
-* @license
-* Copyright 2026 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* Name of the Trusted Types policy that Firebase SDKs use to load external
-* scripts. Apps that restrict policy names with the `trusted-types` CSP
-* directive must allow this name.
-*
-* @internal
-*/
-var _TRUSTED_TYPES_POLICY_NAME = "firebase-js-sdk-policy";
-/**
-* External scripts that Firebase SDKs are allowed to load. A script URL is
-* allowed if it is one of these URLs, optionally followed by a query string.
-*
-* - Analytics: Google tag (gtag.js)
-* - Auth: Google API loader (gapi), reCAPTCHA v2 and reCAPTCHA Enterprise
-* - App Check: reCAPTCHA v3 and reCAPTCHA Enterprise
-*/
-var ALLOWED_SCRIPT_URLS = [
-	"https://www.googletagmanager.com/gtag/js",
-	"https://apis.google.com/js/api.js",
-	"https://www.google.com/recaptcha/api.js",
-	"https://www.google.com/recaptcha/enterprise.js"
-];
-var trustedTypesPolicy;
-var trustedTypesPolicyBlocked = false;
-/**
-* Returns `url` if it is one of the allowed external scripts, and throws
-* otherwise. Used as the `createScriptURL` implementation of the Trusted Types
-* policy.
-*
-* @internal
-*/
-function _createTrustedScriptURL(url) {
-	if (!ALLOWED_SCRIPT_URLS.some((allowedUrl) => url.startsWith(allowedUrl) && (url.length === allowedUrl.length || url.charAt(allowedUrl.length) === "?"))) throw new TypeError(`Firebase: Refusing to load untrusted script URL: ${url}`);
-	return url;
-}
-/**
-* Lazily creates the Trusted Types policy. The policy is only created the first
-* time a script is loaded, so that pages that load more than one copy of
-* `@firebase/app` (for example the compat and modular CDN builds) only run
-* into a policy name collision if more than one copy loads a script.
-*/
-function getTrustedTypesPolicy() {
-	if (trustedTypesPolicy === void 0) {
-		trustedTypesPolicy = null;
-		const trustedTypes = typeof window !== "undefined" ? window.trustedTypes : void 0;
-		if (trustedTypes?.createPolicy) try {
-			trustedTypesPolicy = trustedTypes.createPolicy(_TRUSTED_TYPES_POLICY_NAME, { createScriptURL: _createTrustedScriptURL });
-		} catch {
-			trustedTypesPolicyBlocked = true;
-		}
-	}
-	return trustedTypesPolicy;
-}
-/**
-* Sets the `src` of a script element through the Firebase Trusted Types policy
-* when Trusted Types are supported, so that Firebase SDKs can load external
-* scripts on pages that enforce Trusted Types.
-*
-* Throws if `url` is not an allowed Firebase script URL, or if the browser
-* rejects the assignment.
-*
-* @param script - The script element to update.
-* @param url - The script URL. Must be an allowed Firebase script URL.
-*
-* @internal
-*/
-function _setTrustedScriptSrc(script, url) {
-	_createTrustedScriptURL(url);
-	const policy = getTrustedTypesPolicy();
-	if (policy) {
-		script.src = policy.createScriptURL(url);
-		return;
-	}
-	try {
-		script.src = url;
-	} catch (e) {
-		if (trustedTypesPolicyBlocked) logger.error(`Unable to load ${url} because this page requires Trusted Types for scripts but does not allow the "${_TRUSTED_TYPES_POLICY_NAME}" Trusted Types policy. To fix this, add "${_TRUSTED_TYPES_POLICY_NAME}" to the trusted-types directive of the page's Content-Security-Policy.`);
-		throw e;
-	}
-}
-/**
-* Firebase App
-*
-* @remarks This package coordinates the communication between the different Firebase components
-* @packageDocumentation
-*/
-/**
-* @license
-* Copyright 2019 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-registerCoreComponents("");
-// node_modules/firebase/app/dist/esm/index.esm.js
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-registerVersion("firebase", "13.4.0", "app");
-// node_modules/@firebase/auth/dist/esm/index-CI-XZ6Oy.js
-/**
-* @license
-* Copyright 2021 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-function _prodErrorMap() {
-	return { ["dependent-sdk-initialized-before-auth"]: "Another Firebase SDK was initialized and is trying to use Auth before Auth is initialized. Please be sure to call `initializeAuth` or `getAuth` before starting any other Firebase SDK." };
-}
-/**
-* A minimal error map with all verbose error messages stripped.
-*
-* See discussion at {@link AuthErrorMap}
-*
-* @public
-*/
-var prodErrorMap = _prodErrorMap;
-var _DEFAULT_AUTH_ERROR_FACTORY = new ErrorFactory("auth", "Firebase", _prodErrorMap());
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-var logClient = new Logger("@firebase/auth");
-function _logWarn(msg, ...args) {
-	if (logClient.logLevel <= LogLevel.WARN) logClient.warn(`Auth (${SDK_VERSION}): ${msg}`, ...args);
-}
-function _logError(msg, ...args) {
-	if (logClient.logLevel <= LogLevel.ERROR) logClient.error(`Auth (${SDK_VERSION}): ${msg}`, ...args);
-}
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-function _fail(authOrCode, ...rest) {
-	throw createErrorInternal(authOrCode, ...rest);
-}
-function _createError(authOrCode, ...rest) {
-	return createErrorInternal(authOrCode, ...rest);
-}
-function _errorWithCustomMessage(auth, code, message) {
-	return new ErrorFactory("auth", "Firebase", {
-		...prodErrorMap(),
-		[code]: message
-	}).create(code, { appName: auth.name });
-}
-function _serverAppCurrentUserOperationNotSupportedError(auth) {
-	return _errorWithCustomMessage(auth, "operation-not-supported-in-this-environment", "Operations that alter the current user are not supported in conjunction with FirebaseServerApp");
-}
-function _assertInstanceOf(auth, object, instance) {
-	const constructorInstance = instance;
-	if (!(object instanceof constructorInstance)) {
-		if (constructorInstance.name !== object.constructor.name) _fail(auth, "argument-error");
-		throw _errorWithCustomMessage(auth, "argument-error", `Type of ${object.constructor.name} does not match expected instance.Did you pass a reference from a different Auth SDK?`);
-	}
-}
-function createErrorInternal(authOrCode, ...rest) {
-	if (typeof authOrCode !== "string") {
-		const code = rest[0];
-		const fullParams = [...rest.slice(1)];
-		if (fullParams[0]) fullParams[0].appName = authOrCode.name;
-		return authOrCode._errorFactory.create(code, ...fullParams);
-	}
-	return _DEFAULT_AUTH_ERROR_FACTORY.create(authOrCode, ...rest);
-}
-function _assert(assertion, authOrCode, ...rest) {
-	if (!assertion) throw createErrorInternal(authOrCode, ...rest);
-}
-/**
-* Unconditionally fails, throwing an internal error with the given message.
-*
-* @param failure type of failure encountered
-* @throws Error
-*/
-function debugFail(failure) {
-	const message = `INTERNAL ASSERTION FAILED: ` + failure;
-	_logError(message);
-	throw new Error(message);
-}
-/**
-* Fails if the given assertion condition is false, throwing an Error with the
-* given message if it did.
-*
-* @param assertion
-* @param message
-*/
-function debugAssert(assertion, message) {
-	if (!assertion) debugFail(message);
-}
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-function _getCurrentUrl() {
-	return typeof self !== "undefined" && self.location?.href || "";
-}
-function _isHttpOrHttps() {
-	return _getCurrentScheme() === "http:" || _getCurrentScheme() === "https:";
-}
-function _getCurrentScheme() {
-	return typeof self !== "undefined" && self.location?.protocol || null;
-}
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* Determine whether the browser is working online
-*/
-function _isOnline() {
-	if (typeof navigator !== "undefined" && navigator && "onLine" in navigator && typeof navigator.onLine === "boolean" && (_isHttpOrHttps() || isBrowserExtension() || "connection" in navigator)) return navigator.onLine;
-	return true;
-}
-function _getUserLanguage() {
-	if (typeof navigator === "undefined") return null;
-	const navigatorLanguage = navigator;
-	return navigatorLanguage.languages && navigatorLanguage.languages[0] || navigatorLanguage.language || null;
-}
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* A structure to help pick between a range of long and short delay durations
-* depending on the current environment. In general, the long delay is used for
-* mobile environments whereas short delays are used for desktop environments.
-*/
-var Delay = class {
-	constructor(shortDelay, longDelay) {
-		this.shortDelay = shortDelay;
-		this.longDelay = longDelay;
-		debugAssert(longDelay > shortDelay, "Short delay should be less than long delay!");
-		this.isMobile = isMobileCordova() || isReactNative();
-	}
-	get() {
-		if (!_isOnline()) return Math.min(5e3, this.shortDelay);
-		return this.isMobile ? this.longDelay : this.shortDelay;
-	}
-};
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-function _emulatorUrl(config, path) {
-	debugAssert(config.emulator, "Emulator should always be set here");
-	const { url } = config.emulator;
-	if (!path) return url;
-	return `${url}${path.startsWith("/") ? path.slice(1) : path}`;
-}
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-var FetchProvider = class {
-	static initialize(fetchImpl, headersImpl, responseImpl) {
-		this.fetchImpl = fetchImpl;
-		if (headersImpl) this.headersImpl = headersImpl;
-		if (responseImpl) this.responseImpl = responseImpl;
-	}
-	static fetch() {
-		if (this.fetchImpl) return this.fetchImpl;
-		if (typeof self !== "undefined" && "fetch" in self) return self.fetch;
-		if (typeof globalThis !== "undefined" && globalThis.fetch) return globalThis.fetch;
-		if (typeof fetch !== "undefined") return fetch;
-		debugFail("Could not find fetch implementation, make sure you call FetchProvider.initialize() with an appropriate polyfill");
-	}
-	static headers() {
-		if (this.headersImpl) return this.headersImpl;
-		if (typeof self !== "undefined" && "Headers" in self) return self.Headers;
-		if (typeof globalThis !== "undefined" && globalThis.Headers) return globalThis.Headers;
-		if (typeof Headers !== "undefined") return Headers;
-		debugFail("Could not find Headers implementation, make sure you call FetchProvider.initialize() with an appropriate polyfill");
-	}
-	static response() {
-		if (this.responseImpl) return this.responseImpl;
-		if (typeof self !== "undefined" && "Response" in self) return self.Response;
-		if (typeof globalThis !== "undefined" && globalThis.Response) return globalThis.Response;
-		if (typeof Response !== "undefined") return Response;
-		debugFail("Could not find Response implementation, make sure you call FetchProvider.initialize() with an appropriate polyfill");
-	}
-};
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* Map from errors returned by the server to errors to developer visible errors
-*/
-var SERVER_ERROR_MAP = {
-	["CREDENTIAL_MISMATCH"]: "custom-token-mismatch",
-	["MISSING_CUSTOM_TOKEN"]: "internal-error",
-	["INVALID_IDENTIFIER"]: "invalid-email",
-	["MISSING_CONTINUE_URI"]: "internal-error",
-	["INVALID_PASSWORD"]: "wrong-password",
-	["MISSING_PASSWORD"]: "missing-password",
-	["INVALID_LOGIN_CREDENTIALS"]: "invalid-credential",
-	["EMAIL_EXISTS"]: "email-already-in-use",
-	["PASSWORD_LOGIN_DISABLED"]: "operation-not-allowed",
-	["INVALID_IDP_RESPONSE"]: "invalid-credential",
-	["INVALID_PENDING_TOKEN"]: "invalid-credential",
-	["FEDERATED_USER_ID_ALREADY_LINKED"]: "credential-already-in-use",
-	["MISSING_REQ_TYPE"]: "internal-error",
-	["EMAIL_NOT_FOUND"]: "user-not-found",
-	["RESET_PASSWORD_EXCEED_LIMIT"]: "too-many-requests",
-	["EXPIRED_OOB_CODE"]: "expired-action-code",
-	["INVALID_OOB_CODE"]: "invalid-action-code",
-	["MISSING_OOB_CODE"]: "internal-error",
-	["CREDENTIAL_TOO_OLD_LOGIN_AGAIN"]: "requires-recent-login",
-	["INVALID_ID_TOKEN"]: "invalid-user-token",
-	["TOKEN_EXPIRED"]: "user-token-expired",
-	["USER_NOT_FOUND"]: "user-token-expired",
-	["TOO_MANY_ATTEMPTS_TRY_LATER"]: "too-many-requests",
-	["PASSWORD_DOES_NOT_MEET_REQUIREMENTS"]: "password-does-not-meet-requirements",
-	["INVALID_CODE"]: "invalid-verification-code",
-	["INVALID_SESSION_INFO"]: "invalid-verification-id",
-	["INVALID_TEMPORARY_PROOF"]: "invalid-credential",
-	["MISSING_SESSION_INFO"]: "missing-verification-id",
-	["SESSION_EXPIRED"]: "code-expired",
-	["MISSING_ANDROID_PACKAGE_NAME"]: "missing-android-pkg-name",
-	["UNAUTHORIZED_DOMAIN"]: "unauthorized-continue-uri",
-	["INVALID_OAUTH_CLIENT_ID"]: "invalid-oauth-client-id",
-	["ADMIN_ONLY_OPERATION"]: "admin-restricted-operation",
-	["INVALID_MFA_PENDING_CREDENTIAL"]: "invalid-multi-factor-session",
-	["MFA_ENROLLMENT_NOT_FOUND"]: "multi-factor-info-not-found",
-	["MISSING_MFA_ENROLLMENT_ID"]: "missing-multi-factor-info",
-	["MISSING_MFA_PENDING_CREDENTIAL"]: "missing-multi-factor-session",
-	["SECOND_FACTOR_EXISTS"]: "second-factor-already-in-use",
-	["SECOND_FACTOR_LIMIT_EXCEEDED"]: "maximum-second-factor-count-exceeded",
-	["BLOCKING_FUNCTION_ERROR_RESPONSE"]: "internal-error",
-	["RECAPTCHA_NOT_ENABLED"]: "recaptcha-not-enabled",
-	["MISSING_RECAPTCHA_TOKEN"]: "missing-recaptcha-token",
-	["INVALID_RECAPTCHA_TOKEN"]: "invalid-recaptcha-token",
-	["INVALID_RECAPTCHA_ACTION"]: "invalid-recaptcha-action",
-	["MISSING_CLIENT_TYPE"]: "missing-client-type",
-	["MISSING_RECAPTCHA_VERSION"]: "missing-recaptcha-version",
-	["INVALID_RECAPTCHA_VERSION"]: "invalid-recaptcha-version",
-	["INVALID_REQ_TYPE"]: "invalid-req-type"
-};
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-var CookieAuthProxiedEndpoints = [
-	"/v1/accounts:signInWithCustomToken",
-	"/v1/accounts:signInWithEmailLink",
-	"/v1/accounts:signInWithIdp",
-	"/v1/accounts:signInWithPassword",
-	"/v1/accounts:signInWithPhoneNumber",
-	"/v1/token"
-];
-var DEFAULT_API_TIMEOUT_MS = new Delay(3e4, 6e4);
-function _addTidIfNecessary(auth, request) {
-	if (auth.tenantId && !request.tenantId) return {
-		...request,
-		tenantId: auth.tenantId
-	};
-	return request;
-}
-async function _performApiRequest(auth, method, path, request, customErrorMap = {}) {
-	return _performFetchWithErrorHandling(auth, customErrorMap, async () => {
-		let body = {};
-		let params = {};
-		if (request) {
-			if (method === "GET") params = request;
-			else body = { body: JSON.stringify(request) };
-		}
-		const query = querystring({
-			...params,
-			key: auth.config.apiKey
-		}).slice(1);
-		const headers = await auth._getAdditionalHeaders();
-		headers["Content-Type"] = "application/json";
-		if (auth.languageCode) headers["X-Firebase-Locale"] = auth.languageCode;
-		const fetchArgs = {
-			method,
-			headers,
-			...body
-		};
-		if (!isCloudflareWorker()) fetchArgs.referrerPolicy = "strict-origin-when-cross-origin";
-		if (auth.emulatorConfig && isCloudWorkstation(auth.emulatorConfig.host)) fetchArgs.credentials = "include";
-		return FetchProvider.fetch()(await _getFinalTarget(auth, auth.config.apiHost, path, query), fetchArgs);
-	});
-}
-async function _performFetchWithErrorHandling(auth, customErrorMap, fetchFn) {
-	auth._canInitEmulator = false;
-	const errorMap = {
-		...SERVER_ERROR_MAP,
-		...customErrorMap
-	};
-	try {
-		const networkTimeout = new NetworkTimeout(auth);
-		const response = await Promise.race([fetchFn(), networkTimeout.promise]);
-		networkTimeout.clearNetworkTimeout();
-		const json = await response.json();
-		if ("needConfirmation" in json) throw _makeTaggedError(auth, "account-exists-with-different-credential", json);
-		if (response.ok && !("errorMessage" in json)) return json;
-		else {
-			const [serverErrorCode, serverErrorMessage] = (response.ok ? json.errorMessage : json.error.message).split(" : ");
-			if (serverErrorCode === "FEDERATED_USER_ID_ALREADY_LINKED") throw _makeTaggedError(auth, "credential-already-in-use", json);
-			else if (serverErrorCode === "EMAIL_EXISTS") throw _makeTaggedError(auth, "email-already-in-use", json);
-			else if (serverErrorCode === "USER_DISABLED") throw _makeTaggedError(auth, "user-disabled", json);
-			const authError = errorMap[serverErrorCode] || serverErrorCode.toLowerCase().replace(/[_\s]+/g, "-");
-			if (serverErrorMessage) throw _errorWithCustomMessage(auth, authError, serverErrorMessage);
-			else _fail(auth, authError);
-		}
-	} catch (e) {
-		if (e instanceof FirebaseError) throw e;
-		_fail(auth, "network-request-failed", { "message": String(e) });
-	}
-}
-async function _performSignInRequest(auth, method, path, request, customErrorMap = {}) {
-	const serverResponse = await _performApiRequest(auth, method, path, request, customErrorMap);
-	if ("mfaPendingCredential" in serverResponse) _fail(auth, "multi-factor-auth-required", { _serverResponse: serverResponse });
-	return serverResponse;
-}
-async function _getFinalTarget(auth, host, path, query) {
-	const base = `${host}${path}?${query}`;
-	const authInternal = auth;
-	const finalTarget = authInternal.config.emulator ? _emulatorUrl(auth.config, base) : `${auth.config.apiScheme}://${base}`;
-	if (CookieAuthProxiedEndpoints.includes(path)) {
-		await authInternal._persistenceManagerAvailable;
-		if (authInternal._getPersistenceType() === "COOKIE") return authInternal._getPersistence()._getFinalTarget(finalTarget).toString();
-	}
-	return finalTarget;
-}
-function _parseEnforcementState(enforcementStateStr) {
-	switch (enforcementStateStr) {
-		case "ENFORCE": return "ENFORCE";
-		case "AUDIT": return "AUDIT";
-		case "OFF": return "OFF";
-		default: return "ENFORCEMENT_STATE_UNSPECIFIED";
-	}
-}
-var NetworkTimeout = class {
-	clearNetworkTimeout() {
-		clearTimeout(this.timer);
-	}
-	constructor(auth) {
-		this.auth = auth;
-		this.timer = null;
-		this.promise = new Promise((_, reject) => {
-			this.timer = setTimeout(() => {
-				return reject(_createError(this.auth, "network-request-failed"));
-			}, DEFAULT_API_TIMEOUT_MS.get());
-		});
-	}
-};
-function _makeTaggedError(auth, code, response) {
-	const errorParams = { appName: auth.name };
-	if (response.email) errorParams.email = response.email;
-	if (response.phoneNumber) errorParams.phoneNumber = response.phoneNumber;
-	const error = _createError(auth, code, errorParams);
-	error.customData._tokenResponse = response;
-	return error;
-}
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-function isEnterprise(grecaptcha) {
-	return grecaptcha !== void 0 && grecaptcha.enterprise !== void 0;
-}
-var RecaptchaConfig = class {
-	constructor(response) {
-		/**
-		* The reCAPTCHA site key.
-		*/
-		this.siteKey = "";
-		/**
-		* The list of providers and their enablement status for reCAPTCHA Enterprise.
-		*/
-		this.recaptchaEnforcementState = [];
-		if (response.recaptchaKey === void 0) throw new Error("recaptchaKey undefined");
-		this.siteKey = response.recaptchaKey.split("/")[3];
-		this.recaptchaEnforcementState = response.recaptchaEnforcementState;
-	}
-	/**
-	* Returns the reCAPTCHA Enterprise enforcement state for the given provider.
-	*
-	* @param providerStr - The provider whose enforcement state is to be returned.
-	* @returns The reCAPTCHA Enterprise enforcement state for the given provider.
-	*/
-	getProviderEnforcementState(providerStr) {
-		if (!this.recaptchaEnforcementState || this.recaptchaEnforcementState.length === 0) return null;
-		for (const recaptchaEnforcementState of this.recaptchaEnforcementState) if (recaptchaEnforcementState.provider && recaptchaEnforcementState.provider === providerStr) return _parseEnforcementState(recaptchaEnforcementState.enforcementState);
-		return null;
-	}
-	/**
-	* Returns true if the reCAPTCHA Enterprise enforcement state for the provider is set to ENFORCE or AUDIT.
-	*
-	* @param providerStr - The provider whose enablement state is to be returned.
-	* @returns Whether or not reCAPTCHA Enterprise protection is enabled for the given provider.
-	*/
-	isProviderEnabled(providerStr) {
-		return this.getProviderEnforcementState(providerStr) === "ENFORCE" || this.getProviderEnforcementState(providerStr) === "AUDIT";
-	}
-	/**
-	* Returns true if reCAPTCHA Enterprise protection is enabled in at least one provider, otherwise
-	* returns false.
-	*
-	* @returns Whether or not reCAPTCHA Enterprise protection is enabled for at least one provider.
-	*/
-	isAnyProviderEnabled() {
-		return this.isProviderEnabled("EMAIL_PASSWORD_PROVIDER") || this.isProviderEnabled("PHONE_PROVIDER");
-	}
-};
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-async function getRecaptchaConfig(auth, request) {
-	return _performApiRequest(auth, "GET", "/v2/recaptchaConfig", _addTidIfNecessary(auth, request));
-}
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-async function deleteAccount(auth, request) {
-	return _performApiRequest(auth, "POST", "/v1/accounts:delete", request);
-}
-async function getAccountInfo(auth, request) {
-	return _performApiRequest(auth, "POST", "/v1/accounts:lookup", request);
-}
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-function utcTimestampToDateString(utcTimestamp) {
-	if (!utcTimestamp) return;
-	try {
-		const date = new Date(Number(utcTimestamp));
-		if (!isNaN(date.getTime())) return date.toUTCString();
-	} catch (e) {}
-}
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* Returns a deserialized JSON Web Token (JWT) used to identify the user to a Firebase service.
-*
-* @remarks
-* Returns the current token if it has not expired or if it will not expire in the next five
-* minutes. Otherwise, this will refresh the token and return a new one.
-*
-* @param user - The user.
-* @param forceRefresh - Force refresh regardless of token expiration.
-*
-* @public
-*/
-async function getIdTokenResult(user, forceRefresh = false) {
-	const userInternal = getModularInstance(user);
-	const token = await userInternal.getIdToken(forceRefresh);
-	const claims = _parseToken(token);
-	_assert(claims && claims.exp && claims.auth_time && claims.iat, userInternal.auth, "internal-error");
-	const firebase = typeof claims.firebase === "object" ? claims.firebase : void 0;
-	const signInProvider = firebase?.["sign_in_provider"];
-	return {
-		claims,
-		token,
-		authTime: utcTimestampToDateString(secondsStringToMilliseconds(claims.auth_time)),
-		issuedAtTime: utcTimestampToDateString(secondsStringToMilliseconds(claims.iat)),
-		expirationTime: utcTimestampToDateString(secondsStringToMilliseconds(claims.exp)),
-		signInProvider: signInProvider || null,
-		signInSecondFactor: firebase?.["sign_in_second_factor"] || null
-	};
-}
-function secondsStringToMilliseconds(seconds) {
-	return Number(seconds) * 1e3;
-}
-function _parseToken(token) {
-	const [algorithm, payload, signature] = token.split(".");
-	if (algorithm === void 0 || payload === void 0 || signature === void 0) {
-		_logError("JWT malformed, contained fewer than 3 sections");
-		return null;
-	}
-	try {
-		const decoded = base64Decode(payload);
-		if (!decoded) {
-			_logError("Failed to decode base64 JWT payload");
-			return null;
-		}
-		return JSON.parse(decoded);
-	} catch (e) {
-		_logError("Caught error parsing JWT payload as JSON", e?.toString());
-		return null;
-	}
-}
-/**
-* Extract expiresIn TTL from a token by subtracting the expiration from the issuance.
-*/
-function _tokenExpiresIn(token) {
-	const parsedToken = _parseToken(token);
-	_assert(parsedToken, "internal-error");
-	_assert(typeof parsedToken.exp !== "undefined", "internal-error");
-	_assert(typeof parsedToken.iat !== "undefined", "internal-error");
-	return Number(parsedToken.exp) - Number(parsedToken.iat);
-}
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-async function _logoutIfInvalidated(user, promise, bypassAuthState = false) {
-	if (bypassAuthState) return promise;
-	try {
-		return await promise;
-	} catch (e) {
-		if (_isUserInvalidated(e)) {
-			if (user.auth.currentUser === user) await user.auth.signOut();
-		}
-		throw e;
-	}
-}
-function _isUserInvalidated(error) {
-	if (error instanceof FirebaseError) return error.code === `auth/user-disabled` || error.code === `auth/user-token-expired`;
-	return false;
-}
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-var ProactiveRefresh = class {
-	constructor(user) {
-		this.user = user;
-		this.isRunning = false;
-		this.timerId = null;
-		this.errorBackoff = 3e4;
-	}
-	_start() {
-		if (this.isRunning) return;
-		this.isRunning = true;
-		this.schedule();
-	}
-	_stop() {
-		if (!this.isRunning) return;
-		this.isRunning = false;
-		if (this.timerId !== null) clearTimeout(this.timerId);
-	}
-	getInterval(wasError) {
-		if (wasError) {
-			const interval = this.errorBackoff;
-			this.errorBackoff = Math.min(this.errorBackoff * 2, 96e4);
-			return interval;
-		} else {
-			this.errorBackoff = 3e4;
-			const interval = (this.user.stsTokenManager.expirationTime ?? 0) - Date.now() - 3e5;
-			return Math.max(0, interval);
-		}
-	}
-	schedule(wasError = false) {
-		if (!this.isRunning) return;
-		const interval = this.getInterval(wasError);
-		this.timerId = setTimeout(async () => {
-			await this.iteration();
-		}, interval);
-	}
-	async iteration() {
-		try {
-			await this.user.getIdToken(true);
-		} catch (e) {
-			if (e?.code === `auth/network-request-failed`) this.schedule(true);
-			return;
-		}
-		this.schedule();
-	}
-};
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-var UserMetadata = class {
-	constructor(createdAt, lastLoginAt) {
-		this.createdAt = createdAt;
-		this.lastLoginAt = lastLoginAt;
-		this._initializeTime();
-	}
-	_initializeTime() {
-		this.lastSignInTime = utcTimestampToDateString(this.lastLoginAt);
-		this.creationTime = utcTimestampToDateString(this.createdAt);
-	}
-	_copy(metadata) {
-		this.createdAt = metadata.createdAt;
-		this.lastLoginAt = metadata.lastLoginAt;
-		this._initializeTime();
-	}
-	toJSON() {
-		return {
-			createdAt: this.createdAt,
-			lastLoginAt: this.lastLoginAt
-		};
-	}
-};
-/**
-* @license
-* Copyright 2019 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-async function _reloadWithoutSaving(user) {
-	const auth = user.auth;
-	const response = await _logoutIfInvalidated(user, getAccountInfo(auth, { idToken: await user.getIdToken() }));
-	_assert(response?.users.length, auth, "internal-error");
-	const coreAccount = response.users[0];
-	user._notifyReloadListener(coreAccount);
-	const newProviderData = coreAccount.providerUserInfo?.length ? extractProviderData(coreAccount.providerUserInfo) : [];
-	const providerData = mergeProviderData(user.providerData, newProviderData);
-	const oldIsAnonymous = user.isAnonymous;
-	const newIsAnonymous = !(user.email && coreAccount.passwordHash) && !providerData?.length;
-	const isAnonymous = !oldIsAnonymous ? false : newIsAnonymous;
-	const updates = {
-		uid: coreAccount.localId,
-		displayName: coreAccount.displayName || null,
-		photoURL: coreAccount.photoUrl || null,
-		email: coreAccount.email || null,
-		emailVerified: coreAccount.emailVerified || false,
-		phoneNumber: coreAccount.phoneNumber || null,
-		tenantId: coreAccount.tenantId || null,
-		providerData,
-		metadata: new UserMetadata(coreAccount.createdAt, coreAccount.lastLoginAt),
-		isAnonymous
-	};
-	Object.assign(user, updates);
-}
-/**
-* Reloads user account data, if signed in.
-*
-* @param user - The user.
-*
-* @public
-*/
-async function reload(user) {
-	const userInternal = getModularInstance(user);
-	await _reloadWithoutSaving(userInternal);
-	await userInternal.auth._persistUserIfCurrent(userInternal);
-	userInternal.auth._notifyListenersIfCurrent(userInternal);
-}
-function mergeProviderData(original, newData) {
-	return [...original.filter((o) => !newData.some((n) => n.providerId === o.providerId)), ...newData];
-}
-function extractProviderData(providers) {
-	return providers.map(({ providerId, ...provider }) => {
-		return {
-			providerId,
-			uid: provider.rawId || "",
-			displayName: provider.displayName || null,
-			email: provider.email || null,
-			phoneNumber: provider.phoneNumber || null,
-			photoURL: provider.photoUrl || null
-		};
-	});
-}
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-async function requestStsToken(auth, refreshToken) {
-	const response = await _performFetchWithErrorHandling(auth, {}, async () => {
-		const body = querystring({
-			"grant_type": "refresh_token",
-			"refresh_token": refreshToken
-		}).slice(1);
-		const { tokenApiHost, apiKey } = auth.config;
-		const url = await _getFinalTarget(auth, tokenApiHost, "/v1/token", `key=${apiKey}`);
-		const headers = await auth._getAdditionalHeaders();
-		headers["Content-Type"] = "application/x-www-form-urlencoded";
-		const options = {
-			method: "POST",
-			headers,
-			body
-		};
-		if (auth.emulatorConfig && isCloudWorkstation(auth.emulatorConfig.host)) options.credentials = "include";
-		return FetchProvider.fetch()(url, options);
-	});
-	return {
-		accessToken: response.access_token,
-		expiresIn: response.expires_in,
-		refreshToken: response.refresh_token
-	};
-}
-async function revokeToken(auth, request) {
-	return _performApiRequest(auth, "POST", "/v2/accounts:revokeToken", _addTidIfNecessary(auth, request));
-}
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* We need to mark this class as internal explicitly to exclude it in the public typings, because
-* it references AuthInternal which has a circular dependency with UserInternal.
-*
-* @internal
-*/
-var StsTokenManager = class StsTokenManager {
-	constructor() {
-		this.refreshToken = null;
-		this.accessToken = null;
-		this.expirationTime = null;
-	}
-	get isExpired() {
-		return !this.expirationTime || Date.now() > this.expirationTime - 3e5;
-	}
-	updateFromServerResponse(response) {
-		_assert(response.idToken, "internal-error");
-		_assert(typeof response.idToken !== "undefined", "internal-error");
-		_assert(typeof response.refreshToken !== "undefined", "internal-error");
-		const expiresIn = "expiresIn" in response && typeof response.expiresIn !== "undefined" ? Number(response.expiresIn) : _tokenExpiresIn(response.idToken);
-		this.updateTokensAndExpiration(response.idToken, response.refreshToken, expiresIn);
-	}
-	updateFromIdToken(idToken) {
-		_assert(idToken.length !== 0, "internal-error");
-		const expiresIn = _tokenExpiresIn(idToken);
-		this.updateTokensAndExpiration(idToken, null, expiresIn);
-	}
-	async getToken(auth, forceRefresh = false) {
-		if (!forceRefresh && this.accessToken && !this.isExpired) return this.accessToken;
-		_assert(this.refreshToken, auth, "user-token-expired");
-		if (this.refreshToken) {
-			await this.refresh(auth, this.refreshToken);
-			return this.accessToken;
-		}
-		return null;
-	}
-	clearRefreshToken() {
-		this.refreshToken = null;
-	}
-	async refresh(auth, oldToken) {
-		const { accessToken, refreshToken, expiresIn } = await requestStsToken(auth, oldToken);
-		this.updateTokensAndExpiration(accessToken, refreshToken, Number(expiresIn));
-	}
-	updateTokensAndExpiration(accessToken, refreshToken, expiresInSec) {
-		this.refreshToken = refreshToken || null;
-		this.accessToken = accessToken || null;
-		this.expirationTime = Date.now() + expiresInSec * 1e3;
-	}
-	static fromJSON(appName, object) {
-		const { refreshToken, accessToken, expirationTime } = object;
-		const manager = new StsTokenManager();
-		if (refreshToken) {
-			_assert(typeof refreshToken === "string", "internal-error", { appName });
-			manager.refreshToken = refreshToken;
-		}
-		if (accessToken) {
-			_assert(typeof accessToken === "string", "internal-error", { appName });
-			manager.accessToken = accessToken;
-		}
-		if (expirationTime) {
-			_assert(typeof expirationTime === "number", "internal-error", { appName });
-			manager.expirationTime = expirationTime;
-		}
-		return manager;
-	}
-	toJSON() {
-		return {
-			refreshToken: this.refreshToken,
-			accessToken: this.accessToken,
-			expirationTime: this.expirationTime
-		};
-	}
-	_assign(stsTokenManager) {
-		this.accessToken = stsTokenManager.accessToken;
-		this.refreshToken = stsTokenManager.refreshToken;
-		this.expirationTime = stsTokenManager.expirationTime;
-	}
-	_clone() {
-		return Object.assign(new StsTokenManager(), this.toJSON());
-	}
-	_performRefresh() {
-		return debugFail("not implemented");
-	}
-};
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-function assertStringOrUndefined(assertion, appName) {
-	_assert(typeof assertion === "string" || typeof assertion === "undefined", "internal-error", { appName });
-}
-var UserImpl = class UserImpl {
-	constructor({ uid, auth, stsTokenManager, ...opt }) {
-		this.providerId = "firebase";
-		this.proactiveRefresh = new ProactiveRefresh(this);
-		this.reloadUserInfo = null;
-		this.reloadListener = null;
-		this.uid = uid;
-		this.auth = auth;
-		this.stsTokenManager = stsTokenManager;
-		this.accessToken = stsTokenManager.accessToken;
-		this.displayName = opt.displayName || null;
-		this.email = opt.email || null;
-		this.emailVerified = opt.emailVerified || false;
-		this.phoneNumber = opt.phoneNumber || null;
-		this.photoURL = opt.photoURL || null;
-		this.isAnonymous = opt.isAnonymous || false;
-		this.tenantId = opt.tenantId || null;
-		this.providerData = opt.providerData ? [...opt.providerData] : [];
-		this.metadata = new UserMetadata(opt.createdAt || void 0, opt.lastLoginAt || void 0);
-	}
-	async getIdToken(forceRefresh) {
-		const accessToken = await _logoutIfInvalidated(this, this.stsTokenManager.getToken(this.auth, forceRefresh));
-		_assert(accessToken, this.auth, "internal-error");
-		if (this.accessToken !== accessToken) {
-			this.accessToken = accessToken;
-			await this.auth._persistUserIfCurrent(this);
-			this.auth._notifyListenersIfCurrent(this);
-		}
-		return accessToken;
-	}
-	getIdTokenResult(forceRefresh) {
-		return getIdTokenResult(this, forceRefresh);
-	}
-	reload() {
-		return reload(this);
-	}
-	_assign(user) {
-		if (this === user) return;
-		_assert(this.uid === user.uid, this.auth, "internal-error");
-		this.displayName = user.displayName;
-		this.photoURL = user.photoURL;
-		this.email = user.email;
-		this.emailVerified = user.emailVerified;
-		this.phoneNumber = user.phoneNumber;
-		this.isAnonymous = user.isAnonymous;
-		this.tenantId = user.tenantId;
-		this.providerData = user.providerData.map((userInfo) => ({ ...userInfo }));
-		this.metadata._copy(user.metadata);
-		this.stsTokenManager._assign(user.stsTokenManager);
-	}
-	_clone(auth) {
-		const newUser = new UserImpl({
-			...this,
-			auth,
-			stsTokenManager: this.stsTokenManager._clone()
-		});
-		newUser.metadata._copy(this.metadata);
-		return newUser;
-	}
-	_onReload(callback) {
-		_assert(!this.reloadListener, this.auth, "internal-error");
-		this.reloadListener = callback;
-		if (this.reloadUserInfo) {
-			this._notifyReloadListener(this.reloadUserInfo);
-			this.reloadUserInfo = null;
-		}
-	}
-	_notifyReloadListener(userInfo) {
-		if (this.reloadListener) this.reloadListener(userInfo);
-		else this.reloadUserInfo = userInfo;
-	}
-	_startProactiveRefresh() {
-		this.proactiveRefresh._start();
-	}
-	_stopProactiveRefresh() {
-		this.proactiveRefresh._stop();
-	}
-	async _updateTokensIfNecessary(response, reload = false) {
-		let tokensRefreshed = false;
-		if (response.idToken && response.idToken !== this.stsTokenManager.accessToken) {
-			this.stsTokenManager.updateFromServerResponse(response);
-			tokensRefreshed = true;
-		}
-		if (reload) await _reloadWithoutSaving(this);
-		await this.auth._persistUserIfCurrent(this);
-		if (tokensRefreshed) this.auth._notifyListenersIfCurrent(this);
-	}
-	async delete() {
-		if (_isFirebaseServerApp(this.auth.app)) return Promise.reject(_serverAppCurrentUserOperationNotSupportedError(this.auth));
-		const idToken = await this.getIdToken();
-		await _logoutIfInvalidated(this, deleteAccount(this.auth, { idToken }));
-		this.stsTokenManager.clearRefreshToken();
-		return this.auth.signOut();
-	}
-	toJSON() {
-		return {
-			uid: this.uid,
-			email: this.email || void 0,
-			emailVerified: this.emailVerified,
-			displayName: this.displayName || void 0,
-			isAnonymous: this.isAnonymous,
-			photoURL: this.photoURL || void 0,
-			phoneNumber: this.phoneNumber || void 0,
-			tenantId: this.tenantId || void 0,
-			providerData: this.providerData.map((userInfo) => ({ ...userInfo })),
-			stsTokenManager: this.stsTokenManager.toJSON(),
-			_redirectEventId: this._redirectEventId,
-			...this.metadata.toJSON(),
-			apiKey: this.auth.config.apiKey,
-			appName: this.auth.name
-		};
-	}
-	get refreshToken() {
-		return this.stsTokenManager.refreshToken || "";
-	}
-	static _fromJSON(auth, object) {
-		const displayName = object.displayName ?? void 0;
-		const email = object.email ?? void 0;
-		const phoneNumber = object.phoneNumber ?? void 0;
-		const photoURL = object.photoURL ?? void 0;
-		const tenantId = object.tenantId ?? void 0;
-		const _redirectEventId = object._redirectEventId ?? void 0;
-		const createdAt = object.createdAt ?? void 0;
-		const lastLoginAt = object.lastLoginAt ?? void 0;
-		const { uid, emailVerified, isAnonymous, providerData, stsTokenManager: plainObjectTokenManager } = object;
-		_assert(uid && plainObjectTokenManager, auth, "internal-error");
-		const stsTokenManager = StsTokenManager.fromJSON(this.name, plainObjectTokenManager);
-		_assert(typeof uid === "string", auth, "internal-error");
-		assertStringOrUndefined(displayName, auth.name);
-		assertStringOrUndefined(email, auth.name);
-		_assert(typeof emailVerified === "boolean", auth, "internal-error");
-		_assert(typeof isAnonymous === "boolean", auth, "internal-error");
-		assertStringOrUndefined(phoneNumber, auth.name);
-		assertStringOrUndefined(photoURL, auth.name);
-		assertStringOrUndefined(tenantId, auth.name);
-		assertStringOrUndefined(_redirectEventId, auth.name);
-		assertStringOrUndefined(createdAt, auth.name);
-		assertStringOrUndefined(lastLoginAt, auth.name);
-		const user = new UserImpl({
-			uid,
-			auth,
-			email,
-			emailVerified,
-			displayName,
-			isAnonymous,
-			photoURL,
-			phoneNumber,
-			tenantId,
-			stsTokenManager,
-			createdAt,
-			lastLoginAt
-		});
-		if (providerData && Array.isArray(providerData)) user.providerData = providerData.map((userInfo) => ({ ...userInfo }));
-		if (_redirectEventId) user._redirectEventId = _redirectEventId;
-		return user;
-	}
-	/**
-	* Initialize a User from an idToken server response
-	* @param auth
-	* @param idTokenResponse
-	*/
-	static async _fromIdTokenResponse(auth, idTokenResponse, isAnonymous = false) {
-		const stsTokenManager = new StsTokenManager();
-		stsTokenManager.updateFromServerResponse(idTokenResponse);
-		const user = new UserImpl({
-			uid: idTokenResponse.localId,
-			auth,
-			stsTokenManager,
-			isAnonymous
-		});
-		await _reloadWithoutSaving(user);
-		return user;
-	}
-	/**
-	* Initialize a User from an idToken server response
-	* @param auth
-	* @param idTokenResponse
-	*/
-	static async _fromGetAccountInfoResponse(auth, response, idToken) {
-		const coreAccount = response.users[0];
-		_assert(coreAccount.localId !== void 0, "internal-error");
-		const providerData = coreAccount.providerUserInfo !== void 0 ? extractProviderData(coreAccount.providerUserInfo) : [];
-		const isAnonymous = !(coreAccount.email && coreAccount.passwordHash) && !providerData?.length;
-		const stsTokenManager = new StsTokenManager();
-		stsTokenManager.updateFromIdToken(idToken);
-		const user = new UserImpl({
-			uid: coreAccount.localId,
-			auth,
-			stsTokenManager,
-			isAnonymous
-		});
-		const updates = {
-			uid: coreAccount.localId,
-			displayName: coreAccount.displayName || null,
-			photoURL: coreAccount.photoUrl || null,
-			email: coreAccount.email || null,
-			emailVerified: coreAccount.emailVerified || false,
-			phoneNumber: coreAccount.phoneNumber || null,
-			tenantId: coreAccount.tenantId || null,
-			providerData,
-			metadata: new UserMetadata(coreAccount.createdAt, coreAccount.lastLoginAt),
-			isAnonymous: !(coreAccount.email && coreAccount.passwordHash) && !providerData?.length
-		};
-		Object.assign(user, updates);
-		return user;
-	}
-};
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-var instanceCache = /* @__PURE__ */ new Map();
-function _getInstance(cls) {
-	debugAssert(cls instanceof Function, "Expected a class definition");
-	let instance = instanceCache.get(cls);
-	if (instance) {
-		debugAssert(instance instanceof cls, "Instance stored in cache mismatched with class");
-		return instance;
-	}
-	instance = new cls();
-	instanceCache.set(cls, instance);
-	return instance;
-}
-/**
-* @license
-* Copyright 2019 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-var InMemoryPersistence = class {
-	constructor() {
-		this.type = "NONE";
-		this.storage = {};
-	}
-	async _isAvailable() {
-		return true;
-	}
-	async _set(key, value) {
-		this.storage[key] = value;
-	}
-	async _get(key) {
-		const value = this.storage[key];
-		return value === void 0 ? null : value;
-	}
-	async _remove(key) {
-		delete this.storage[key];
-	}
-	_addListener(_key, _listener) {}
-	_removeListener(_key, _listener) {}
-};
-InMemoryPersistence.type = "NONE";
-/**
-* An implementation of {@link Persistence} of type 'NONE'.
-*
-* @public
-*/
-var inMemoryPersistence = InMemoryPersistence;
-/**
-* @license
-* Copyright 2019 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-function _persistenceKeyName(key, apiKey, appName) {
-	return `firebase:${key}:${apiKey}:${appName}`;
-}
-var PersistenceUserManager = class PersistenceUserManager {
-	constructor(persistence, auth, userKey) {
-		this.persistence = persistence;
-		this.auth = auth;
-		this.userKey = userKey;
-		const { config, name } = this.auth;
-		this.fullUserKey = _persistenceKeyName(this.userKey, config.apiKey, name);
-		this.fullPersistenceKey = _persistenceKeyName("persistence", config.apiKey, name);
-		this.boundEventHandler = auth._onStorageEvent.bind(auth);
-		try {
-			this.persistence._addListener(this.fullUserKey, this.boundEventHandler);
-		} catch {}
-	}
-	setCurrentUser(user) {
-		return this.persistence._set(this.fullUserKey, user.toJSON());
-	}
-	async getCurrentUser() {
-		const blob = await this.persistence._get(this.fullUserKey);
-		if (!blob) return null;
-		if (typeof blob === "string") {
-			const response = await getAccountInfo(this.auth, { idToken: blob }).catch(() => void 0);
-			if (!response) return null;
-			return UserImpl._fromGetAccountInfoResponse(this.auth, response, blob);
-		}
-		return UserImpl._fromJSON(this.auth, blob);
-	}
-	removeCurrentUser() {
-		return this.persistence._remove(this.fullUserKey);
-	}
-	savePersistenceForRedirect() {
-		return this.persistence._set(this.fullPersistenceKey, this.persistence.type);
-	}
-	async setPersistence(newPersistence) {
-		if (this.persistence === newPersistence) return;
-		const currentUser = await this.getCurrentUser();
-		await this.removeCurrentUser();
-		this.persistence = newPersistence;
-		if (currentUser) return this.setCurrentUser(currentUser);
-	}
-	delete() {
-		try {
-			this.persistence._removeListener(this.fullUserKey, this.boundEventHandler);
-		} catch {}
-	}
-	static async create(auth, persistenceHierarchy, userKey = "authUser") {
-		if (!persistenceHierarchy.length) return new PersistenceUserManager(_getInstance(inMemoryPersistence), auth, userKey);
-		const key = _persistenceKeyName(userKey, auth.config.apiKey, auth.name);
-		let foundUser = null;
-		let foundPersistence = null;
-		const unreadablePersistences = /* @__PURE__ */ new Set();
-		for (const persistence of persistenceHierarchy) {
-			let blob = null;
-			try {
-				blob = await persistence._get(key);
-			} catch {
-				unreadablePersistences.add(persistence);
-				continue;
-			}
-			try {
-				if (blob) {
-					let user;
-					if (typeof blob === "string") {
-						const response = await getAccountInfo(auth, { idToken: blob }).catch(() => void 0);
-						if (!response) break;
-						user = await UserImpl._fromGetAccountInfoResponse(auth, response, blob);
-					} else user = UserImpl._fromJSON(auth, blob);
-					foundUser = user;
-					foundPersistence = persistence;
-					break;
-				}
-			} catch {}
-		}
-		const availablePersistences = (await Promise.all(persistenceHierarchy.map(async (persistence) => {
-			try {
-				if (await persistence._isAvailable()) return persistence;
-				if (persistence._lastProbeTimedOut) unreadablePersistences.add(persistence);
-			} catch {
-				return;
-			}
-		}))).filter((persistence) => persistence);
-		let selectedPersistence = availablePersistences[0] || _getInstance(inMemoryPersistence);
-		let userToMigrate = null;
-		if (foundPersistence && foundUser) {
-			if (foundPersistence !== selectedPersistence) userToMigrate = foundUser;
-			selectedPersistence = foundPersistence;
-		}
-		const migrationHierarchy = availablePersistences.filter((p) => p._shouldAllowMigration);
-		if (!selectedPersistence._shouldAllowMigration || !migrationHierarchy.length) return new PersistenceUserManager(selectedPersistence, auth, userKey);
-		selectedPersistence = migrationHierarchy[0];
-		if (userToMigrate) await selectedPersistence._set(key, userToMigrate.toJSON());
-		await Promise.all(persistenceHierarchy.map(async (persistence) => {
-			if (persistence !== selectedPersistence && !unreadablePersistences.has(persistence)) try {
-				await persistence._remove(key);
-			} catch {}
-		}));
-		return new PersistenceUserManager(selectedPersistence, auth, userKey);
-	}
-};
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* Determine the browser for the purposes of reporting usage to the API
-*/
-function _getBrowserName(userAgent) {
-	const ua = userAgent.toLowerCase();
-	if (ua.includes("opera/") || ua.includes("opr/") || ua.includes("opios/")) return "Opera";
-	else if (_isIEMobile(ua)) return "IEMobile";
-	else if (ua.includes("msie") || ua.includes("trident/")) return "IE";
-	else if (ua.includes("edge/")) return "Edge";
-	else if (_isFirefox(ua)) return "Firefox";
-	else if (ua.includes("silk/")) return "Silk";
-	else if (_isBlackBerry(ua)) return "Blackberry";
-	else if (_isWebOS(ua)) return "Webos";
-	else if (_isSafari(ua)) return "Safari";
-	else if ((ua.includes("chrome/") || _isChromeIOS(ua)) && !ua.includes("edge/")) return "Chrome";
-	else if (_isAndroid(ua)) return "Android";
-	else {
-		const matches = userAgent.match(/([a-zA-Z\d\.]+)\/[a-zA-Z\d\.]*$/);
-		if (matches?.length === 2) return matches[1];
-	}
-	return "Other";
-}
-function _isFirefox(ua = getUA()) {
-	return /firefox\//i.test(ua);
-}
-function _isSafari(userAgent = getUA()) {
-	const ua = userAgent.toLowerCase();
-	return ua.includes("safari/") && !ua.includes("chrome/") && !ua.includes("crios/") && !ua.includes("android");
-}
-function _isChromeIOS(ua = getUA()) {
-	return /crios\//i.test(ua);
-}
-function _isIEMobile(ua = getUA()) {
-	return /iemobile/i.test(ua);
-}
-function _isAndroid(ua = getUA()) {
-	return /android/i.test(ua);
-}
-function _isBlackBerry(ua = getUA()) {
-	return /blackberry/i.test(ua);
-}
-function _isWebOS(ua = getUA()) {
-	return /webos/i.test(ua);
-}
-function _isIOS(ua = getUA()) {
-	return /iphone|ipad|ipod/i.test(ua) || /macintosh/i.test(ua) && /mobile/i.test(ua);
-}
-function _isIOSStandalone(ua = getUA()) {
-	return _isIOS(ua) && !!window.navigator?.standalone;
-}
-function _isIE10() {
-	return isIE() && document.documentMode === 10;
-}
-function _isMobileBrowser(ua = getUA()) {
-	return _isIOS(ua) || _isAndroid(ua) || _isWebOS(ua) || _isBlackBerry(ua) || /windows phone/i.test(ua) || _isIEMobile(ua);
-}
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-function _getClientVersion(clientPlatform, frameworks = []) {
-	let reportedPlatform;
-	switch (clientPlatform) {
-		case "Browser":
-			reportedPlatform = _getBrowserName(getUA());
-			break;
-		case "Worker":
-			reportedPlatform = `${_getBrowserName(getUA())}-${clientPlatform}`;
-			break;
-		default: reportedPlatform = clientPlatform;
-	}
-	const reportedFrameworks = frameworks.length ? frameworks.join(",") : "FirebaseCore-web";
-	return `${reportedPlatform}/JsCore/${SDK_VERSION}/${reportedFrameworks}`;
-}
-/**
-* @license
-* Copyright 2022 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-var AuthMiddlewareQueue = class {
-	constructor(auth) {
-		this.auth = auth;
-		this.queue = [];
-	}
-	pushCallback(callback, onAbort) {
-		const wrappedCallback = (user) => new Promise((resolve, reject) => {
-			try {
-				resolve(callback(user));
-			} catch (e) {
-				reject(e);
-			}
-		});
-		wrappedCallback.onAbort = onAbort;
-		this.queue.push(wrappedCallback);
-		const index = this.queue.length - 1;
-		return () => {
-			this.queue[index] = () => Promise.resolve();
-		};
-	}
-	async runMiddleware(nextUser) {
-		if (this.auth.currentUser === nextUser) return;
-		const onAbortStack = [];
-		try {
-			for (const beforeStateCallback of this.queue) {
-				await beforeStateCallback(nextUser);
-				if (beforeStateCallback.onAbort) onAbortStack.push(beforeStateCallback.onAbort);
-			}
-		} catch (e) {
-			onAbortStack.reverse();
-			for (const onAbort of onAbortStack) try {
-				onAbort();
-			} catch (_) {}
-			throw this.auth._errorFactory.create("login-blocked", { originalMessage: e?.message });
-		}
-	}
-};
-/**
-* @license
-* Copyright 2023 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* Fetches the password policy for the currently set tenant or the project if no tenant is set.
-*
-* @param auth Auth object.
-* @param request Password policy request.
-* @returns Password policy response.
-*/
-async function _getPasswordPolicy(auth, request = {}) {
-	return _performApiRequest(auth, "GET", "/v2/passwordPolicy", _addTidIfNecessary(auth, request));
-}
-/**
-* @license
-* Copyright 2023 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-var MINIMUM_MIN_PASSWORD_LENGTH = 6;
-/**
-* Stores password policy requirements and provides password validation against the policy.
-*
-* @internal
-*/
-var PasswordPolicyImpl = class {
-	constructor(response) {
-		const responseOptions = response.customStrengthOptions;
-		this.customStrengthOptions = {};
-		this.customStrengthOptions.minPasswordLength = responseOptions.minPasswordLength ?? MINIMUM_MIN_PASSWORD_LENGTH;
-		if (responseOptions.maxPasswordLength) this.customStrengthOptions.maxPasswordLength = responseOptions.maxPasswordLength;
-		if (responseOptions.containsLowercaseCharacter !== void 0) this.customStrengthOptions.containsLowercaseLetter = responseOptions.containsLowercaseCharacter;
-		if (responseOptions.containsUppercaseCharacter !== void 0) this.customStrengthOptions.containsUppercaseLetter = responseOptions.containsUppercaseCharacter;
-		if (responseOptions.containsNumericCharacter !== void 0) this.customStrengthOptions.containsNumericCharacter = responseOptions.containsNumericCharacter;
-		if (responseOptions.containsNonAlphanumericCharacter !== void 0) this.customStrengthOptions.containsNonAlphanumericCharacter = responseOptions.containsNonAlphanumericCharacter;
-		this.enforcementState = response.enforcementState;
-		if (this.enforcementState === "ENFORCEMENT_STATE_UNSPECIFIED") this.enforcementState = "OFF";
-		this.allowedNonAlphanumericCharacters = response.allowedNonAlphanumericCharacters?.join("") ?? "";
-		this.forceUpgradeOnSignin = response.forceUpgradeOnSignin ?? false;
-		this.schemaVersion = response.schemaVersion;
-	}
-	validatePassword(password) {
-		const status = {
-			isValid: true,
-			passwordPolicy: this
-		};
-		this.validatePasswordLengthOptions(password, status);
-		this.validatePasswordCharacterOptions(password, status);
-		status.isValid && (status.isValid = status.meetsMinPasswordLength ?? true);
-		status.isValid && (status.isValid = status.meetsMaxPasswordLength ?? true);
-		status.isValid && (status.isValid = status.containsLowercaseLetter ?? true);
-		status.isValid && (status.isValid = status.containsUppercaseLetter ?? true);
-		status.isValid && (status.isValid = status.containsNumericCharacter ?? true);
-		status.isValid && (status.isValid = status.containsNonAlphanumericCharacter ?? true);
-		return status;
-	}
-	/**
-	* Validates that the password meets the length options for the policy.
-	*
-	* @param password Password to validate.
-	* @param status Validation status.
-	*/
-	validatePasswordLengthOptions(password, status) {
-		const minPasswordLength = this.customStrengthOptions.minPasswordLength;
-		const maxPasswordLength = this.customStrengthOptions.maxPasswordLength;
-		if (minPasswordLength) status.meetsMinPasswordLength = password.length >= minPasswordLength;
-		if (maxPasswordLength) status.meetsMaxPasswordLength = password.length <= maxPasswordLength;
-	}
-	/**
-	* Validates that the password meets the character options for the policy.
-	*
-	* @param password Password to validate.
-	* @param status Validation status.
-	*/
-	validatePasswordCharacterOptions(password, status) {
-		this.updatePasswordCharacterOptionsStatuses(status, false, false, false, false);
-		let passwordChar;
-		for (let i = 0; i < password.length; i++) {
-			passwordChar = password.charAt(i);
-			this.updatePasswordCharacterOptionsStatuses(status, passwordChar >= "a" && passwordChar <= "z", passwordChar >= "A" && passwordChar <= "Z", passwordChar >= "0" && passwordChar <= "9", this.allowedNonAlphanumericCharacters.includes(passwordChar));
-		}
-	}
-	/**
-	* Updates the running validation status with the statuses for the character options.
-	* Expected to be called each time a character is processed to update each option status
-	* based on the current character.
-	*
-	* @param status Validation status.
-	* @param containsLowercaseCharacter Whether the character is a lowercase letter.
-	* @param containsUppercaseCharacter Whether the character is an uppercase letter.
-	* @param containsNumericCharacter Whether the character is a numeric character.
-	* @param containsNonAlphanumericCharacter Whether the character is a non-alphanumeric character.
-	*/
-	updatePasswordCharacterOptionsStatuses(status, containsLowercaseCharacter, containsUppercaseCharacter, containsNumericCharacter, containsNonAlphanumericCharacter) {
-		if (this.customStrengthOptions.containsLowercaseLetter) status.containsLowercaseLetter || (status.containsLowercaseLetter = containsLowercaseCharacter);
-		if (this.customStrengthOptions.containsUppercaseLetter) status.containsUppercaseLetter || (status.containsUppercaseLetter = containsUppercaseCharacter);
-		if (this.customStrengthOptions.containsNumericCharacter) status.containsNumericCharacter || (status.containsNumericCharacter = containsNumericCharacter);
-		if (this.customStrengthOptions.containsNonAlphanumericCharacter) status.containsNonAlphanumericCharacter || (status.containsNonAlphanumericCharacter = containsNonAlphanumericCharacter);
-	}
-};
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-var AuthImpl = class {
-	constructor(app, heartbeatServiceProvider, appCheckServiceProvider, config) {
-		this.app = app;
-		this.heartbeatServiceProvider = heartbeatServiceProvider;
-		this.appCheckServiceProvider = appCheckServiceProvider;
-		this.config = config;
-		this.currentUser = null;
-		this.emulatorConfig = null;
-		this.operations = Promise.resolve();
-		this.authStateSubscription = new Subscription(this);
-		this.idTokenSubscription = new Subscription(this);
-		this.beforeStateQueue = new AuthMiddlewareQueue(this);
-		this.redirectUser = null;
-		this.isProactiveRefreshEnabled = false;
-		this.EXPECTED_PASSWORD_POLICY_SCHEMA_VERSION = 1;
-		this._canInitEmulator = true;
-		this._isInitialized = false;
-		this._deleted = false;
-		this._initializationPromise = null;
-		this._popupRedirectResolver = null;
-		this._errorFactory = _DEFAULT_AUTH_ERROR_FACTORY;
-		this._agentRecaptchaConfig = null;
-		this._tenantRecaptchaConfigs = {};
-		this._projectPasswordPolicy = null;
-		this._tenantPasswordPolicies = {};
-		this._resolvePersistenceManagerAvailable = void 0;
-		this.lastNotifiedUid = void 0;
-		this.languageCode = null;
-		this.tenantId = null;
-		this.settings = { appVerificationDisabledForTesting: false };
-		this.frameworks = [];
-		this.name = app.name;
-		this.clientVersion = config.sdkClientVersion;
-		this._persistenceManagerAvailable = new Promise((resolve) => this._resolvePersistenceManagerAvailable = resolve);
-	}
-	_initializeWithPersistence(persistenceHierarchy, popupRedirectResolver) {
-		if (popupRedirectResolver) this._popupRedirectResolver = _getInstance(popupRedirectResolver);
-		this._initializationPromise = this.queue(async () => {
-			if (this._deleted) return;
-			try {
-				this.persistenceManager = await PersistenceUserManager.create(this, persistenceHierarchy);
-			} catch (e) {
-				_logWarn(`Failed to initialize persistence: ${e}`);
-				this.persistenceManager = await PersistenceUserManager.create(this, []);
-			} finally {
-				this._resolvePersistenceManagerAvailable?.();
-			}
-			if (this._deleted) return;
-			if (this._popupRedirectResolver?._shouldInitProactively) try {
-				await this._popupRedirectResolver._initialize(this);
-			} catch (e) {}
-			try {
-				await this.initializeCurrentUser(popupRedirectResolver);
-			} catch (e) {
-				_logWarn(`Failed to initialize current user: ${e}`);
-			}
-			this.lastNotifiedUid = this.currentUser?.uid || null;
-			if (this._deleted) return;
-			this._isInitialized = true;
-		});
-		return this._initializationPromise;
-	}
-	/**
-	* If the persistence is changed in another window, the user manager will let us know
-	*/
-	async _onStorageEvent() {
-		if (this._deleted) return;
-		const user = await this.assertedPersistence.getCurrentUser();
-		if (!this.currentUser && !user) return;
-		if (this.currentUser && user && this.currentUser.uid === user.uid) {
-			this._currentUser._assign(user);
-			await this.currentUser.getIdToken();
-			return;
-		}
-		await this._updateCurrentUser(user, true);
-	}
-	async initializeCurrentUserFromIdToken(idToken) {
-		try {
-			const response = await getAccountInfo(this, { idToken });
-			const user = await UserImpl._fromGetAccountInfoResponse(this, response, idToken);
-			await this.directlySetCurrentUser(user);
-		} catch (err) {
-			console.warn("FirebaseServerApp could not login user with provided authIdToken: ", err);
-			await this.directlySetCurrentUser(null);
-		}
-	}
-	async initializeCurrentUser(popupRedirectResolver) {
-		if (_isFirebaseServerApp(this.app)) {
-			const idToken = this.app.settings.authIdToken;
-			if (idToken) return new Promise((resolve) => {
-				setTimeout(() => this.initializeCurrentUserFromIdToken(idToken).then(resolve, resolve));
-			});
-			else return this.directlySetCurrentUser(null);
-		}
-		const previouslyStoredUser = await this.assertedPersistence.getCurrentUser();
-		let futureCurrentUser = previouslyStoredUser;
-		let needsTocheckMiddleware = false;
-		if (popupRedirectResolver && this.config.authDomain) {
-			await this.getOrInitRedirectPersistenceManager();
-			const redirectUserEventId = this.redirectUser?._redirectEventId;
-			const storedUserEventId = futureCurrentUser?._redirectEventId;
-			const result = await this.tryRedirectSignIn(popupRedirectResolver);
-			if ((!redirectUserEventId || redirectUserEventId === storedUserEventId) && result?.user) {
-				futureCurrentUser = result.user;
-				needsTocheckMiddleware = true;
-			}
-		}
-		if (!futureCurrentUser) return this.directlySetCurrentUser(null);
-		if (!futureCurrentUser._redirectEventId) {
-			if (needsTocheckMiddleware) try {
-				await this.beforeStateQueue.runMiddleware(futureCurrentUser);
-			} catch (e) {
-				futureCurrentUser = previouslyStoredUser;
-				this._popupRedirectResolver._overrideRedirectResult(this, () => Promise.reject(e));
-			}
-			if (futureCurrentUser) return this.reloadAndSetCurrentUserOrClear(futureCurrentUser);
-			else return this.directlySetCurrentUser(null);
-		}
-		_assert(this._popupRedirectResolver, this, "argument-error");
-		await this.getOrInitRedirectPersistenceManager();
-		if (this.redirectUser && this.redirectUser._redirectEventId === futureCurrentUser._redirectEventId) return this.directlySetCurrentUser(futureCurrentUser);
-		return this.reloadAndSetCurrentUserOrClear(futureCurrentUser);
-	}
-	async tryRedirectSignIn(redirectResolver) {
-		let result = null;
-		try {
-			result = await this._popupRedirectResolver._completeRedirectFn(this, redirectResolver, true);
-		} catch (e) {
-			await this._setRedirectUser(null);
-		}
-		return result;
-	}
-	async reloadAndSetCurrentUserOrClear(user) {
-		try {
-			await _reloadWithoutSaving(user);
-		} catch (e) {
-			if (_isUserInvalidated(e)) return this.directlySetCurrentUser(null);
-		}
-		return this.directlySetCurrentUser(user);
-	}
-	useDeviceLanguage() {
-		this.languageCode = _getUserLanguage();
-	}
-	async _delete() {
-		this._deleted = true;
-	}
-	async updateCurrentUser(userExtern) {
-		if (_isFirebaseServerApp(this.app)) return Promise.reject(_serverAppCurrentUserOperationNotSupportedError(this));
-		const user = userExtern ? getModularInstance(userExtern) : null;
-		if (user) _assert(user.auth.config.apiKey === this.config.apiKey, this, "invalid-user-token");
-		return this._updateCurrentUser(user && user._clone(this));
-	}
-	async _updateCurrentUser(user, skipBeforeStateCallbacks = false) {
-		if (this._deleted) return;
-		if (user) _assert(this.tenantId === user.tenantId, this, "tenant-id-mismatch");
-		if (!skipBeforeStateCallbacks) await this.beforeStateQueue.runMiddleware(user);
-		return this.queue(async () => {
-			await this.directlySetCurrentUser(user);
-			this.notifyAuthListeners();
-		});
-	}
-	async signOut() {
-		if (_isFirebaseServerApp(this.app)) return Promise.reject(_serverAppCurrentUserOperationNotSupportedError(this));
-		await this.beforeStateQueue.runMiddleware(null);
-		if (this.redirectPersistenceManager || this._popupRedirectResolver) await this._setRedirectUser(null);
-		return this._updateCurrentUser(null, true);
-	}
-	setPersistence(persistence) {
-		if (_isFirebaseServerApp(this.app)) return Promise.reject(_serverAppCurrentUserOperationNotSupportedError(this));
-		return this.queue(async () => {
-			await this.assertedPersistence.setPersistence(_getInstance(persistence));
-		});
-	}
-	_getRecaptchaConfig() {
-		if (this.tenantId == null) return this._agentRecaptchaConfig;
-		else return this._tenantRecaptchaConfigs[this.tenantId];
-	}
-	async validatePassword(password) {
-		if (!this._getPasswordPolicyInternal()) await this._updatePasswordPolicy();
-		const passwordPolicy = this._getPasswordPolicyInternal();
-		if (passwordPolicy.schemaVersion !== this.EXPECTED_PASSWORD_POLICY_SCHEMA_VERSION) return Promise.reject(this._errorFactory.create("unsupported-password-policy-schema-version", {}));
-		return passwordPolicy.validatePassword(password);
-	}
-	_getPasswordPolicyInternal() {
-		if (this.tenantId === null) return this._projectPasswordPolicy;
-		else return this._tenantPasswordPolicies[this.tenantId];
-	}
-	async _updatePasswordPolicy() {
-		const passwordPolicy = new PasswordPolicyImpl(await _getPasswordPolicy(this));
-		if (this.tenantId === null) this._projectPasswordPolicy = passwordPolicy;
-		else this._tenantPasswordPolicies[this.tenantId] = passwordPolicy;
-	}
-	_getPersistenceType() {
-		return this.assertedPersistence.persistence.type;
-	}
-	_getPersistence() {
-		return this.assertedPersistence.persistence;
-	}
-	_updateErrorMap(errorMap) {
-		this._errorFactory = new ErrorFactory("auth", "Firebase", errorMap());
-	}
-	onAuthStateChanged(nextOrObserver, error, completed) {
-		return this.registerStateListener(this.authStateSubscription, nextOrObserver, error, completed);
-	}
-	beforeAuthStateChanged(callback, onAbort) {
-		return this.beforeStateQueue.pushCallback(callback, onAbort);
-	}
-	onIdTokenChanged(nextOrObserver, error, completed) {
-		return this.registerStateListener(this.idTokenSubscription, nextOrObserver, error, completed);
-	}
-	authStateReady() {
-		return new Promise((resolve, reject) => {
-			if (this.currentUser) resolve();
-			else {
-				const unsubscribe = this.onAuthStateChanged(() => {
-					unsubscribe();
-					resolve();
-				}, reject);
-			}
-		});
-	}
-	/**
-	* Revokes the given access token. Currently only supports Apple OAuth access tokens.
-	*/
-	async revokeAccessToken(token) {
-		if (this.currentUser) {
-			const request = {
-				providerId: "apple.com",
-				tokenType: "ACCESS_TOKEN",
-				token,
-				idToken: await this.currentUser.getIdToken()
-			};
-			if (this.tenantId != null) request.tenantId = this.tenantId;
-			await revokeToken(this, request);
-		}
-	}
-	toJSON() {
-		return {
-			apiKey: this.config.apiKey,
-			authDomain: this.config.authDomain,
-			appName: this.name,
-			currentUser: this._currentUser?.toJSON()
-		};
-	}
-	async _setRedirectUser(user, popupRedirectResolver) {
-		const redirectManager = await this.getOrInitRedirectPersistenceManager(popupRedirectResolver);
-		return user === null ? redirectManager.removeCurrentUser() : redirectManager.setCurrentUser(user);
-	}
-	async getOrInitRedirectPersistenceManager(popupRedirectResolver) {
-		if (!this.redirectPersistenceManager) {
-			const resolver = popupRedirectResolver && _getInstance(popupRedirectResolver) || this._popupRedirectResolver;
-			_assert(resolver, this, "argument-error");
-			this.redirectPersistenceManager = await PersistenceUserManager.create(this, [_getInstance(resolver._redirectPersistence)], "redirectUser");
-			this.redirectUser = await this.redirectPersistenceManager.getCurrentUser();
-		}
-		return this.redirectPersistenceManager;
-	}
-	async _redirectUserForId(id) {
-		if (this._isInitialized) await this.queue(async () => {});
-		if (this._currentUser?._redirectEventId === id) return this._currentUser;
-		if (this.redirectUser?._redirectEventId === id) return this.redirectUser;
-		return null;
-	}
-	async _persistUserIfCurrent(user) {
-		if (user === this.currentUser) return this.queue(async () => this.directlySetCurrentUser(user));
-	}
-	/** Notifies listeners only if the user is current */
-	_notifyListenersIfCurrent(user) {
-		if (user === this.currentUser) this.notifyAuthListeners();
-	}
-	_key() {
-		return `${this.config.authDomain}:${this.config.apiKey}:${this.name}`;
-	}
-	_startProactiveRefresh() {
-		this.isProactiveRefreshEnabled = true;
-		if (this.currentUser) this._currentUser._startProactiveRefresh();
-	}
-	_stopProactiveRefresh() {
-		this.isProactiveRefreshEnabled = false;
-		if (this.currentUser) this._currentUser._stopProactiveRefresh();
-	}
-	/** Returns the current user cast as the internal type */
-	get _currentUser() {
-		return this.currentUser;
-	}
-	notifyAuthListeners() {
-		if (!this._isInitialized) return;
-		this.idTokenSubscription.next(this.currentUser);
-		const currentUid = this.currentUser?.uid ?? null;
-		if (this.lastNotifiedUid !== currentUid) {
-			this.lastNotifiedUid = currentUid;
-			this.authStateSubscription.next(this.currentUser);
-		}
-	}
-	registerStateListener(subscription, nextOrObserver, error, completed) {
-		if (this._deleted) return () => {};
-		const cb = typeof nextOrObserver === "function" ? nextOrObserver : nextOrObserver.next.bind(nextOrObserver);
-		let isUnsubscribed = false;
-		const promise = this._isInitialized ? Promise.resolve() : this._initializationPromise;
-		_assert(promise, this, "internal-error");
-		promise.then(() => {
-			if (isUnsubscribed) return;
-			cb(this.currentUser);
-		}).catch((err) => {
-			if (isUnsubscribed) return;
-			if (typeof nextOrObserver !== "function" && nextOrObserver.error) nextOrObserver.error(err);
-			else if (error) error(err);
-			else throw err;
-		});
-		if (typeof nextOrObserver === "function") {
-			const unsubscribe = subscription.addObserver(nextOrObserver, error, completed);
-			return () => {
-				isUnsubscribed = true;
-				unsubscribe();
-			};
-		} else {
-			const unsubscribe = subscription.addObserver(nextOrObserver);
-			return () => {
-				isUnsubscribed = true;
-				unsubscribe();
-			};
-		}
-	}
-	/**
-	* Unprotected (from race conditions) method to set the current user. This
-	* should only be called from within a queued callback. This is necessary
-	* because the queue shouldn't rely on another queued callback.
-	*/
-	async directlySetCurrentUser(user) {
-		if (this.currentUser && this.currentUser !== user) this._currentUser._stopProactiveRefresh();
-		if (user && this.isProactiveRefreshEnabled) user._startProactiveRefresh();
-		this.currentUser = user;
-		if (this.persistenceManager) try {
-			if (user) await this.persistenceManager.setCurrentUser(user);
-			else await this.persistenceManager.removeCurrentUser();
-		} catch (e) {
-			const originalMessage = e?.message || String(e);
-			const error = _errorWithCustomMessage(this, "internal-error", `An internal AuthError has occurred: ${originalMessage}`);
-			error.customData = { originalError: e };
-			throw error;
-		}
-	}
-	queue(action) {
-		this.operations = this.operations.then(action, action);
-		return this.operations;
-	}
-	get assertedPersistence() {
-		_assert(this.persistenceManager, this, "internal-error");
-		return this.persistenceManager;
-	}
-	_logFramework(framework) {
-		if (!framework || this.frameworks.includes(framework)) return;
-		this.frameworks.push(framework);
-		this.frameworks.sort();
-		this.clientVersion = _getClientVersion(this.config.clientPlatform, this._getFrameworks());
-	}
-	_getFrameworks() {
-		return this.frameworks;
-	}
-	async _getAdditionalHeaders() {
-		const headers = { ["X-Client-Version"]: this.clientVersion };
-		if (this.app.options.appId) headers["X-Firebase-gmpid"] = this.app.options.appId;
-		const heartbeatsHeader = await this.heartbeatServiceProvider.getImmediate({ optional: true })?.getHeartbeatsHeader();
-		if (heartbeatsHeader) headers["X-Firebase-Client"] = heartbeatsHeader;
-		const appCheckToken = await this._getAppCheckToken();
-		if (appCheckToken) headers["X-Firebase-AppCheck"] = appCheckToken;
-		return headers;
-	}
-	async _getAppCheckToken() {
-		if (_isFirebaseServerApp(this.app) && this.app.settings.appCheckToken) return this.app.settings.appCheckToken;
-		const appCheckTokenResult = await this.appCheckServiceProvider.getImmediate({ optional: true })?.getToken();
-		if (appCheckTokenResult?.error) _logWarn(`Error while retrieving App Check token: ${appCheckTokenResult.error}`);
-		return appCheckTokenResult?.token;
-	}
-};
-/**
-* Method to be used to cast down to our private implementation of Auth.
-* It will also handle unwrapping from the compat type if necessary
-*
-* @param auth Auth object passed in from developer
-*/
-function _castAuth(auth) {
-	return getModularInstance(auth);
-}
-/** Helper class to wrap subscriber logic */
-var Subscription = class {
-	constructor(auth) {
-		this.auth = auth;
-		this.observer = null;
-		this.addObserver = createSubscribe((observer) => this.observer = observer);
-	}
-	get next() {
-		_assert(this.observer, this.auth, "internal-error");
-		return this.observer.next.bind(this.observer);
-	}
-};
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-var externalJSProvider = {
-	async loadJS() {
-		throw new Error("Unable to load external scripts");
-	},
-	recaptchaV2Script: "",
-	recaptchaEnterpriseScript: "",
-	gapiScript: ""
-};
-function _setExternalJSProvider(p) {
-	externalJSProvider = p;
-}
-function _loadJS(url) {
-	return externalJSProvider.loadJS(url);
-}
-function _recaptchaEnterpriseScriptUrl() {
-	return externalJSProvider.recaptchaEnterpriseScript;
-}
-function _gapiScriptUrl() {
-	return externalJSProvider.gapiScript;
-}
-function _generateCallbackName(prefix) {
-	return `__${prefix}${Math.floor(Math.random() * 1e6)}`;
-}
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-var MockGreCAPTCHATopLevel = class {
-	constructor() {
-		this.enterprise = new MockGreCAPTCHA();
-	}
-	ready(callback) {
-		callback();
-	}
-	execute(_siteKey, _options) {
-		return Promise.resolve("token");
-	}
-	render(_container, _parameters) {
-		return "";
-	}
-};
-var MockGreCAPTCHA = class {
-	ready(callback) {
-		callback();
-	}
-	execute(_siteKey, _options) {
-		return Promise.resolve("token");
-	}
-	render(_container, _parameters) {
-		return "";
-	}
-};
-/**
-* @license
-* Copyright 2022 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-var RECAPTCHA_ENTERPRISE_VERIFIER_TYPE = "recaptcha-enterprise";
-var FAKE_TOKEN = "NO_RECAPTCHA";
-var RECAPTCHA_ENTERPRISE_ONLOAD_CALLBACK_NAME = "onFirebaseAuthREInstanceReady";
-var RecaptchaEnterpriseVerifier = class RecaptchaEnterpriseVerifier {
-	/**
-	*
-	* @param authExtern - The corresponding Firebase {@link Auth} instance.
-	*
-	*/
-	constructor(authExtern) {
-		/**
-		* Identifies the type of application verifier (e.g. "recaptcha-enterprise").
-		*/
-		this.type = RECAPTCHA_ENTERPRISE_VERIFIER_TYPE;
-		this.auth = _castAuth(authExtern);
-	}
-	/**
-	* Executes the verification process.
-	*
-	* @returns A Promise for a token that can be used to assert the validity of a request.
-	*/
-	async verify(action = "verify", forceRefresh = false) {
-		async function retrieveSiteKey(auth) {
-			if (!forceRefresh) {
-				if (auth.tenantId == null && auth._agentRecaptchaConfig != null) return auth._agentRecaptchaConfig.siteKey;
-				if (auth.tenantId != null && auth._tenantRecaptchaConfigs[auth.tenantId] !== void 0) return auth._tenantRecaptchaConfigs[auth.tenantId].siteKey;
-			}
-			return new Promise(async (resolve, reject) => {
-				getRecaptchaConfig(auth, {
-					clientType: "CLIENT_TYPE_WEB",
-					version: "RECAPTCHA_ENTERPRISE"
-				}).then((response) => {
-					if (response.recaptchaKey === void 0) reject(/* @__PURE__ */ new Error("recaptcha Enterprise site key undefined"));
-					else {
-						const config = new RecaptchaConfig(response);
-						if (auth.tenantId == null) auth._agentRecaptchaConfig = config;
-						else auth._tenantRecaptchaConfigs[auth.tenantId] = config;
-						return resolve(config.siteKey);
-					}
-				}).catch((error) => {
-					reject(error);
-				});
-			});
-		}
-		function retrieveRecaptchaToken(siteKey, resolve, reject) {
-			const grecaptcha = window.grecaptcha;
-			if (isEnterprise(grecaptcha)) grecaptcha.enterprise.ready(() => {
-				grecaptcha.enterprise.execute(siteKey, { action }).then((token) => {
-					resolve(token);
-				}).catch(() => {
-					resolve(FAKE_TOKEN);
-				});
-			});
-			else reject(Error("No reCAPTCHA enterprise script loaded."));
-		}
-		if (this.auth.settings.appVerificationDisabledForTesting) return new MockGreCAPTCHATopLevel().execute("siteKey", { action: "verify" });
-		return new Promise((resolve, reject) => {
-			retrieveSiteKey(this.auth).then(async (siteKey) => {
-				if (!forceRefresh && isEnterprise(window.grecaptcha) && RecaptchaEnterpriseVerifier.scriptInjectionDeferred) {
-					await RecaptchaEnterpriseVerifier.scriptInjectionDeferred.promise;
-					retrieveRecaptchaToken(siteKey, resolve, reject);
-				} else {
-					if (typeof window === "undefined") {
-						reject(/* @__PURE__ */ new Error("RecaptchaVerifier is only supported in browser"));
-						return;
-					}
-					let url = _recaptchaEnterpriseScriptUrl();
-					if (url.length !== 0) url += siteKey + `&onload=${RECAPTCHA_ENTERPRISE_ONLOAD_CALLBACK_NAME}`;
-					RecaptchaEnterpriseVerifier.scriptInjectionDeferred = new Deferred();
-					/**
-					* Script attached to global window object that will be called
-					* when the ReCAPTCHA Enterprise instance is ready.
-					* grecaptcha.ready() is not reliable when there are multiple
-					* scripts on the page, and script.onload only indicates the
-					* script has downloaded, not that it has initialized.
-					*/
-					window[RECAPTCHA_ENTERPRISE_ONLOAD_CALLBACK_NAME] = () => {
-						RecaptchaEnterpriseVerifier.scriptInjectionDeferred?.resolve();
-					};
-					_loadJS(url).then(() => RecaptchaEnterpriseVerifier.scriptInjectionDeferred?.promise).then(() => {
-						retrieveRecaptchaToken(siteKey, resolve, reject);
-					}).catch((error) => {
-						reject(error);
-					});
-				}
-			}).catch((error) => {
-				reject(error);
-			});
-		});
-	}
-};
-/**
-* Deferred that resolves when script tag has been injected onto the page
-* and the script is ready (grecaptcha.ready() and script.onload are not
-* reliable indicators, so this resolves when the global
-* `window[RECAPTCHA_ENTERPRISE_ONLOAD_CALLBACK_NAME]()` callback provided to the recaptcha url param "onload"
-* is triggered).
-* As a static variable this is applied to all instances of the class.
-* This will cause an error if users try to create multiple RecaptchaVerifiers
-* with different Recaptcha Enterprise sitekeys, which should be an
-* unuspported use case.
-*/
-RecaptchaEnterpriseVerifier.scriptInjectionDeferred = null;
-async function injectRecaptchaFields(auth, request, action, isCaptchaResp = false, isFakeToken = false) {
-	const verifier = new RecaptchaEnterpriseVerifier(auth);
-	let captchaResponse;
-	if (isFakeToken) captchaResponse = FAKE_TOKEN;
-	else try {
-		captchaResponse = await verifier.verify(action);
-	} catch (error) {
-		captchaResponse = await verifier.verify(action, true);
-	}
-	const newRequest = { ...request };
-	if (action === "mfaSmsEnrollment" || action === "mfaSmsSignIn") {
-		if ("phoneEnrollmentInfo" in newRequest) {
-			const phoneNumber = newRequest.phoneEnrollmentInfo.phoneNumber;
-			const recaptchaToken = newRequest.phoneEnrollmentInfo.recaptchaToken;
-			Object.assign(newRequest, { "phoneEnrollmentInfo": {
-				phoneNumber,
-				recaptchaToken,
-				captchaResponse,
-				"clientType": "CLIENT_TYPE_WEB",
-				"recaptchaVersion": "RECAPTCHA_ENTERPRISE"
-			} });
-		} else if ("phoneSignInInfo" in newRequest) {
-			const recaptchaToken = newRequest.phoneSignInInfo.recaptchaToken;
-			Object.assign(newRequest, { "phoneSignInInfo": {
-				recaptchaToken,
-				captchaResponse,
-				"clientType": "CLIENT_TYPE_WEB",
-				"recaptchaVersion": "RECAPTCHA_ENTERPRISE"
-			} });
-		}
-		return newRequest;
-	}
-	if (!isCaptchaResp) Object.assign(newRequest, { captchaResponse });
-	else Object.assign(newRequest, { "captchaResp": captchaResponse });
-	Object.assign(newRequest, { "clientType": "CLIENT_TYPE_WEB" });
-	Object.assign(newRequest, { "recaptchaVersion": "RECAPTCHA_ENTERPRISE" });
-	return newRequest;
-}
-async function handleRecaptchaFlow(authInstance, request, actionName, actionMethod, recaptchaAuthProvider) {
-	if (recaptchaAuthProvider === "EMAIL_PASSWORD_PROVIDER") {
-		if (authInstance._getRecaptchaConfig()?.isProviderEnabled("EMAIL_PASSWORD_PROVIDER")) return actionMethod(authInstance, await injectRecaptchaFields(authInstance, request, actionName, actionName === "getOobCode"));
-		else return actionMethod(authInstance, request).catch(async (error) => {
-			if (error.code === `auth/missing-recaptcha-token`) {
-				console.log(`${actionName} is protected by reCAPTCHA Enterprise for this project. Automatically triggering the reCAPTCHA flow and restarting the flow.`);
-				return actionMethod(authInstance, await injectRecaptchaFields(authInstance, request, actionName, actionName === "getOobCode"));
-			} else return Promise.reject(error);
-		});
-	} else if (recaptchaAuthProvider === "PHONE_PROVIDER") {
-		if (authInstance._getRecaptchaConfig()?.isProviderEnabled("PHONE_PROVIDER")) return actionMethod(authInstance, await injectRecaptchaFields(authInstance, request, actionName)).catch(async (error) => {
-			if (authInstance._getRecaptchaConfig()?.getProviderEnforcementState("PHONE_PROVIDER") === "AUDIT") {
-				if (error.code === `auth/missing-recaptcha-token` || error.code === `auth/invalid-app-credential`) {
-					console.log(`Failed to verify with reCAPTCHA Enterprise. Automatically triggering the reCAPTCHA v2 flow to complete the ${actionName} flow.`);
-					return actionMethod(authInstance, await injectRecaptchaFields(authInstance, request, actionName, false, true));
-				}
-			}
-			return Promise.reject(error);
-		});
-		else return actionMethod(authInstance, await injectRecaptchaFields(authInstance, request, actionName, false, true));
-	} else return Promise.reject(recaptchaAuthProvider + " provider is not supported.");
-}
-async function _initializeRecaptchaConfig(auth) {
-	const authInternal = _castAuth(auth);
-	const config = new RecaptchaConfig(await getRecaptchaConfig(authInternal, {
-		clientType: "CLIENT_TYPE_WEB",
-		version: "RECAPTCHA_ENTERPRISE"
-	}));
-	if (authInternal.tenantId == null) authInternal._agentRecaptchaConfig = config;
-	else authInternal._tenantRecaptchaConfigs[authInternal.tenantId] = config;
-	if (config.isAnyProviderEnabled()) new RecaptchaEnterpriseVerifier(authInternal).verify().catch(() => {});
-}
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* Initializes an {@link Auth} instance with fine-grained control over
-* {@link Dependencies}.
-*
-* @remarks
-*
-* This function allows more control over the {@link Auth} instance than
-* {@link getAuth}. `getAuth` uses platform-specific defaults to supply
-* the {@link Dependencies}. In general, `getAuth` is the easiest way to
-* initialize Auth and works for most use cases. Use `initializeAuth` if you
-* need control over which persistence layer is used, or to minimize bundle
-* size if you're not using either `signInWithPopup` or `signInWithRedirect`.
-*
-* For example, if your app only uses anonymous accounts and you only want
-* accounts saved for the current session, initialize `Auth` with:
-*
-* ```js
-* const auth = initializeAuth(app, {
-*   persistence: browserSessionPersistence,
-*   popupRedirectResolver: undefined,
-* });
-* ```
-*
-* @public
-*/
-function initializeAuth(app, deps) {
-	const provider = _getProvider(app, "auth");
-	if (provider.isInitialized()) {
-		const auth = provider.getImmediate();
-		if (deepEqual(provider.getOptions(), deps ?? {})) return auth;
-		else _fail(auth, "already-initialized");
-	}
-	return provider.initialize({ options: deps });
-}
-function _initializeAuthInstance(auth, deps) {
-	const persistence = deps?.persistence || [];
-	const hierarchy = (Array.isArray(persistence) ? persistence : [persistence]).map(_getInstance);
-	if (deps?.errorMap) auth._updateErrorMap(deps.errorMap);
-	auth._initializeWithPersistence(hierarchy, deps?.popupRedirectResolver);
-}
-/**
-* Changes the {@link Auth} instance to communicate with the Firebase Auth Emulator, instead of production
-* Firebase Auth services.
-*
-* @remarks
-* This must be called synchronously immediately following the first call to
-* {@link initializeAuth}.  Do not use with production credentials as emulator
-* traffic is not encrypted.
-*
-*
-* @example
-* ```javascript
-* connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
-* ```
-*
-* @param auth - The {@link Auth} instance.
-* @param url - The URL at which the emulator is running (eg, 'http://localhost:9099').
-* @param options - Optional. `options.disableWarnings` defaults to `false`. Set it to
-* `true` to disable the warning banner attached to the DOM.
-*
-* @public
-*/
-function connectAuthEmulator(auth, url, options) {
-	const authInternal = _castAuth(auth);
-	_assert(/^https?:\/\//.test(url), authInternal, "invalid-emulator-scheme");
-	const disableWarnings = !!options?.disableWarnings;
-	const protocol = extractProtocol(url);
-	const { host, port } = extractHostAndPort(url);
-	const portStr = port === null ? "" : `:${port}`;
-	const emulator = { url: `${protocol}//${host}${portStr}/` };
-	const emulatorConfig = Object.freeze({
-		host,
-		port,
-		protocol: protocol.replace(":", ""),
-		options: Object.freeze({ disableWarnings })
-	});
-	if (!authInternal._canInitEmulator) {
-		_assert(authInternal.config.emulator && authInternal.emulatorConfig, authInternal, "emulator-config-failed");
-		_assert(deepEqual(emulator, authInternal.config.emulator) && deepEqual(emulatorConfig, authInternal.emulatorConfig), authInternal, "emulator-config-failed");
-		return;
-	}
-	authInternal.config.emulator = emulator;
-	authInternal.emulatorConfig = emulatorConfig;
-	authInternal.settings.appVerificationDisabledForTesting = true;
-	if (isCloudWorkstation(host)) pingServer(`${protocol}//${host}${portStr}`);
-	else if (!disableWarnings) emitEmulatorWarning();
-}
-function extractProtocol(url) {
-	const protocolEnd = url.indexOf(":");
-	return protocolEnd < 0 ? "" : url.substr(0, protocolEnd + 1);
-}
-function extractHostAndPort(url) {
-	const protocol = extractProtocol(url);
-	const authority = /(\/\/)?([^?#/]+)/.exec(url.substr(protocol.length));
-	if (!authority) return {
-		host: "",
-		port: null
-	};
-	const hostAndPort = authority[2].split("@").pop() || "";
-	const bracketedIPv6 = /^(\[[^\]]+\])(:|$)/.exec(hostAndPort);
-	if (bracketedIPv6) {
-		const host = bracketedIPv6[1];
-		return {
-			host,
-			port: parsePort(hostAndPort.substr(host.length + 1))
-		};
-	} else {
-		const [host, port] = hostAndPort.split(":");
-		return {
-			host,
-			port: parsePort(port)
-		};
-	}
-}
-function parsePort(portStr) {
-	if (!portStr) return null;
-	const port = Number(portStr);
-	if (isNaN(port)) return null;
-	return port;
-}
-function emitEmulatorWarning() {
-	function attachBanner() {
-		const el = document.createElement("p");
-		const sty = el.style;
-		el.innerText = "Running in emulator mode. Do not use with production credentials.";
-		sty.position = "fixed";
-		sty.width = "100%";
-		sty.backgroundColor = "#ffffff";
-		sty.border = ".1em solid #000000";
-		sty.color = "#b50000";
-		sty.bottom = "0px";
-		sty.left = "0px";
-		sty.margin = "0px";
-		sty.zIndex = "10000";
-		sty.textAlign = "center";
-		el.classList.add("firebase-emulator-warning");
-		document.body.appendChild(el);
-	}
-	if (typeof console !== "undefined" && typeof console.info === "function") console.info("WARNING: You are using the Auth Emulator, which is intended for local testing only.  Do not use with production credentials.");
-	if (typeof window !== "undefined" && typeof document !== "undefined") {
-		if (document.readyState === "loading") window.addEventListener("DOMContentLoaded", attachBanner);
-		else attachBanner();
-	}
-}
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* Interface that represents the credentials returned by an {@link AuthProvider}.
-*
-* @remarks
-* Implementations specify the details about each auth provider's credential requirements.
-*
-* @public
-*/
-var AuthCredential = class {
-	/** @internal */
-	constructor(providerId, signInMethod) {
-		this.providerId = providerId;
-		this.signInMethod = signInMethod;
-	}
-	/**
-	* Returns a JSON-serializable representation of this object.
-	*
-	* @returns a JSON-serializable representation of this object.
-	*/
-	toJSON() {
-		return debugFail("not implemented");
-	}
-	/** @internal */
-	_getIdTokenResponse(_auth) {
-		return debugFail("not implemented");
-	}
-	/** @internal */
-	_linkToIdToken(_auth, _idToken) {
-		return debugFail("not implemented");
-	}
-	/** @internal */
-	_getReauthenticationResolver(_auth) {
-		return debugFail("not implemented");
-	}
-};
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-async function linkEmailPassword(auth, request) {
-	return _performApiRequest(auth, "POST", "/v1/accounts:signUp", request);
-}
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-async function signInWithPassword(auth, request) {
-	return _performSignInRequest(auth, "POST", "/v1/accounts:signInWithPassword", _addTidIfNecessary(auth, request));
-}
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-async function signInWithEmailLink$1(auth, request) {
-	return _performSignInRequest(auth, "POST", "/v1/accounts:signInWithEmailLink", _addTidIfNecessary(auth, request));
-}
-async function signInWithEmailLinkForLinking(auth, request) {
-	return _performSignInRequest(auth, "POST", "/v1/accounts:signInWithEmailLink", _addTidIfNecessary(auth, request));
-}
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* Interface that represents the credentials returned by {@link EmailAuthProvider} for
-* {@link ProviderId}.PASSWORD
-*
-* @remarks
-* Covers both {@link SignInMethod}.EMAIL_PASSWORD and
-* {@link SignInMethod}.EMAIL_LINK.
-*
-* @public
-*/
-var EmailAuthCredential = class EmailAuthCredential extends AuthCredential {
-	/** @internal */
-	constructor(_email, _password, signInMethod, _tenantId = null) {
-		super("password", signInMethod);
-		this._email = _email;
-		this._password = _password;
-		this._tenantId = _tenantId;
-	}
-	/** @internal */
-	static _fromEmailAndPassword(email, password) {
-		return new EmailAuthCredential(email, password, "password");
-	}
-	/** @internal */
-	static _fromEmailAndCode(email, oobCode, tenantId = null) {
-		return new EmailAuthCredential(email, oobCode, "emailLink", tenantId);
-	}
-	/** {@inheritdoc AuthCredential.toJSON} */
-	toJSON() {
-		return {
-			email: this._email,
-			password: this._password,
-			signInMethod: this.signInMethod,
-			tenantId: this._tenantId
-		};
-	}
-	/**
-	* Static method to deserialize a JSON representation of an object into an {@link  AuthCredential}.
-	*
-	* @param json - Either `object` or the stringified representation of the object. When string is
-	* provided, `JSON.parse` would be called first.
-	*
-	* @returns If the JSON input does not represent an {@link AuthCredential}, null is returned.
-	*/
-	static fromJSON(json) {
-		const obj = typeof json === "string" ? JSON.parse(json) : json;
-		if (obj?.email && obj?.password) {
-			if (obj.signInMethod === "password") return this._fromEmailAndPassword(obj.email, obj.password);
-			else if (obj.signInMethod === "emailLink") return this._fromEmailAndCode(obj.email, obj.password, obj.tenantId);
-		}
-		return null;
-	}
-	/** @internal */
-	async _getIdTokenResponse(auth) {
-		switch (this.signInMethod) {
-			case "password": return handleRecaptchaFlow(auth, {
-				returnSecureToken: true,
-				email: this._email,
-				password: this._password,
-				clientType: "CLIENT_TYPE_WEB"
-			}, "signInWithPassword", signInWithPassword, "EMAIL_PASSWORD_PROVIDER");
-			case "emailLink": return signInWithEmailLink$1(auth, {
-				email: this._email,
-				oobCode: this._password
-			});
-			default: _fail(auth, "internal-error");
-		}
-	}
-	/** @internal */
-	async _linkToIdToken(auth, idToken) {
-		switch (this.signInMethod) {
-			case "password": return handleRecaptchaFlow(auth, {
-				idToken,
-				returnSecureToken: true,
-				email: this._email,
-				password: this._password,
-				clientType: "CLIENT_TYPE_WEB"
-			}, "signUpPassword", linkEmailPassword, "EMAIL_PASSWORD_PROVIDER");
-			case "emailLink": return signInWithEmailLinkForLinking(auth, {
-				idToken,
-				email: this._email,
-				oobCode: this._password
-			});
-			default: _fail(auth, "internal-error");
-		}
-	}
-	/** @internal */
-	_getReauthenticationResolver(auth) {
-		return this._getIdTokenResponse(auth);
-	}
-};
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-async function signInWithIdp(auth, request) {
-	return _performSignInRequest(auth, "POST", "/v1/accounts:signInWithIdp", _addTidIfNecessary(auth, request));
-}
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-var IDP_REQUEST_URI$1 = "http://localhost";
-/**
-* Represents the OAuth credentials returned by an {@link OAuthProvider}.
-*
-* @remarks
-* Implementations specify the details about each auth provider's credential requirements.
-*
-* @public
-*/
-var OAuthCredential = class OAuthCredential extends AuthCredential {
-	constructor() {
-		super(...arguments);
-		this.pendingToken = null;
-	}
-	/** @internal */
-	static _fromParams(params) {
-		const cred = new OAuthCredential(params.providerId, params.signInMethod);
-		if (params.idToken || params.accessToken) {
-			if (params.idToken) cred.idToken = params.idToken;
-			if (params.accessToken) cred.accessToken = params.accessToken;
-			if (params.nonce && !params.pendingToken) cred.nonce = params.nonce;
-			if (params.pendingToken) cred.pendingToken = params.pendingToken;
-		} else if (params.oauthToken && params.oauthTokenSecret) {
-			cred.accessToken = params.oauthToken;
-			cred.secret = params.oauthTokenSecret;
-		} else _fail("argument-error");
-		return cred;
-	}
-	/** {@inheritdoc AuthCredential.toJSON}  */
-	toJSON() {
-		return {
-			idToken: this.idToken,
-			accessToken: this.accessToken,
-			secret: this.secret,
-			nonce: this.nonce,
-			pendingToken: this.pendingToken,
-			providerId: this.providerId,
-			signInMethod: this.signInMethod
-		};
-	}
-	/**
-	* Static method to deserialize a JSON representation of an object into an
-	* {@link  AuthCredential}.
-	*
-	* @param json - Input can be either Object or the stringified representation of the object.
-	* When string is provided, JSON.parse would be called first.
-	*
-	* @returns If the JSON input does not represent an {@link  AuthCredential}, null is returned.
-	*/
-	static fromJSON(json) {
-		const { providerId, signInMethod, ...rest } = typeof json === "string" ? JSON.parse(json) : json;
-		if (!providerId || !signInMethod) return null;
-		const cred = new OAuthCredential(providerId, signInMethod);
-		cred.idToken = rest.idToken || void 0;
-		cred.accessToken = rest.accessToken || void 0;
-		cred.secret = rest.secret;
-		cred.nonce = rest.nonce;
-		cred.pendingToken = rest.pendingToken || null;
-		return cred;
-	}
-	/** @internal */
-	_getIdTokenResponse(auth) {
-		return signInWithIdp(auth, this.buildRequest());
-	}
-	/** @internal */
-	_linkToIdToken(auth, idToken) {
-		const request = this.buildRequest();
-		request.idToken = idToken;
-		return signInWithIdp(auth, request);
-	}
-	/** @internal */
-	_getReauthenticationResolver(auth) {
-		const request = this.buildRequest();
-		request.autoCreate = false;
-		return signInWithIdp(auth, request);
-	}
-	buildRequest() {
-		const request = {
-			requestUri: IDP_REQUEST_URI$1,
-			returnSecureToken: true
-		};
-		if (this.pendingToken) request.pendingToken = this.pendingToken;
-		else {
-			const postBody = {};
-			if (this.idToken) postBody["id_token"] = this.idToken;
-			if (this.accessToken) postBody["access_token"] = this.accessToken;
-			if (this.secret) postBody["oauth_token_secret"] = this.secret;
-			postBody["providerId"] = this.providerId;
-			if (this.nonce && !this.pendingToken) postBody["nonce"] = this.nonce;
-			request.postBody = querystring(postBody);
-		}
-		return request;
-	}
-};
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-async function sendPhoneVerificationCode(auth, request) {
-	return _performApiRequest(auth, "POST", "/v1/accounts:sendVerificationCode", _addTidIfNecessary(auth, request));
-}
-async function signInWithPhoneNumber$1(auth, request) {
-	return _performSignInRequest(auth, "POST", "/v1/accounts:signInWithPhoneNumber", _addTidIfNecessary(auth, request));
-}
-async function linkWithPhoneNumber$1(auth, request) {
-	const response = await _performSignInRequest(auth, "POST", "/v1/accounts:signInWithPhoneNumber", _addTidIfNecessary(auth, request));
-	if (response.temporaryProof) throw _makeTaggedError(auth, "account-exists-with-different-credential", response);
-	return response;
-}
-var VERIFY_PHONE_NUMBER_FOR_EXISTING_ERROR_MAP_ = { ["USER_NOT_FOUND"]: "user-not-found" };
-async function verifyPhoneNumberForExisting(auth, request) {
-	return _performSignInRequest(auth, "POST", "/v1/accounts:signInWithPhoneNumber", _addTidIfNecessary(auth, {
-		...request,
-		operation: "REAUTH"
-	}), VERIFY_PHONE_NUMBER_FOR_EXISTING_ERROR_MAP_);
-}
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* Represents the credentials returned by {@link PhoneAuthProvider}.
-*
-* @public
-*/
-var PhoneAuthCredential = class PhoneAuthCredential extends AuthCredential {
-	constructor(params) {
-		super("phone", "phone");
-		this.params = params;
-	}
-	/** @internal */
-	static _fromVerification(verificationId, verificationCode) {
-		return new PhoneAuthCredential({
-			verificationId,
-			verificationCode
-		});
-	}
-	/** @internal */
-	static _fromTokenResponse(phoneNumber, temporaryProof) {
-		return new PhoneAuthCredential({
-			phoneNumber,
-			temporaryProof
-		});
-	}
-	/** @internal */
-	_getIdTokenResponse(auth) {
-		return signInWithPhoneNumber$1(auth, this._makeVerificationRequest());
-	}
-	/** @internal */
-	_linkToIdToken(auth, idToken) {
-		return linkWithPhoneNumber$1(auth, {
-			idToken,
-			...this._makeVerificationRequest()
-		});
-	}
-	/** @internal */
-	_getReauthenticationResolver(auth) {
-		return verifyPhoneNumberForExisting(auth, this._makeVerificationRequest());
-	}
-	/** @internal */
-	_makeVerificationRequest() {
-		const { temporaryProof, phoneNumber, verificationId, verificationCode } = this.params;
-		if (temporaryProof && phoneNumber) return {
-			temporaryProof,
-			phoneNumber
-		};
-		return {
-			sessionInfo: verificationId,
-			code: verificationCode
-		};
-	}
-	/** {@inheritdoc AuthCredential.toJSON} */
-	toJSON() {
-		const obj = { providerId: this.providerId };
-		if (this.params.phoneNumber) obj.phoneNumber = this.params.phoneNumber;
-		if (this.params.temporaryProof) obj.temporaryProof = this.params.temporaryProof;
-		if (this.params.verificationCode) obj.verificationCode = this.params.verificationCode;
-		if (this.params.verificationId) obj.verificationId = this.params.verificationId;
-		return obj;
-	}
-	/** Generates a phone credential based on a plain object or a JSON string. */
-	static fromJSON(json) {
-		if (typeof json === "string") json = JSON.parse(json);
-		const { verificationId, verificationCode, phoneNumber, temporaryProof } = json;
-		if (!verificationCode && !verificationId && !phoneNumber && !temporaryProof) return null;
-		return new PhoneAuthCredential({
-			verificationId,
-			verificationCode,
-			phoneNumber,
-			temporaryProof
-		});
-	}
-};
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* Maps the mode string in action code URL to Action Code Info operation.
-*
-* @param mode
-*/
-function parseMode(mode) {
-	switch (mode) {
-		case "recoverEmail": return "RECOVER_EMAIL";
-		case "resetPassword": return "PASSWORD_RESET";
-		case "signIn": return "EMAIL_SIGNIN";
-		case "verifyEmail": return "VERIFY_EMAIL";
-		case "verifyAndChangeEmail": return "VERIFY_AND_CHANGE_EMAIL";
-		case "revertSecondFactorAddition": return "REVERT_SECOND_FACTOR_ADDITION";
-		default: return null;
-	}
-}
-/**
-* Helper to parse FDL links
-*
-* @param url
-*/
-function parseDeepLink(url) {
-	const link = querystringDecode(extractQuerystring(url))["link"];
-	const doubleDeepLink = link ? querystringDecode(extractQuerystring(link))["deep_link_id"] : null;
-	const iOSDeepLink = querystringDecode(extractQuerystring(url))["deep_link_id"];
-	return (iOSDeepLink ? querystringDecode(extractQuerystring(iOSDeepLink))["link"] : null) || iOSDeepLink || doubleDeepLink || link || url;
-}
-/**
-* A utility class to parse email action URLs such as password reset, email verification,
-* email link sign in, etc.
-*
-* @public
-*/
-var ActionCodeURL = class ActionCodeURL {
-	/**
-	* @param actionLink - The link from which to extract the URL.
-	* @returns The {@link ActionCodeURL} object, or null if the link is invalid.
-	*
-	* @internal
-	*/
-	constructor(actionLink) {
-		const searchParams = querystringDecode(extractQuerystring(actionLink));
-		const apiKey = searchParams["apiKey"] ?? null;
-		const code = searchParams["oobCode"] ?? null;
-		const operation = parseMode(searchParams["mode"] ?? null);
-		_assert(apiKey && code && operation, "argument-error");
-		this.apiKey = apiKey;
-		this.operation = operation;
-		this.code = code;
-		this.continueUrl = searchParams["continueUrl"] ?? null;
-		this.languageCode = searchParams["lang"] ?? null;
-		this.tenantId = searchParams["tenantId"] ?? null;
-	}
-	/**
-	* Parses the email action link string and returns an {@link ActionCodeURL} if the link is valid,
-	* otherwise returns null.
-	*
-	* @param link  - The email action link string.
-	* @returns The {@link ActionCodeURL} object, or null if the link is invalid.
-	*
-	* @public
-	*/
-	static parseLink(link) {
-		const actionLink = parseDeepLink(link);
-		try {
-			return new ActionCodeURL(actionLink);
-		} catch {
-			return null;
-		}
-	}
-};
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* Provider for generating {@link EmailAuthCredential}.
-*
-* @public
-*/
-var EmailAuthProvider = class EmailAuthProvider {
-	constructor() {
-		/**
-		* Always set to {@link ProviderId}.PASSWORD, even for email link.
-		*/
-		this.providerId = EmailAuthProvider.PROVIDER_ID;
-	}
-	/**
-	* Initialize an {@link AuthCredential} using an email and password.
-	*
-	* @example
-	* ```javascript
-	* const authCredential = EmailAuthProvider.credential(email, password);
-	* const userCredential = await signInWithCredential(auth, authCredential);
-	* ```
-	*
-	* @example
-	* ```javascript
-	* const userCredential = await signInWithEmailAndPassword(auth, email, password);
-	* ```
-	*
-	* @param email - Email address.
-	* @param password - User account password.
-	* @returns The auth provider credential.
-	*/
-	static credential(email, password) {
-		return EmailAuthCredential._fromEmailAndPassword(email, password);
-	}
-	/**
-	* Initialize an {@link AuthCredential} using an email and an email link after a sign in with
-	* email link operation.
-	*
-	* @example
-	* ```javascript
-	* const authCredential = EmailAuthProvider.credentialWithLink(auth, email, emailLink);
-	* const userCredential = await signInWithCredential(auth, authCredential);
-	* ```
-	*
-	* @example
-	* ```javascript
-	* await sendSignInLinkToEmail(auth, email);
-	* // Obtain emailLink from user.
-	* const userCredential = await signInWithEmailLink(auth, email, emailLink);
-	* ```
-	*
-	* @param auth - The {@link Auth} instance used to verify the link.
-	* @param email - Email address.
-	* @param emailLink - Sign-in email link.
-	* @returns - The auth provider credential.
-	*/
-	static credentialWithLink(email, emailLink) {
-		const actionCodeUrl = ActionCodeURL.parseLink(emailLink);
-		_assert(actionCodeUrl, "argument-error");
-		return EmailAuthCredential._fromEmailAndCode(email, actionCodeUrl.code, actionCodeUrl.tenantId);
-	}
-};
-/**
-* Always set to {@link ProviderId}.PASSWORD, even for email link.
-*/
-EmailAuthProvider.PROVIDER_ID = "password";
-/**
-* Always set to {@link SignInMethod}.EMAIL_PASSWORD.
-*/
-EmailAuthProvider.EMAIL_PASSWORD_SIGN_IN_METHOD = "password";
-/**
-* Always set to {@link SignInMethod}.EMAIL_LINK.
-*/
-EmailAuthProvider.EMAIL_LINK_SIGN_IN_METHOD = "emailLink";
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* The base class for all Federated providers (OAuth (including OIDC), SAML).
-*
-* This class is not meant to be instantiated directly.
-*
-* @public
-*/
-var FederatedAuthProvider = class {
-	/**
-	* Constructor for generic OAuth providers.
-	*
-	* @param providerId - Provider for which credentials should be generated.
-	*/
-	constructor(providerId) {
-		this.providerId = providerId;
-		/** @internal */
-		this.defaultLanguageCode = null;
-		/** @internal */
-		this.customParameters = {};
-	}
-	/**
-	* Set the language gode.
-	*
-	* @param languageCode - language code
-	*/
-	setDefaultLanguage(languageCode) {
-		this.defaultLanguageCode = languageCode;
-	}
-	/**
-	* Sets the OAuth custom parameters to pass in an OAuth request for popup and redirect sign-in
-	* operations.
-	*
-	* @remarks
-	* For a detailed list, check the reserved required OAuth 2.0 parameters such as `client_id`,
-	* `redirect_uri`, `scope`, `response_type`, and `state` are not allowed and will be ignored.
-	*
-	* @param customOAuthParameters - The custom OAuth parameters to pass in the OAuth request.
-	*/
-	setCustomParameters(customOAuthParameters) {
-		this.customParameters = customOAuthParameters;
-		return this;
-	}
-	/**
-	* Retrieve the current list of {@link CustomParameters}.
-	*/
-	getCustomParameters() {
-		return this.customParameters;
-	}
-};
-/**
-* @license
-* Copyright 2019 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* Common code to all OAuth providers. This is separate from the
-* {@link OAuthProvider} so that child providers (like
-* {@link GoogleAuthProvider}) don't inherit the `credential` instance method.
-* Instead, they rely on a static `credential` method.
-*/
-var BaseOAuthProvider = class extends FederatedAuthProvider {
-	constructor() {
-		super(...arguments);
-		/** @internal */
-		this.scopes = [];
-	}
-	/**
-	* Add an OAuth scope to the credential.
-	*
-	* @param scope - Provider OAuth scope to add.
-	*/
-	addScope(scope) {
-		if (!this.scopes.includes(scope)) this.scopes.push(scope);
-		return this;
-	}
-	/**
-	* Retrieve the current list of OAuth scopes.
-	*/
-	getScopes() {
-		return [...this.scopes];
-	}
-};
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* Provider for generating an {@link OAuthCredential} for {@link ProviderId}.FACEBOOK.
-*
-* @example
-* ```javascript
-* // Sign in using a redirect.
-* const provider = new FacebookAuthProvider();
-* // Start a sign in process for an unauthenticated user.
-* provider.addScope('user_birthday');
-* await signInWithRedirect(auth, provider);
-* // This will trigger a full page redirect away from your app
-*
-* // After returning from the redirect when your app initializes you can obtain the result
-* const result = await getRedirectResult(auth);
-* if (result) {
-*   // This is the signed-in user
-*   const user = result.user;
-*   // This gives you a Facebook Access Token.
-*   const credential = FacebookAuthProvider.credentialFromResult(result);
-*   const token = credential.accessToken;
-* }
-* ```
-*
-* @example
-* ```javascript
-* // Sign in using a popup.
-* const provider = new FacebookAuthProvider();
-* provider.addScope('user_birthday');
-* const result = await signInWithPopup(auth, provider);
-*
-* // The signed-in user info.
-* const user = result.user;
-* // This gives you a Facebook Access Token.
-* const credential = FacebookAuthProvider.credentialFromResult(result);
-* const token = credential.accessToken;
-* ```
-*
-* @public
-*/
-var FacebookAuthProvider = class FacebookAuthProvider extends BaseOAuthProvider {
-	constructor() {
-		super("facebook.com");
-	}
-	/**
-	* Creates a credential for Facebook.
-	*
-	* @example
-	* ```javascript
-	* // `event` from the Facebook auth.authResponseChange callback.
-	* const credential = FacebookAuthProvider.credential(event.authResponse.accessToken);
-	* const result = await signInWithCredential(credential);
-	* ```
-	*
-	* @param accessToken - Facebook access token.
-	*/
-	static credential(accessToken) {
-		return OAuthCredential._fromParams({
-			providerId: FacebookAuthProvider.PROVIDER_ID,
-			signInMethod: FacebookAuthProvider.FACEBOOK_SIGN_IN_METHOD,
-			accessToken
-		});
-	}
-	/**
-	* Used to extract the underlying {@link OAuthCredential} from a {@link UserCredential}.
-	*
-	* @param userCredential - The user credential.
-	*/
-	static credentialFromResult(userCredential) {
-		return FacebookAuthProvider.credentialFromTaggedObject(userCredential);
-	}
-	/**
-	* Used to extract the underlying {@link OAuthCredential} from a {@link AuthError} which was
-	* thrown during a sign-in, link, or reauthenticate operation.
-	*
-	* @param userCredential - The user credential.
-	*/
-	static credentialFromError(error) {
-		return FacebookAuthProvider.credentialFromTaggedObject(error.customData || {});
-	}
-	static credentialFromTaggedObject({ _tokenResponse: tokenResponse }) {
-		if (!tokenResponse || !("oauthAccessToken" in tokenResponse)) return null;
-		if (!tokenResponse.oauthAccessToken) return null;
-		try {
-			return FacebookAuthProvider.credential(tokenResponse.oauthAccessToken);
-		} catch {
-			return null;
-		}
-	}
-};
-/** Always set to {@link SignInMethod}.FACEBOOK. */
-FacebookAuthProvider.FACEBOOK_SIGN_IN_METHOD = "facebook.com";
-/** Always set to {@link ProviderId}.FACEBOOK. */
-FacebookAuthProvider.PROVIDER_ID = "facebook.com";
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* Provider for generating an {@link OAuthCredential} for {@link ProviderId}.GOOGLE.
-*
-* @example
-* ```javascript
-* // Sign in using a redirect.
-* const provider = new GoogleAuthProvider();
-* // Start a sign in process for an unauthenticated user.
-* provider.addScope('profile');
-* provider.addScope('email');
-* await signInWithRedirect(auth, provider);
-* // This will trigger a full page redirect away from your app
-*
-* // After returning from the redirect when your app initializes you can obtain the result
-* const result = await getRedirectResult(auth);
-* if (result) {
-*   // This is the signed-in user
-*   const user = result.user;
-*   // This gives you a Google Access Token.
-*   const credential = GoogleAuthProvider.credentialFromResult(result);
-*   const token = credential.accessToken;
-* }
-* ```
-*
-* @example
-* ```javascript
-* // Sign in using a popup.
-* const provider = new GoogleAuthProvider();
-* provider.addScope('profile');
-* provider.addScope('email');
-* const result = await signInWithPopup(auth, provider);
-*
-* // The signed-in user info.
-* const user = result.user;
-* // This gives you a Google Access Token.
-* const credential = GoogleAuthProvider.credentialFromResult(result);
-* const token = credential.accessToken;
-* ```
-*
-* @public
-*/
-var GoogleAuthProvider = class GoogleAuthProvider extends BaseOAuthProvider {
-	constructor() {
-		super("google.com");
-		this.addScope("profile");
-	}
-	/**
-	* Creates a credential for Google. At least one of ID token and access token is required.
-	*
-	* @example
-	* ```javascript
-	* // \`googleUser\` from the onsuccess Google Sign In callback.
-	* const credential = GoogleAuthProvider.credential(googleUser.getAuthResponse().id_token);
-	* const result = await signInWithCredential(credential);
-	* ```
-	*
-	* @param idToken - Google ID token.
-	* @param accessToken - Google access token.
-	*/
-	static credential(idToken, accessToken) {
-		return OAuthCredential._fromParams({
-			providerId: GoogleAuthProvider.PROVIDER_ID,
-			signInMethod: GoogleAuthProvider.GOOGLE_SIGN_IN_METHOD,
-			idToken,
-			accessToken
-		});
-	}
-	/**
-	* Used to extract the underlying {@link OAuthCredential} from a {@link UserCredential}.
-	*
-	* @param userCredential - The user credential.
-	*/
-	static credentialFromResult(userCredential) {
-		return GoogleAuthProvider.credentialFromTaggedObject(userCredential);
-	}
-	/**
-	* Used to extract the underlying {@link OAuthCredential} from a {@link AuthError} which was
-	* thrown during a sign-in, link, or reauthenticate operation.
-	*
-	* @param userCredential - The user credential.
-	*/
-	static credentialFromError(error) {
-		return GoogleAuthProvider.credentialFromTaggedObject(error.customData || {});
-	}
-	static credentialFromTaggedObject({ _tokenResponse: tokenResponse }) {
-		if (!tokenResponse) return null;
-		const { oauthIdToken, oauthAccessToken } = tokenResponse;
-		if (!oauthIdToken && !oauthAccessToken) return null;
-		try {
-			return GoogleAuthProvider.credential(oauthIdToken, oauthAccessToken);
-		} catch {
-			return null;
-		}
-	}
-};
-/** Always set to {@link SignInMethod}.GOOGLE. */
-GoogleAuthProvider.GOOGLE_SIGN_IN_METHOD = "google.com";
-/** Always set to {@link ProviderId}.GOOGLE. */
-GoogleAuthProvider.PROVIDER_ID = "google.com";
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* Provider for generating an {@link OAuthCredential} for {@link ProviderId}.GITHUB.
-*
-* @remarks
-* GitHub requires an OAuth 2.0 redirect, so you can either handle the redirect directly, or use
-* the {@link signInWithPopup} handler:
-*
-* @example
-* ```javascript
-* // Sign in using a redirect.
-* const provider = new GithubAuthProvider();
-* // Start a sign in process for an unauthenticated user.
-* provider.addScope('repo');
-* await signInWithRedirect(auth, provider);
-* // This will trigger a full page redirect away from your app
-*
-* // After returning from the redirect when your app initializes you can obtain the result
-* const result = await getRedirectResult(auth);
-* if (result) {
-*   // This is the signed-in user
-*   const user = result.user;
-*   // This gives you a GitHub Access Token.
-*   const credential = GithubAuthProvider.credentialFromResult(result);
-*   const token = credential.accessToken;
-* }
-* ```
-*
-* @example
-* ```javascript
-* // Sign in using a popup.
-* const provider = new GithubAuthProvider();
-* provider.addScope('repo');
-* const result = await signInWithPopup(auth, provider);
-*
-* // The signed-in user info.
-* const user = result.user;
-* // This gives you a GitHub Access Token.
-* const credential = GithubAuthProvider.credentialFromResult(result);
-* const token = credential.accessToken;
-* ```
-* @public
-*/
-var GithubAuthProvider = class GithubAuthProvider extends BaseOAuthProvider {
-	constructor() {
-		super("github.com");
-	}
-	/**
-	* Creates a credential for GitHub.
-	*
-	* @param accessToken - GitHub access token.
-	*/
-	static credential(accessToken) {
-		return OAuthCredential._fromParams({
-			providerId: GithubAuthProvider.PROVIDER_ID,
-			signInMethod: GithubAuthProvider.GITHUB_SIGN_IN_METHOD,
-			accessToken
-		});
-	}
-	/**
-	* Used to extract the underlying {@link OAuthCredential} from a {@link UserCredential}.
-	*
-	* @param userCredential - The user credential.
-	*/
-	static credentialFromResult(userCredential) {
-		return GithubAuthProvider.credentialFromTaggedObject(userCredential);
-	}
-	/**
-	* Used to extract the underlying {@link OAuthCredential} from a {@link AuthError} which was
-	* thrown during a sign-in, link, or reauthenticate operation.
-	*
-	* @param userCredential - The user credential.
-	*/
-	static credentialFromError(error) {
-		return GithubAuthProvider.credentialFromTaggedObject(error.customData || {});
-	}
-	static credentialFromTaggedObject({ _tokenResponse: tokenResponse }) {
-		if (!tokenResponse || !("oauthAccessToken" in tokenResponse)) return null;
-		if (!tokenResponse.oauthAccessToken) return null;
-		try {
-			return GithubAuthProvider.credential(tokenResponse.oauthAccessToken);
-		} catch {
-			return null;
-		}
-	}
-};
-/** Always set to {@link SignInMethod}.GITHUB. */
-GithubAuthProvider.GITHUB_SIGN_IN_METHOD = "github.com";
-/** Always set to {@link ProviderId}.GITHUB. */
-GithubAuthProvider.PROVIDER_ID = "github.com";
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* Provider for generating an {@link OAuthCredential} for {@link ProviderId}.TWITTER.
-*
-* @example
-* ```javascript
-* // Sign in using a redirect.
-* const provider = new TwitterAuthProvider();
-* // Start a sign in process for an unauthenticated user.
-* await signInWithRedirect(auth, provider);
-* // This will trigger a full page redirect away from your app
-*
-* // After returning from the redirect when your app initializes you can obtain the result
-* const result = await getRedirectResult(auth);
-* if (result) {
-*   // This is the signed-in user
-*   const user = result.user;
-*   // This gives you a Twitter Access Token and Secret.
-*   const credential = TwitterAuthProvider.credentialFromResult(result);
-*   const token = credential.accessToken;
-*   const secret = credential.secret;
-* }
-* ```
-*
-* @example
-* ```javascript
-* // Sign in using a popup.
-* const provider = new TwitterAuthProvider();
-* const result = await signInWithPopup(auth, provider);
-*
-* // The signed-in user info.
-* const user = result.user;
-* // This gives you a Twitter Access Token and Secret.
-* const credential = TwitterAuthProvider.credentialFromResult(result);
-* const token = credential.accessToken;
-* const secret = credential.secret;
-* ```
-*
-* @public
-*/
-var TwitterAuthProvider = class TwitterAuthProvider extends BaseOAuthProvider {
-	constructor() {
-		super("twitter.com");
-	}
-	/**
-	* Creates a credential for Twitter.
-	*
-	* @param token - Twitter access token.
-	* @param secret - Twitter secret.
-	*/
-	static credential(token, secret) {
-		return OAuthCredential._fromParams({
-			providerId: TwitterAuthProvider.PROVIDER_ID,
-			signInMethod: TwitterAuthProvider.TWITTER_SIGN_IN_METHOD,
-			oauthToken: token,
-			oauthTokenSecret: secret
-		});
-	}
-	/**
-	* Used to extract the underlying {@link OAuthCredential} from a {@link UserCredential}.
-	*
-	* @param userCredential - The user credential.
-	*/
-	static credentialFromResult(userCredential) {
-		return TwitterAuthProvider.credentialFromTaggedObject(userCredential);
-	}
-	/**
-	* Used to extract the underlying {@link OAuthCredential} from a {@link AuthError} which was
-	* thrown during a sign-in, link, or reauthenticate operation.
-	*
-	* @param userCredential - The user credential.
-	*/
-	static credentialFromError(error) {
-		return TwitterAuthProvider.credentialFromTaggedObject(error.customData || {});
-	}
-	static credentialFromTaggedObject({ _tokenResponse: tokenResponse }) {
-		if (!tokenResponse) return null;
-		const { oauthAccessToken, oauthTokenSecret } = tokenResponse;
-		if (!oauthAccessToken || !oauthTokenSecret) return null;
-		try {
-			return TwitterAuthProvider.credential(oauthAccessToken, oauthTokenSecret);
-		} catch {
-			return null;
-		}
-	}
-};
-/** Always set to {@link SignInMethod}.TWITTER. */
-TwitterAuthProvider.TWITTER_SIGN_IN_METHOD = "twitter.com";
-/** Always set to {@link ProviderId}.TWITTER. */
-TwitterAuthProvider.PROVIDER_ID = "twitter.com";
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-var UserCredentialImpl = class UserCredentialImpl {
-	constructor(params) {
-		this.user = params.user;
-		this.providerId = params.providerId;
-		this._tokenResponse = params._tokenResponse;
-		this.operationType = params.operationType;
-	}
-	static async _fromIdTokenResponse(auth, operationType, idTokenResponse, isAnonymous = false) {
-		const user = await UserImpl._fromIdTokenResponse(auth, idTokenResponse, isAnonymous);
-		const providerId = providerIdForResponse(idTokenResponse);
-		return new UserCredentialImpl({
-			user,
-			providerId,
-			_tokenResponse: idTokenResponse,
-			operationType
-		});
-	}
-	static async _forOperation(user, operationType, response) {
-		await user._updateTokensIfNecessary(response, true);
-		const providerId = providerIdForResponse(response);
-		return new UserCredentialImpl({
-			user,
-			providerId,
-			_tokenResponse: response,
-			operationType
-		});
-	}
-};
-function providerIdForResponse(response) {
-	if (response.providerId) return response.providerId;
-	if ("phoneNumber" in response) return "phone";
-	return null;
-}
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-var MultiFactorError = class MultiFactorError extends FirebaseError {
-	constructor(auth, error, operationType, user) {
-		super(error.code, error.message);
-		this.operationType = operationType;
-		this.user = user;
-		Object.setPrototypeOf(this, MultiFactorError.prototype);
-		this.customData = {
-			appName: auth.name,
-			tenantId: auth.tenantId ?? void 0,
-			_serverResponse: error.customData._serverResponse,
-			operationType
-		};
-	}
-	static _fromErrorAndOperation(auth, error, operationType, user) {
-		return new MultiFactorError(auth, error, operationType, user);
-	}
-};
-function _processCredentialSavingMfaContextIfNecessary(auth, operationType, credential, user) {
-	return (operationType === "reauthenticate" ? credential._getReauthenticationResolver(auth) : credential._getIdTokenResponse(auth)).catch((error) => {
-		if (error.code === `auth/multi-factor-auth-required`) throw MultiFactorError._fromErrorAndOperation(auth, error, operationType, user);
-		throw error;
-	});
-}
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* @license
-* Copyright 2019 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-async function _link$1(user, credential, bypassAuthState = false) {
-	const response = await _logoutIfInvalidated(user, credential._linkToIdToken(user.auth, await user.getIdToken()), bypassAuthState);
-	return UserCredentialImpl._forOperation(user, "link", response);
-}
-/**
-* @license
-* Copyright 2019 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-async function _reauthenticate(user, credential, bypassAuthState = false) {
-	const { auth } = user;
-	if (_isFirebaseServerApp(auth.app)) return Promise.reject(_serverAppCurrentUserOperationNotSupportedError(auth));
-	const operationType = "reauthenticate";
-	try {
-		const response = await _logoutIfInvalidated(user, _processCredentialSavingMfaContextIfNecessary(auth, operationType, credential, user), bypassAuthState);
-		_assert(response.idToken, auth, "internal-error");
-		const parsed = _parseToken(response.idToken);
-		_assert(parsed, auth, "internal-error");
-		const { sub: localId } = parsed;
-		_assert(user.uid === localId, auth, "user-mismatch");
-		return UserCredentialImpl._forOperation(user, operationType, response);
-	} catch (e) {
-		if (e?.code === `auth/user-not-found`) _fail(auth, "user-mismatch");
-		throw e;
-	}
-}
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-async function _signInWithCredential(auth, credential, bypassAuthState = false) {
-	if (_isFirebaseServerApp(auth.app)) return Promise.reject(_serverAppCurrentUserOperationNotSupportedError(auth));
-	const operationType = "signIn";
-	const response = await _processCredentialSavingMfaContextIfNecessary(auth, operationType, credential);
-	const userCredential = await UserCredentialImpl._fromIdTokenResponse(auth, operationType, response);
-	if (!bypassAuthState) await auth._updateCurrentUser(userCredential.user);
-	return userCredential;
-}
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* @license
-* Copyright 2019 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* Adds an observer for changes to the signed-in user's ID token.
-*
-* @remarks
-* This includes sign-in, sign-out, and token refresh events.
-* This will not be triggered automatically upon ID token expiration. Use {@link User.getIdToken} to refresh the ID token.
-*
-* @param auth - The {@link Auth} instance.
-* @param nextOrObserver - callback triggered on change.
-* @param error - Deprecated. This callback is never triggered. Errors
-* on signing in/out can be caught in promises returned from
-* sign-in/sign-out functions.
-* @param completed - Deprecated. This callback is never triggered.
-*
-* @public
-*/
-function onIdTokenChanged(auth, nextOrObserver, error, completed) {
-	return getModularInstance(auth).onIdTokenChanged(nextOrObserver, error, completed);
-}
-/**
-* Adds a blocking callback that runs before an auth state change
-* sets a new user.
-*
-* @param auth - The {@link Auth} instance.
-* @param callback - callback triggered before new user value is set.
-*   If this throws, it blocks the user from being set.
-* @param onAbort - callback triggered if a later `beforeAuthStateChanged()`
-*   callback throws, allowing you to undo any side effects.
-*/
-function beforeAuthStateChanged(auth, callback, onAbort) {
-	return getModularInstance(auth).beforeAuthStateChanged(callback, onAbort);
-}
-/**
-* Adds an observer for changes to the user's sign-in state.
-*
-* @remarks
-* To keep the old behavior, see {@link onIdTokenChanged}.
-*
-* @param auth - The {@link Auth} instance.
-* @param nextOrObserver - callback triggered on change.
-* @param error - Deprecated. This callback is never triggered. Errors
-* on signing in/out can be caught in promises returned from
-* sign-in/sign-out functions.
-* @param completed - Deprecated. This callback is never triggered.
-*
-* @public
-*/
-function onAuthStateChanged(auth, nextOrObserver, error, completed) {
-	return getModularInstance(auth).onAuthStateChanged(nextOrObserver, error, completed);
-}
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-function startEnrollPhoneMfa(auth, request) {
-	return _performApiRequest(auth, "POST", "/v2/accounts/mfaEnrollment:start", _addTidIfNecessary(auth, request));
-}
-function finalizeEnrollPhoneMfa(auth, request) {
-	return _performApiRequest(auth, "POST", "/v2/accounts/mfaEnrollment:finalize", _addTidIfNecessary(auth, request));
-}
-function startEnrollTotpMfa(auth, request) {
-	return _performApiRequest(auth, "POST", "/v2/accounts/mfaEnrollment:start", _addTidIfNecessary(auth, request));
-}
-function finalizeEnrollTotpMfa(auth, request) {
-	return _performApiRequest(auth, "POST", "/v2/accounts/mfaEnrollment:finalize", _addTidIfNecessary(auth, request));
-}
-var STORAGE_AVAILABLE_KEY = "__sak";
-/**
-* @license
-* Copyright 2019 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-var BrowserPersistenceClass = class {
-	constructor(storageRetriever, type) {
-		this.storageRetriever = storageRetriever;
-		this.type = type;
-	}
-	_isAvailable() {
-		try {
-			if (!this.storage) return Promise.resolve(false);
-			this.storage.setItem(STORAGE_AVAILABLE_KEY, "1");
-			this.storage.removeItem(STORAGE_AVAILABLE_KEY);
-			return Promise.resolve(true);
-		} catch {
-			return Promise.resolve(false);
-		}
-	}
-	_set(key, value) {
-		this.storage.setItem(key, JSON.stringify(value));
-		return Promise.resolve();
-	}
-	_get(key) {
-		const json = this.storage.getItem(key);
-		return Promise.resolve(json ? JSON.parse(json) : null);
-	}
-	_remove(key) {
-		this.storage.removeItem(key);
-		return Promise.resolve();
-	}
-	get storage() {
-		return this.storageRetriever();
-	}
-};
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-var _POLLING_INTERVAL_MS$1 = 1e3;
-var IE10_LOCAL_STORAGE_SYNC_DELAY = 10;
-var BrowserLocalPersistence = class extends BrowserPersistenceClass {
-	constructor() {
-		super(() => window.localStorage, "LOCAL");
-		this.boundEventHandler = (event, poll) => this.onStorageEvent(event, poll);
-		this.listeners = {};
-		this.localCache = {};
-		this.pollTimer = null;
-		this.fallbackToPolling = _isMobileBrowser();
-		this._shouldAllowMigration = true;
-	}
-	forAllChangedKeys(cb) {
-		for (const key of Object.keys(this.listeners)) {
-			const newValue = this.storage.getItem(key);
-			const oldValue = this.localCache[key];
-			if (newValue !== oldValue) cb(key, oldValue, newValue);
-		}
-	}
-	onStorageEvent(event, poll = false) {
-		if (!event.key) {
-			this.forAllChangedKeys((key, _oldValue, newValue) => {
-				this.notifyListeners(key, newValue);
-			});
-			return;
-		}
-		const key = event.key;
-		if (poll) this.detachListener();
-		else this.stopPolling();
-		const triggerListeners = () => {
-			const storedValue = this.storage.getItem(key);
-			if (!poll && this.localCache[key] === storedValue) return;
-			this.notifyListeners(key, storedValue);
-		};
-		const storedValue = this.storage.getItem(key);
-		if (_isIE10() && storedValue !== event.newValue && event.newValue !== event.oldValue) setTimeout(triggerListeners, IE10_LOCAL_STORAGE_SYNC_DELAY);
-		else triggerListeners();
-	}
-	notifyListeners(key, value) {
-		this.localCache[key] = value;
-		const listeners = this.listeners[key];
-		if (listeners) for (const listener of Array.from(listeners)) listener(value ? JSON.parse(value) : value);
-	}
-	startPolling() {
-		this.stopPolling();
-		this.pollTimer = setInterval(() => {
-			this.forAllChangedKeys((key, oldValue, newValue) => {
-				this.onStorageEvent(new StorageEvent("storage", {
-					key,
-					oldValue,
-					newValue
-				}), true);
-			});
-		}, _POLLING_INTERVAL_MS$1);
-	}
-	stopPolling() {
-		if (this.pollTimer) {
-			clearInterval(this.pollTimer);
-			this.pollTimer = null;
-		}
-	}
-	attachListener() {
-		window.addEventListener("storage", this.boundEventHandler);
-	}
-	detachListener() {
-		window.removeEventListener("storage", this.boundEventHandler);
-	}
-	_addListener(key, listener) {
-		if (Object.keys(this.listeners).length === 0) {
-			if (this.fallbackToPolling) this.startPolling();
-			else this.attachListener();
-		}
-		if (!this.listeners[key]) {
-			this.listeners[key] = /* @__PURE__ */ new Set();
-			this.localCache[key] = this.storage.getItem(key);
-		}
-		this.listeners[key].add(listener);
-	}
-	_removeListener(key, listener) {
-		if (this.listeners[key]) {
-			this.listeners[key].delete(listener);
-			if (this.listeners[key].size === 0) delete this.listeners[key];
-		}
-		if (Object.keys(this.listeners).length === 0) {
-			this.detachListener();
-			this.stopPolling();
-		}
-	}
-	async _set(key, value) {
-		await super._set(key, value);
-		this.localCache[key] = JSON.stringify(value);
-	}
-	async _get(key) {
-		const value = await super._get(key);
-		this.localCache[key] = JSON.stringify(value);
-		return value;
-	}
-	async _remove(key) {
-		await super._remove(key);
-		delete this.localCache[key];
-	}
-};
-BrowserLocalPersistence.type = "LOCAL";
-/**
-* An implementation of {@link Persistence} of type `LOCAL` using `localStorage`
-* for the underlying storage.
-*
-* @public
-*/
-var browserLocalPersistence = BrowserLocalPersistence;
-/**
-* @license
-* Copyright 2025 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-var POLLING_INTERVAL_MS = 1e3;
-function getDocumentCookie(name) {
-	const escapedName = name.replace(/[\\^$.*+?()[\]{}|]/g, "\\$&");
-	const matcher = RegExp(`${escapedName}=([^;]+)`);
-	return document.cookie.match(matcher)?.[1] ?? null;
-}
-function getCookieName(key) {
-	return `${window.location.protocol === "http:" ? "__dev_" : "__HOST-"}FIREBASE_${key.split(":")[3]}`;
-}
-var CookiePersistence = class {
-	constructor() {
-		this.type = "COOKIE";
-		this.listenerUnsubscribes = /* @__PURE__ */ new Map();
-	}
-	_getFinalTarget(originalUrl) {
-		const url = new URL(`${window.location.origin}/__cookies__`);
-		url.searchParams.set("finalTarget", originalUrl);
-		return url;
-	}
-	async _isAvailable() {
-		if (typeof isSecureContext === "boolean" && !isSecureContext) return false;
-		if (typeof navigator === "undefined" || typeof document === "undefined") return false;
-		return navigator.cookieEnabled ?? true;
-	}
-	async _set(_key, _value) {}
-	async _get(key) {
-		if (!this._isAvailable()) return null;
-		const name = getCookieName(key);
-		if (window.cookieStore) return (await window.cookieStore.get(name))?.value;
-		return getDocumentCookie(name);
-	}
-	async _remove(key) {
-		if (!this._isAvailable()) return;
-		if (!await this._get(key)) return;
-		const name = getCookieName(key);
-		document.cookie = `${name}=;Max-Age=34560000;Partitioned;Secure;SameSite=Strict;Path=/;Priority=High`;
-		await fetch(`/__cookies__`, { method: "DELETE" }).catch(() => void 0);
-	}
-	_addListener(key, listener) {
-		if (!this._isAvailable()) return;
-		const name = getCookieName(key);
-		if (window.cookieStore) {
-			const cb = ((event) => {
-				const changedCookie = event.changed.find((change) => change.name === name);
-				if (changedCookie) listener(changedCookie.value);
-				if (event.deleted.find((change) => change.name === name)) listener(null);
-			});
-			const unsubscribe = () => window.cookieStore.removeEventListener("change", cb);
-			this.listenerUnsubscribes.set(listener, unsubscribe);
-			return window.cookieStore.addEventListener("change", cb);
-		}
-		let lastValue = getDocumentCookie(name);
-		const interval = setInterval(() => {
-			const currentValue = getDocumentCookie(name);
-			if (currentValue !== lastValue) {
-				listener(currentValue);
-				lastValue = currentValue;
-			}
-		}, POLLING_INTERVAL_MS);
-		const unsubscribe = () => clearInterval(interval);
-		this.listenerUnsubscribes.set(listener, unsubscribe);
-	}
-	_removeListener(_key, listener) {
-		const unsubscribe = this.listenerUnsubscribes.get(listener);
-		if (!unsubscribe) return;
-		unsubscribe();
-		this.listenerUnsubscribes.delete(listener);
-	}
-};
-CookiePersistence.type = "COOKIE";
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-var BrowserSessionPersistence = class extends BrowserPersistenceClass {
-	constructor() {
-		super(() => window.sessionStorage, "SESSION");
-	}
-	_addListener(_key, _listener) {}
-	_removeListener(_key, _listener) {}
-};
-BrowserSessionPersistence.type = "SESSION";
-/**
-* An implementation of {@link Persistence} of `SESSION` using `sessionStorage`
-* for the underlying storage.
-*
-* @public
-*/
-var browserSessionPersistence = BrowserSessionPersistence;
-/**
-* @license
-* Copyright 2019 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* Shim for Promise.allSettled, note the slightly different format of `fulfilled` vs `status`.
-*
-* @param promises - Array of promises to wait on.
-*/
-function _allSettled(promises) {
-	return Promise.all(promises.map(async (promise) => {
-		try {
-			return {
-				fulfilled: true,
-				value: await promise
-			};
-		} catch (reason) {
-			return {
-				fulfilled: false,
-				reason
-			};
-		}
-	}));
-}
-/**
-* @license
-* Copyright 2019 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* Interface class for receiving messages.
-*
-*/
-var Receiver = class Receiver {
-	constructor(eventTarget) {
-		this.eventTarget = eventTarget;
-		this.handlersMap = {};
-		this.boundEventHandler = this.handleEvent.bind(this);
-	}
-	/**
-	* Obtain an instance of a Receiver for a given event target, if none exists it will be created.
-	*
-	* @param eventTarget - An event target (such as window or self) through which the underlying
-	* messages will be received.
-	*/
-	static _getInstance(eventTarget) {
-		const existingInstance = this.receivers.find((receiver) => receiver.isListeningto(eventTarget));
-		if (existingInstance) return existingInstance;
-		const newInstance = new Receiver(eventTarget);
-		this.receivers.push(newInstance);
-		return newInstance;
-	}
-	isListeningto(eventTarget) {
-		return this.eventTarget === eventTarget;
-	}
-	/**
-	* Fans out a MessageEvent to the appropriate listeners.
-	*
-	* @remarks
-	* Sends an {@link Status.ACK} upon receipt and a {@link Status.DONE} once all handlers have
-	* finished processing.
-	*
-	* @param event - The MessageEvent.
-	*
-	*/
-	async handleEvent(event) {
-		const messageEvent = event;
-		const { eventId, eventType, data } = messageEvent.data;
-		const handlers = this.handlersMap[eventType];
-		if (!handlers?.size) return;
-		messageEvent.ports[0].postMessage({
-			status: "ack",
-			eventId,
-			eventType
-		});
-		const response = await _allSettled(Array.from(handlers).map(async (handler) => handler(messageEvent.origin, data)));
-		messageEvent.ports[0].postMessage({
-			status: "done",
-			eventId,
-			eventType,
-			response
-		});
-	}
-	/**
-	* Subscribe an event handler for a particular event.
-	*
-	* @param eventType - Event name to subscribe to.
-	* @param eventHandler - The event handler which should receive the events.
-	*
-	*/
-	_subscribe(eventType, eventHandler) {
-		if (Object.keys(this.handlersMap).length === 0) this.eventTarget.addEventListener("message", this.boundEventHandler);
-		if (!this.handlersMap[eventType]) this.handlersMap[eventType] = /* @__PURE__ */ new Set();
-		this.handlersMap[eventType].add(eventHandler);
-	}
-	/**
-	* Unsubscribe an event handler from a particular event.
-	*
-	* @param eventType - Event name to unsubscribe from.
-	* @param eventHandler - Optional event handler, if none provided, unsubscribe all handlers on this event.
-	*
-	*/
-	_unsubscribe(eventType, eventHandler) {
-		if (this.handlersMap[eventType] && eventHandler) this.handlersMap[eventType].delete(eventHandler);
-		if (!eventHandler || this.handlersMap[eventType].size === 0) delete this.handlersMap[eventType];
-		if (Object.keys(this.handlersMap).length === 0) this.eventTarget.removeEventListener("message", this.boundEventHandler);
-	}
-};
-Receiver.receivers = [];
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-function _generateEventId(prefix = "", digits = 10) {
-	let random = "";
-	for (let i = 0; i < digits; i++) random += Math.floor(Math.random() * 10);
-	return prefix + random;
-}
-/**
-* @license
-* Copyright 2019 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* Interface for sending messages and waiting for a completion response.
-*
-*/
-var Sender = class {
-	constructor(target) {
-		this.target = target;
-		this.handlers = /* @__PURE__ */ new Set();
-	}
-	/**
-	* Unsubscribe the handler and remove it from our tracking Set.
-	*
-	* @param handler - The handler to unsubscribe.
-	*/
-	removeMessageHandler(handler) {
-		if (handler.messageChannel) {
-			handler.messageChannel.port1.removeEventListener("message", handler.onMessage);
-			handler.messageChannel.port1.close();
-		}
-		this.handlers.delete(handler);
-	}
-	/**
-	* Send a message to the Receiver located at {@link target}.
-	*
-	* @remarks
-	* We'll first wait a bit for an ACK , if we get one we will wait significantly longer until the
-	* receiver has had a chance to fully process the event.
-	*
-	* @param eventType - Type of event to send.
-	* @param data - The payload of the event.
-	* @param timeout - Timeout for waiting on an ACK from the receiver.
-	*
-	* @returns An array of settled promises from all the handlers that were listening on the receiver.
-	*/
-	async _send(eventType, data, timeout = 50) {
-		const messageChannel = typeof MessageChannel !== "undefined" ? new MessageChannel() : null;
-		if (!messageChannel) throw new Error("connection_unavailable");
-		let completionTimer;
-		let handler;
-		return new Promise((resolve, reject) => {
-			const eventId = _generateEventId("", 20);
-			messageChannel.port1.start();
-			const ackTimer = setTimeout(() => {
-				reject(/* @__PURE__ */ new Error("unsupported_event"));
-			}, timeout);
-			handler = {
-				messageChannel,
-				onMessage(event) {
-					const messageEvent = event;
-					if (messageEvent.data.eventId !== eventId) return;
-					switch (messageEvent.data.status) {
-						case "ack":
-							clearTimeout(ackTimer);
-							completionTimer = setTimeout(() => {
-								reject(/* @__PURE__ */ new Error("timeout"));
-							}, 3e3);
-							break;
-						case "done":
-							clearTimeout(completionTimer);
-							resolve(messageEvent.data.response);
-							break;
-						default:
-							clearTimeout(ackTimer);
-							clearTimeout(completionTimer);
-							reject(/* @__PURE__ */ new Error("invalid_response"));
-					}
-				}
-			};
-			this.handlers.add(handler);
-			messageChannel.port1.addEventListener("message", handler.onMessage);
-			this.target.postMessage({
-				eventType,
-				eventId,
-				data
-			}, [messageChannel.port2]);
-		}).finally(() => {
-			if (handler) this.removeMessageHandler(handler);
-		});
-	}
-};
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* Lazy accessor for window, since the compat layer won't tree shake this out,
-* we need to make sure not to mess with window unless we have to
-*/
-function _window() {
-	return window;
-}
-function _setWindowLocation(url) {
-	_window().location.href = url;
-}
-/**
-* @license
-* Copyright 2020 Google LLC.
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-function _isWorker() {
-	return typeof _window()["WorkerGlobalScope"] !== "undefined" && typeof _window()["importScripts"] === "function";
-}
-async function _getActiveServiceWorker() {
-	if (!navigator?.serviceWorker) return null;
-	try {
-		return (await navigator.serviceWorker.ready).active;
-	} catch {
-		return null;
-	}
-}
-function _getServiceWorkerController() {
-	return navigator?.serviceWorker?.controller || null;
-}
-function _getWorkerGlobalScope() {
-	return _isWorker() ? self : null;
-}
-/**
-* @license
-* Copyright 2019 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-var DB_NAME = "firebaseLocalStorageDb";
-var DB_VERSION = 1;
-var DB_OBJECTSTORE_NAME = "firebaseLocalStorage";
-var DB_DATA_KEYPATH = "fbase_key";
-var _POLLING_INTERVAL_MS = 800;
-var _TRANSACTION_RETRY_COUNT = 3;
-/**
-* Short timeout scoped to the `readwrite` availability probe in `_isAvailable()`.
-* Matches `_POLLING_INTERVAL_MS` so that if a background tab is suspended while
-* holding a `readonly` poll transaction that blocks `readwrite` transactions
-* (#10540), the startup probe fails fast and aborts its queued transaction in
-* under a second without blocking fallback or user loading.
-*/
-var _DB_PROBE_TIMEOUT_MS = 800;
-/**
-* Timeout for opening the database and regular IndexedDB read/write requests.
-* Kept at multiple seconds to accommodate cold `indexedDB.open()` or slow disk
-* I/O on low-end devices without premature timeouts.
-*/
-var _DB_TIMEOUT_MS = 2500;
-var DB_TIMEOUT_ERROR = "DB_TIMEOUT";
-/**
-* Promise wrapper for IDBRequest
-*
-* Unfortunately we can't cleanly extend Promise<T> since promises are not callable in ES6
-*
-*/
-var DBPromise = class {
-	constructor(request) {
-		this.request = request;
-	}
-	toPromise(timeoutMs = _DB_TIMEOUT_MS) {
-		return new Promise((resolve, reject) => {
-			let settled = false;
-			const timer = setTimeout(() => {
-				if (!settled) {
-					settled = true;
-					try {
-						this.request.transaction?.abort();
-					} catch {}
-					reject(/* @__PURE__ */ new Error(DB_TIMEOUT_ERROR));
-				}
-			}, timeoutMs);
-			this.request.addEventListener("success", () => {
-				if (!settled) {
-					settled = true;
-					clearTimeout(timer);
-					resolve(this.request.result);
-				}
-			});
-			this.request.addEventListener("error", () => {
-				if (!settled) {
-					settled = true;
-					clearTimeout(timer);
-					reject(this.request.error);
-				}
-			});
-		});
-	}
-};
-function getObjectStore(db, isReadWrite) {
-	return db.transaction([DB_OBJECTSTORE_NAME], isReadWrite ? "readwrite" : "readonly").objectStore(DB_OBJECTSTORE_NAME);
-}
-function _deleteDatabase() {
-	return new DBPromise(indexedDB.deleteDatabase(DB_NAME)).toPromise();
-}
-function _openDatabase() {
-	const request = indexedDB.open(DB_NAME, DB_VERSION);
-	return new Promise((resolve, reject) => {
-		let settled = false;
-		const timer = setTimeout(() => {
-			if (!settled) {
-				settled = true;
-				reject(/* @__PURE__ */ new Error(DB_TIMEOUT_ERROR));
-			}
-		}, _DB_TIMEOUT_MS);
-		request.addEventListener("error", () => {
-			if (!settled) {
-				settled = true;
-				clearTimeout(timer);
-				reject(request.error);
-			}
-		});
-		request.addEventListener("upgradeneeded", () => {
-			const db = request.result;
-			try {
-				db.createObjectStore(DB_OBJECTSTORE_NAME, { keyPath: DB_DATA_KEYPATH });
-			} catch (e) {
-				if (!settled) {
-					settled = true;
-					clearTimeout(timer);
-					reject(e);
-				}
-			}
-		});
-		request.addEventListener("success", async () => {
-			const db = request.result;
-			if (settled) {
-				db.close();
-				return;
-			}
-			clearTimeout(timer);
-			if (!db.objectStoreNames.contains(DB_OBJECTSTORE_NAME)) {
-				db.close();
-				try {
-					await _deleteDatabase();
-					const reopenedDb = await _openDatabase();
-					settled = true;
-					resolve(reopenedDb);
-				} catch (e) {
-					if (!settled) {
-						settled = true;
-						reject(e);
-					}
-				}
-			} else {
-				settled = true;
-				resolve(db);
-			}
-		});
-	});
-}
-async function _putObject(db, key, value, timeoutMs = _DB_TIMEOUT_MS) {
-	return new DBPromise(getObjectStore(db, true).put({
-		[DB_DATA_KEYPATH]: key,
-		value
-	})).toPromise(timeoutMs);
-}
-async function getObject(db, key) {
-	const data = await new DBPromise(getObjectStore(db, false).get(key)).toPromise();
-	return data === void 0 ? null : data.value;
-}
-function _deleteObject(db, key, timeoutMs = _DB_TIMEOUT_MS) {
-	return new DBPromise(getObjectStore(db, true).delete(key)).toPromise(timeoutMs);
-}
-var IndexedDBLocalPersistence = class {
-	registerLifecycleListeners() {
-		if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
-			window.addEventListener("pagehide", this.onPageHide);
-			window.addEventListener("pageshow", this.onPageShow);
-		}
-	}
-	unregisterLifecycleListeners() {
-		if (typeof window !== "undefined" && typeof window.removeEventListener === "function") {
-			window.removeEventListener("pagehide", this.onPageHide);
-			window.removeEventListener("pageshow", this.onPageShow);
-		}
-	}
-	constructor() {
-		this.type = "LOCAL";
-		this.dbPromise = null;
-		this._shouldAllowMigration = true;
-		this.listeners = {};
-		this.localCache = {};
-		this.pollTimer = null;
-		this.isClosing = false;
-		this.pendingWrites = 0;
-		this._lastProbeTimedOut = false;
-		this.receiver = null;
-		this.sender = null;
-		this.serviceWorkerReceiverAvailable = false;
-		this.activeServiceWorker = null;
-		this.onPageHide = () => {
-			this.isClosing = true;
-			this.stopPolling();
-			if (this.dbPromise) {
-				this.dbPromise.then((db) => db.close()).catch(() => {});
-				this.dbPromise = null;
-			}
-		};
-		this.onPageShow = () => {
-			if (this.isClosing) {
-				this.isClosing = false;
-				if (Object.keys(this.listeners).length > 0) this.startPolling();
-			}
-		};
-		this._workerInitializationPromise = this.initializeServiceWorkerMessaging().then(() => {}, () => {});
-	}
-	async _openDb() {
-		if (this.dbPromise) return this.dbPromise;
-		const dbPromise = _openDatabase();
-		this.dbPromise = dbPromise;
-		dbPromise.catch(() => {
-			if (this.dbPromise === dbPromise) this.dbPromise = null;
-		});
-		return dbPromise;
-	}
-	async _withRetries(op) {
-		let numAttempts = 0;
-		while (true) {
-			let db;
-			let dbPromiseBeforeOp = null;
-			try {
-				const openPromise = this._openDb();
-				dbPromiseBeforeOp = this.dbPromise;
-				db = await openPromise;
-				return await op(db);
-			} catch (e) {
-				if (db) {
-					db.close();
-					if (dbPromiseBeforeOp && this.dbPromise === dbPromiseBeforeOp) this.dbPromise = null;
-				} else if (this.dbPromise && this.dbPromise === dbPromiseBeforeOp) {
-					const currentDbPromise = this.dbPromise;
-					this.dbPromise = null;
-					try {
-						(await currentDbPromise).close();
-					} catch {}
-				}
-				if (e instanceof Error && e.message === DB_TIMEOUT_ERROR || numAttempts++ > _TRANSACTION_RETRY_COUNT) throw e;
-			}
-		}
-	}
-	/**
-	* IndexedDB events do not propagate from the main window to the worker context.  We rely on a
-	* postMessage interface to send these events to the worker ourselves.
-	*/
-	async initializeServiceWorkerMessaging() {
-		return _isWorker() ? this.initializeReceiver() : this.initializeSender();
-	}
-	/**
-	* As the worker we should listen to events from the main window.
-	*/
-	async initializeReceiver() {
-		this.receiver = Receiver._getInstance(_getWorkerGlobalScope());
-		this.receiver._subscribe("keyChanged", async (_origin, data) => {
-			return { keyProcessed: (await this._poll()).includes(data.key) };
-		});
-		this.receiver._subscribe("ping", async (_origin, _data) => {
-			return ["keyChanged"];
-		});
-	}
-	/**
-	* As the main window, we should let the worker know when keys change (set and remove).
-	*
-	* @remarks
-	* {@link https://developer.mozilla.org/en-US/docs/Web/API/ServiceWorkerContainer/ready | ServiceWorkerContainer.ready}
-	* may not resolve.
-	*/
-	async initializeSender() {
-		this.activeServiceWorker = await _getActiveServiceWorker();
-		if (!this.activeServiceWorker) return;
-		this.sender = new Sender(this.activeServiceWorker);
-		const results = await this.sender._send("ping", {}, 800);
-		if (!results) return;
-		if (results[0]?.fulfilled && results[0]?.value.includes("keyChanged")) this.serviceWorkerReceiverAvailable = true;
-	}
-	/**
-	* Let the worker know about a changed key, the exact key doesn't technically matter since the
-	* worker will just trigger a full sync anyway.
-	*
-	* @remarks
-	* For now, we only support one service worker per page.
-	*
-	* @param key - Storage key which changed.
-	*/
-	async notifyServiceWorker(key) {
-		if (!this.sender || !this.activeServiceWorker || _getServiceWorkerController() !== this.activeServiceWorker) return;
-		try {
-			await this.sender._send("keyChanged", { key }, this.serviceWorkerReceiverAvailable ? 800 : 50);
-		} catch {}
-	}
-	async _isAvailable() {
-		this._lastProbeTimedOut = false;
-		try {
-			if (!indexedDB) return false;
-			await this._withRetries(async (db) => {
-				await _putObject(db, STORAGE_AVAILABLE_KEY, "1", _DB_PROBE_TIMEOUT_MS);
-				await _deleteObject(db, STORAGE_AVAILABLE_KEY, _DB_PROBE_TIMEOUT_MS);
-			});
-			return true;
-		} catch (e) {
-			this._lastProbeTimedOut = e instanceof Error && e.message === DB_TIMEOUT_ERROR;
-		}
-		return false;
-	}
-	async _withPendingWrite(write) {
-		this.pendingWrites++;
-		try {
-			await write();
-		} finally {
-			this.pendingWrites--;
-		}
-	}
-	async _set(key, value) {
-		return this._withPendingWrite(async () => {
-			await this._withRetries((db) => _putObject(db, key, value));
-			this.localCache[key] = value;
-			return this.notifyServiceWorker(key);
-		});
-	}
-	async _get(key) {
-		try {
-			const obj = await this._withRetries((db) => getObject(db, key));
-			this.localCache[key] = obj;
-			return obj;
-		} catch (e) {
-			if (e instanceof Error && e.message === DB_TIMEOUT_ERROR && this.localCache[key] != null) return this.localCache[key];
-			throw e;
-		}
-	}
-	async _remove(key) {
-		return this._withPendingWrite(async () => {
-			await this._withRetries((db) => _deleteObject(db, key));
-			delete this.localCache[key];
-			return this.notifyServiceWorker(key);
-		});
-	}
-	async _poll() {
-		if (this.isClosing) return [];
-		try {
-			const result = await this._withRetries((db) => {
-				return new DBPromise(getObjectStore(db, false).getAll()).toPromise();
-			});
-			if (this.isClosing) return [];
-			if (!result) return [];
-			if (this.pendingWrites !== 0) return [];
-			const keys = [];
-			const keysInResult = /* @__PURE__ */ new Set();
-			if (result.length !== 0) for (const { fbase_key: key, value } of result) {
-				keysInResult.add(key);
-				if (JSON.stringify(this.localCache[key]) !== JSON.stringify(value)) {
-					this.notifyListeners(key, value);
-					keys.push(key);
-				}
-			}
-			for (const localKey of Object.keys(this.localCache)) if (this.localCache[localKey] && !keysInResult.has(localKey)) {
-				this.notifyListeners(localKey, null);
-				keys.push(localKey);
-			}
-			return keys;
-		} catch (e) {
-			if (!this.isClosing) _logWarn(`Firebase Auth cross-tab polling failed with error: ${e}`);
-			return [];
-		}
-	}
-	notifyListeners(key, newValue) {
-		this.localCache[key] = newValue;
-		const listeners = this.listeners[key];
-		if (listeners) for (const listener of Array.from(listeners)) listener(newValue);
-	}
-	startPolling() {
-		this.stopPolling();
-		this.pollTimer = setInterval(async () => this._poll(), _POLLING_INTERVAL_MS);
-	}
-	stopPolling() {
-		if (this.pollTimer) {
-			clearInterval(this.pollTimer);
-			this.pollTimer = null;
-		}
-	}
-	_addListener(key, listener) {
-		if (Object.keys(this.listeners).length === 0) {
-			this.startPolling();
-			this.registerLifecycleListeners();
-		}
-		if (!this.listeners[key]) {
-			this.listeners[key] = /* @__PURE__ */ new Set();
-			if (!(key in this.localCache)) this._get(key).catch(() => {});
-		}
-		this.listeners[key].add(listener);
-	}
-	_removeListener(key, listener) {
-		if (this.listeners[key]) {
-			this.listeners[key].delete(listener);
-			if (this.listeners[key].size === 0) delete this.listeners[key];
-		}
-		if (Object.keys(this.listeners).length === 0) {
-			this.stopPolling();
-			this.unregisterLifecycleListeners();
-		}
-	}
-};
-IndexedDBLocalPersistence.type = "LOCAL";
-/**
-* An implementation of {@link Persistence} of type `LOCAL` using `indexedDB`
-* for the underlying storage.
-*
-* @public
-*/
-var indexedDBLocalPersistence = IndexedDBLocalPersistence;
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-function startSignInPhoneMfa(auth, request) {
-	return _performApiRequest(auth, "POST", "/v2/accounts/mfaSignIn:start", _addTidIfNecessary(auth, request));
-}
-function finalizeSignInPhoneMfa(auth, request) {
-	return _performApiRequest(auth, "POST", "/v2/accounts/mfaSignIn:finalize", _addTidIfNecessary(auth, request));
-}
-function finalizeSignInTotpMfa(auth, request) {
-	return _performApiRequest(auth, "POST", "/v2/accounts/mfaSignIn:finalize", _addTidIfNecessary(auth, request));
-}
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-_generateCallbackName("rcb");
-new Delay(3e4, 6e4);
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-var RECAPTCHA_VERIFIER_TYPE = "recaptcha";
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* Returns a verification ID to be used in conjunction with the SMS code that is sent.
-*
-*/
-async function _verifyPhoneNumber(auth, options, verifier) {
-	if (!auth._getRecaptchaConfig()) try {
-		await _initializeRecaptchaConfig(auth);
-	} catch (error) {
-		console.log("Failed to initialize reCAPTCHA Enterprise config. Triggering the reCAPTCHA v2 verification.");
-	}
-	try {
-		let phoneInfoOptions;
-		if (typeof options === "string") phoneInfoOptions = { phoneNumber: options };
-		else phoneInfoOptions = options;
-		if ("session" in phoneInfoOptions) {
-			const session = phoneInfoOptions.session;
-			if ("phoneNumber" in phoneInfoOptions) {
-				_assert(session.type === "enroll", auth, "internal-error");
-				const startPhoneMfaEnrollmentRequest = {
-					idToken: session.credential,
-					phoneEnrollmentInfo: {
-						phoneNumber: phoneInfoOptions.phoneNumber,
-						clientType: "CLIENT_TYPE_WEB"
-					}
-				};
-				const startEnrollPhoneMfaActionCallback = async (authInstance, request) => {
-					if (request.phoneEnrollmentInfo.captchaResponse === FAKE_TOKEN) {
-						_assert(verifier?.type === RECAPTCHA_VERIFIER_TYPE, authInstance, "argument-error");
-						return startEnrollPhoneMfa(authInstance, await injectRecaptchaV2Token(authInstance, request, verifier));
-					}
-					return startEnrollPhoneMfa(authInstance, request);
-				};
-				return (await handleRecaptchaFlow(auth, startPhoneMfaEnrollmentRequest, "mfaSmsEnrollment", startEnrollPhoneMfaActionCallback, "PHONE_PROVIDER").catch((error) => {
-					return Promise.reject(error);
-				})).phoneSessionInfo.sessionInfo;
-			} else {
-				_assert(session.type === "signin", auth, "internal-error");
-				const mfaEnrollmentId = phoneInfoOptions.multiFactorHint?.uid || phoneInfoOptions.multiFactorUid;
-				_assert(mfaEnrollmentId, auth, "missing-multi-factor-info");
-				const startPhoneMfaSignInRequest = {
-					mfaPendingCredential: session.credential,
-					mfaEnrollmentId,
-					phoneSignInInfo: { clientType: "CLIENT_TYPE_WEB" }
-				};
-				const startSignInPhoneMfaActionCallback = async (authInstance, request) => {
-					if (request.phoneSignInInfo.captchaResponse === FAKE_TOKEN) {
-						_assert(verifier?.type === RECAPTCHA_VERIFIER_TYPE, authInstance, "argument-error");
-						return startSignInPhoneMfa(authInstance, await injectRecaptchaV2Token(authInstance, request, verifier));
-					}
-					return startSignInPhoneMfa(authInstance, request);
-				};
-				return (await handleRecaptchaFlow(auth, startPhoneMfaSignInRequest, "mfaSmsSignIn", startSignInPhoneMfaActionCallback, "PHONE_PROVIDER").catch((error) => {
-					return Promise.reject(error);
-				})).phoneResponseInfo.sessionInfo;
-			}
-		} else {
-			const sendPhoneVerificationCodeRequest = {
-				phoneNumber: phoneInfoOptions.phoneNumber,
-				clientType: "CLIENT_TYPE_WEB"
-			};
-			const sendPhoneVerificationCodeActionCallback = async (authInstance, request) => {
-				if (request.captchaResponse === FAKE_TOKEN) {
-					_assert(verifier?.type === RECAPTCHA_VERIFIER_TYPE, authInstance, "argument-error");
-					return sendPhoneVerificationCode(authInstance, await injectRecaptchaV2Token(authInstance, request, verifier));
-				}
-				return sendPhoneVerificationCode(authInstance, request);
-			};
-			return (await handleRecaptchaFlow(auth, sendPhoneVerificationCodeRequest, "sendVerificationCode", sendPhoneVerificationCodeActionCallback, "PHONE_PROVIDER").catch((error) => {
-				return Promise.reject(error);
-			})).sessionInfo;
-		}
-	} finally {
-		verifier?._reset();
-	}
-}
-async function injectRecaptchaV2Token(auth, request, recaptchaV2Verifier) {
-	_assert(recaptchaV2Verifier.type === RECAPTCHA_VERIFIER_TYPE, auth, "argument-error");
-	const recaptchaV2Token = await recaptchaV2Verifier.verify();
-	_assert(typeof recaptchaV2Token === "string", auth, "argument-error");
-	const newRequest = { ...request };
-	if ("phoneEnrollmentInfo" in newRequest) {
-		const phoneNumber = newRequest.phoneEnrollmentInfo.phoneNumber;
-		const captchaResponse = newRequest.phoneEnrollmentInfo.captchaResponse;
-		const clientType = newRequest.phoneEnrollmentInfo.clientType;
-		const recaptchaVersion = newRequest.phoneEnrollmentInfo.recaptchaVersion;
-		Object.assign(newRequest, { "phoneEnrollmentInfo": {
-			phoneNumber,
-			recaptchaToken: recaptchaV2Token,
-			captchaResponse,
-			clientType,
-			recaptchaVersion
-		} });
-		return newRequest;
-	} else if ("phoneSignInInfo" in newRequest) {
-		const captchaResponse = newRequest.phoneSignInInfo.captchaResponse;
-		const clientType = newRequest.phoneSignInInfo.clientType;
-		const recaptchaVersion = newRequest.phoneSignInInfo.recaptchaVersion;
-		Object.assign(newRequest, { "phoneSignInInfo": {
-			recaptchaToken: recaptchaV2Token,
-			captchaResponse,
-			clientType,
-			recaptchaVersion
-		} });
-		return newRequest;
-	} else {
-		Object.assign(newRequest, { "recaptchaToken": recaptchaV2Token });
-		return newRequest;
-	}
-}
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* Provider for generating an {@link PhoneAuthCredential}.
-*
-* @remarks
-* `PhoneAuthProvider` does not work in a Node.js environment.
-*
-* @example
-* ```javascript
-* // 'recaptcha-container' is the ID of an element in the DOM.
-* const applicationVerifier = new RecaptchaVerifier('recaptcha-container');
-* const provider = new PhoneAuthProvider(auth);
-* const verificationId = await provider.verifyPhoneNumber('+16505550101', applicationVerifier);
-* // Obtain the verificationCode from the user.
-* const phoneCredential = PhoneAuthProvider.credential(verificationId, verificationCode);
-* const userCredential = await signInWithCredential(auth, phoneCredential);
-* ```
-*
-* @public
-*/
-var PhoneAuthProvider = class PhoneAuthProvider {
-	/**
-	* @param auth - The Firebase {@link Auth} instance in which sign-ins should occur.
-	*
-	*/
-	constructor(auth) {
-		/** Always set to {@link ProviderId}.PHONE. */
-		this.providerId = PhoneAuthProvider.PROVIDER_ID;
-		this.auth = _castAuth(auth);
-	}
-	/**
-	*
-	* Starts a phone number authentication flow by sending a verification code to the given phone
-	* number.
-	*
-	* @example
-	* ```javascript
-	* const provider = new PhoneAuthProvider(auth);
-	* const verificationId = await provider.verifyPhoneNumber(phoneNumber, applicationVerifier);
-	* // Obtain verificationCode from the user.
-	* const authCredential = PhoneAuthProvider.credential(verificationId, verificationCode);
-	* const userCredential = await signInWithCredential(auth, authCredential);
-	* ```
-	*
-	* @example
-	* An alternative flow is provided using the `signInWithPhoneNumber` method.
-	* ```javascript
-	* const confirmationResult = signInWithPhoneNumber(auth, phoneNumber, applicationVerifier);
-	* // Obtain verificationCode from the user.
-	* const userCredential = confirmationResult.confirm(verificationCode);
-	* ```
-	*
-	* @param phoneInfoOptions - The user's {@link PhoneInfoOptions}. The phone number should be in
-	* E.164 format (e.g. +16505550101).
-	* @param applicationVerifier - An {@link ApplicationVerifier}, which prevents
-	* requests from unauthorized clients. This SDK includes an implementation
-	* based on reCAPTCHA v2, {@link RecaptchaVerifier}. If you've enabled
-	* reCAPTCHA Enterprise bot protection in Enforce mode, this parameter is
-	* optional; in all other configurations, the parameter is required.
-	*
-	* @returns A Promise for a verification ID that can be passed to
-	* {@link PhoneAuthProvider.credential} to identify this flow.
-	*/
-	verifyPhoneNumber(phoneOptions, applicationVerifier) {
-		return _verifyPhoneNumber(this.auth, phoneOptions, getModularInstance(applicationVerifier));
-	}
-	/**
-	* Creates a phone auth credential, given the verification ID from
-	* {@link PhoneAuthProvider.verifyPhoneNumber} and the code that was sent to the user's
-	* mobile device.
-	*
-	* @example
-	* ```javascript
-	* const provider = new PhoneAuthProvider(auth);
-	* const verificationId = provider.verifyPhoneNumber(phoneNumber, applicationVerifier);
-	* // Obtain verificationCode from the user.
-	* const authCredential = PhoneAuthProvider.credential(verificationId, verificationCode);
-	* const userCredential = signInWithCredential(auth, authCredential);
-	* ```
-	*
-	* @example
-	* An alternative flow is provided using the `signInWithPhoneNumber` method.
-	* ```javascript
-	* const confirmationResult = await signInWithPhoneNumber(auth, phoneNumber, applicationVerifier);
-	* // Obtain verificationCode from the user.
-	* const userCredential = await confirmationResult.confirm(verificationCode);
-	* ```
-	*
-	* @param verificationId - The verification ID returned from {@link PhoneAuthProvider.verifyPhoneNumber}.
-	* @param verificationCode - The verification code sent to the user's mobile device.
-	*
-	* @returns The auth provider credential.
-	*/
-	static credential(verificationId, verificationCode) {
-		return PhoneAuthCredential._fromVerification(verificationId, verificationCode);
-	}
-	/**
-	* Generates an {@link AuthCredential} from a {@link UserCredential}.
-	* @param userCredential - The user credential.
-	*/
-	static credentialFromResult(userCredential) {
-		const credential = userCredential;
-		return PhoneAuthProvider.credentialFromTaggedObject(credential);
-	}
-	/**
-	* Returns an {@link AuthCredential} when passed an error.
-	*
-	* @remarks
-	*
-	* This method works for errors like
-	* `auth/account-exists-with-different-credentials`. This is useful for
-	* recovering when attempting to set a user's phone number but the number
-	* in question is already tied to another account. For example, the following
-	* code tries to update the current user's phone number, and if that
-	* fails, links the user with the account associated with that number:
-	*
-	* ```js
-	* const provider = new PhoneAuthProvider(auth);
-	* const verificationId = await provider.verifyPhoneNumber(number, verifier);
-	* try {
-	*   const code = ''; // Prompt the user for the verification code
-	*   await updatePhoneNumber(
-	*       auth.currentUser,
-	*       PhoneAuthProvider.credential(verificationId, code));
-	* } catch (e) {
-	*   if ((e as FirebaseError)?.code === 'auth/account-exists-with-different-credential') {
-	*     const cred = PhoneAuthProvider.credentialFromError(e);
-	*     await linkWithCredential(auth.currentUser, cred);
-	*   }
-	* }
-	*
-	* // At this point, auth.currentUser.phoneNumber === number.
-	* ```
-	*
-	* @param error - The error to generate a credential from.
-	*/
-	static credentialFromError(error) {
-		return PhoneAuthProvider.credentialFromTaggedObject(error.customData || {});
-	}
-	static credentialFromTaggedObject({ _tokenResponse: tokenResponse }) {
-		if (!tokenResponse) return null;
-		const { phoneNumber, temporaryProof } = tokenResponse;
-		if (phoneNumber && temporaryProof) return PhoneAuthCredential._fromTokenResponse(phoneNumber, temporaryProof);
-		return null;
-	}
-};
-/** Always set to {@link ProviderId}.PHONE. */
-PhoneAuthProvider.PROVIDER_ID = "phone";
-/** Always set to {@link SignInMethod}.PHONE. */
-PhoneAuthProvider.PHONE_SIGN_IN_METHOD = "phone";
-/**
-* @license
-* Copyright 2021 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* Chooses a popup/redirect resolver to use. This prefers the override (which
-* is directly passed in), and falls back to the property set on the auth
-* object. If neither are available, this function errors w/ an argument error.
-*/
-function _withDefaultResolver(auth, resolverOverride) {
-	if (resolverOverride) return _getInstance(resolverOverride);
-	_assert(auth._popupRedirectResolver, auth, "argument-error");
-	return auth._popupRedirectResolver;
-}
-/**
-* @license
-* Copyright 2019 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-var IdpCredential = class extends AuthCredential {
-	constructor(params) {
-		super("custom", "custom");
-		this.params = params;
-	}
-	_getIdTokenResponse(auth) {
-		return signInWithIdp(auth, this._buildIdpRequest());
-	}
-	_linkToIdToken(auth, idToken) {
-		return signInWithIdp(auth, this._buildIdpRequest(idToken));
-	}
-	_getReauthenticationResolver(auth) {
-		return signInWithIdp(auth, this._buildIdpRequest());
-	}
-	_buildIdpRequest(idToken) {
-		const request = {
-			requestUri: this.params.requestUri,
-			sessionId: this.params.sessionId,
-			postBody: this.params.postBody,
-			tenantId: this.params.tenantId,
-			pendingToken: this.params.pendingToken,
-			returnSecureToken: true,
-			returnIdpCredential: true
-		};
-		if (idToken) request.idToken = idToken;
-		return request;
-	}
-};
-function _signIn(params) {
-	return _signInWithCredential(params.auth, new IdpCredential(params), params.bypassAuthState);
-}
-function _reauth(params) {
-	const { auth, user } = params;
-	_assert(user, auth, "internal-error");
-	return _reauthenticate(user, new IdpCredential(params), params.bypassAuthState);
-}
-async function _link(params) {
-	const { auth, user } = params;
-	_assert(user, auth, "internal-error");
-	return _link$1(user, new IdpCredential(params), params.bypassAuthState);
-}
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* Popup event manager. Handles the popup's entire lifecycle; listens to auth
-* events
-*/
-var AbstractPopupRedirectOperation = class {
-	constructor(auth, filter, resolver, user, bypassAuthState = false) {
-		this.auth = auth;
-		this.resolver = resolver;
-		this.user = user;
-		this.bypassAuthState = bypassAuthState;
-		this.pendingPromise = null;
-		this.eventManager = null;
-		this.filter = Array.isArray(filter) ? filter : [filter];
-	}
-	execute() {
-		return new Promise(async (resolve, reject) => {
-			this.pendingPromise = {
-				resolve,
-				reject
-			};
-			try {
-				this.eventManager = await this.resolver._initialize(this.auth);
-				if (!this.pendingPromise) return;
-				await this.onExecution();
-				if (!this.pendingPromise) return;
-				this.eventManager.registerConsumer(this);
-			} catch (e) {
-				if (this.pendingPromise) this.reject(e);
-			}
-		});
-	}
-	async onAuthEvent(event) {
-		if (!this.pendingPromise) return;
-		const { urlResponse, sessionId, postBody, tenantId, error, type } = event;
-		if (error) {
-			this.reject(error);
-			return;
-		}
-		const params = {
-			auth: this.auth,
-			requestUri: urlResponse,
-			sessionId,
-			tenantId: tenantId || void 0,
-			postBody: postBody || void 0,
-			user: this.user,
-			bypassAuthState: this.bypassAuthState
-		};
-		try {
-			this.resolve(await this.getIdpTask(type)(params));
-		} catch (e) {
-			this.reject(e);
-		}
-	}
-	onError(error) {
-		this.reject(error);
-	}
-	getIdpTask(type) {
-		switch (type) {
-			case "signInViaPopup":
-			case "signInViaRedirect": return _signIn;
-			case "linkViaPopup":
-			case "linkViaRedirect": return _link;
-			case "reauthViaPopup":
-			case "reauthViaRedirect": return _reauth;
-			default: _fail(this.auth, "internal-error");
-		}
-	}
-	resolve(cred) {
-		debugAssert(this.pendingPromise, "Pending promise was never set");
-		this.pendingPromise.resolve(cred);
-		this.unregisterAndCleanUp();
-	}
-	reject(error) {
-		debugAssert(this.pendingPromise, "Pending promise was never set");
-		this.pendingPromise.reject(error);
-		this.unregisterAndCleanUp();
-	}
-	unregisterAndCleanUp() {
-		if (this.eventManager) this.eventManager.unregisterConsumer(this);
-		this.pendingPromise = null;
-		this.cleanUp();
-	}
-};
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-var _POLL_WINDOW_CLOSE_TIMEOUT = new Delay(2e3, 1e4);
-/**
-* Authenticates a Firebase client using a popup-based OAuth authentication flow.
-*
-* @remarks
-* If succeeds, returns the signed in user along with the provider's credential. If sign in was
-* unsuccessful, returns an error object containing additional information about the error.
-*
-* This method does not work in a Node.js environment or with {@link Auth} instances created with a
-* {@link @firebase/app#FirebaseServerApp}.
-*
-* @example
-* ```javascript
-* // Sign in using a popup.
-* const provider = new FacebookAuthProvider();
-* const result = await signInWithPopup(auth, provider);
-*
-* // The signed-in user info.
-* const user = result.user;
-* // This gives you a Facebook Access Token.
-* const credential = provider.credentialFromResult(auth, result);
-* const token = credential.accessToken;
-* ```
-*
-* @param auth - The {@link Auth} instance.
-* @param provider - The provider to authenticate. The provider has to be an {@link OAuthProvider}.
-* Non-OAuth providers like {@link EmailAuthProvider} will throw an error.
-* @param resolver - An instance of {@link PopupRedirectResolver}, optional
-* if already supplied to {@link initializeAuth} or provided by {@link getAuth}.
-*
-* @public
-*/
-async function signInWithPopup(auth, provider, resolver) {
-	if (_isFirebaseServerApp(auth.app)) return Promise.reject(_createError(auth, "operation-not-supported-in-this-environment"));
-	const authInternal = _castAuth(auth);
-	_assertInstanceOf(auth, provider, FederatedAuthProvider);
-	return new PopupOperation(authInternal, "signInViaPopup", provider, _withDefaultResolver(authInternal, resolver)).executeNotNull();
-}
-/**
-* Popup event manager. Handles the popup's entire lifecycle; listens to auth
-* events
-*
-*/
-var PopupOperation = class PopupOperation extends AbstractPopupRedirectOperation {
-	constructor(auth, filter, provider, resolver, user) {
-		super(auth, filter, resolver, user);
-		this.provider = provider;
-		this.authWindow = null;
-		this.pollId = null;
-		if (PopupOperation.currentPopupAction) PopupOperation.currentPopupAction.cancel();
-		PopupOperation.currentPopupAction = this;
-	}
-	async executeNotNull() {
-		const result = await this.execute();
-		_assert(result, this.auth, "internal-error");
-		return result;
-	}
-	async onExecution() {
-		debugAssert(this.filter.length === 1, "Popup operations only handle one event");
-		const eventId = _generateEventId();
-		this.authWindow = await this.resolver._openPopup(this.auth, this.provider, this.filter[0], eventId);
-		this.authWindow.associatedEvent = eventId;
-		this.resolver._originValidation(this.auth).catch((e) => {
-			this.reject(e);
-		});
-		this.resolver._isIframeWebStorageSupported(this.auth, (isSupported) => {
-			if (!isSupported) this.reject(_createError(this.auth, "web-storage-unsupported"));
-		});
-		this.pollUserCancellation();
-	}
-	get eventId() {
-		return this.authWindow?.associatedEvent || null;
-	}
-	cancel() {
-		this.reject(_createError(this.auth, "cancelled-popup-request"));
-	}
-	cleanUp() {
-		if (this.authWindow) this.authWindow.close();
-		if (this.pollId) window.clearTimeout(this.pollId);
-		this.authWindow = null;
-		this.pollId = null;
-		PopupOperation.currentPopupAction = null;
-	}
-	pollUserCancellation() {
-		const poll = () => {
-			if (this.authWindow?.window?.closed) {
-				this.pollId = window.setTimeout(() => {
-					this.pollId = null;
-					this.reject(_createError(this.auth, "popup-closed-by-user"));
-				}, 8e3);
-				return;
-			}
-			this.pollId = window.setTimeout(poll, _POLL_WINDOW_CLOSE_TIMEOUT.get());
-		};
-		poll();
-	}
-};
-PopupOperation.currentPopupAction = null;
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-var PENDING_REDIRECT_KEY = "pendingRedirect";
-var redirectOutcomeMap = /* @__PURE__ */ new Map();
-var RedirectAction = class extends AbstractPopupRedirectOperation {
-	constructor(auth, resolver, bypassAuthState = false) {
-		super(auth, [
-			"signInViaRedirect",
-			"linkViaRedirect",
-			"reauthViaRedirect",
-			"unknown"
-		], resolver, void 0, bypassAuthState);
-		this.eventId = null;
-	}
-	/**
-	* Override the execute function; if we already have a redirect result, then
-	* just return it.
-	*/
-	async execute() {
-		let readyOutcome = redirectOutcomeMap.get(this.auth._key());
-		if (!readyOutcome) {
-			try {
-				const result = await _getAndClearPendingRedirectStatus(this.resolver, this.auth) ? await super.execute() : null;
-				readyOutcome = () => Promise.resolve(result);
-			} catch (e) {
-				readyOutcome = () => Promise.reject(e);
-			}
-			redirectOutcomeMap.set(this.auth._key(), readyOutcome);
-		}
-		if (!this.bypassAuthState) redirectOutcomeMap.set(this.auth._key(), () => Promise.resolve(null));
-		return readyOutcome();
-	}
-	async onAuthEvent(event) {
-		if (event.type === "signInViaRedirect") return super.onAuthEvent(event);
-		else if (event.type === "unknown") {
-			this.resolve(null);
-			return;
-		}
-		if (event.eventId) {
-			const user = await this.auth._redirectUserForId(event.eventId);
-			if (user) {
-				this.user = user;
-				return super.onAuthEvent(event);
-			} else this.resolve(null);
-		}
-	}
-	async onExecution() {}
-	cleanUp() {}
-};
-async function _getAndClearPendingRedirectStatus(resolver, auth) {
-	const key = pendingRedirectKey(auth);
-	const persistence = resolverPersistence(resolver);
-	if (!await persistence._isAvailable()) return false;
-	const hasPendingRedirect = await persistence._get(key) === "true";
-	await persistence._remove(key);
-	return hasPendingRedirect;
-}
-function _overrideRedirectResult(auth, result) {
-	redirectOutcomeMap.set(auth._key(), result);
-}
-function resolverPersistence(resolver) {
-	return _getInstance(resolver._redirectPersistence);
-}
-function pendingRedirectKey(auth) {
-	return _persistenceKeyName(PENDING_REDIRECT_KEY, auth.config.apiKey, auth.name);
-}
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-async function _getRedirectResult(auth, resolverExtern, bypassAuthState = false) {
-	if (_isFirebaseServerApp(auth.app)) return Promise.reject(_serverAppCurrentUserOperationNotSupportedError(auth));
-	const authInternal = _castAuth(auth);
-	const result = await new RedirectAction(authInternal, _withDefaultResolver(authInternal, resolverExtern), bypassAuthState).execute();
-	if (result && !bypassAuthState) {
-		delete result.user._redirectEventId;
-		await authInternal._persistUserIfCurrent(result.user);
-		await authInternal._setRedirectUser(null, resolverExtern);
-	}
-	return result;
-}
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-var EVENT_DUPLICATION_CACHE_DURATION_MS = 6e5;
-var AuthEventManager = class {
-	constructor(auth) {
-		this.auth = auth;
-		this.cachedEventUids = /* @__PURE__ */ new Set();
-		this.consumers = /* @__PURE__ */ new Set();
-		this.queuedRedirectEvent = null;
-		this.hasHandledPotentialRedirect = false;
-		this.lastProcessedEventTime = Date.now();
-	}
-	registerConsumer(authEventConsumer) {
-		this.consumers.add(authEventConsumer);
-		if (this.queuedRedirectEvent && this.isEventForConsumer(this.queuedRedirectEvent, authEventConsumer)) {
-			this.sendToConsumer(this.queuedRedirectEvent, authEventConsumer);
-			this.saveEventToCache(this.queuedRedirectEvent);
-			this.queuedRedirectEvent = null;
-		}
-	}
-	unregisterConsumer(authEventConsumer) {
-		this.consumers.delete(authEventConsumer);
-	}
-	onEvent(event) {
-		if (this.hasEventBeenHandled(event)) return false;
-		let handled = false;
-		this.consumers.forEach((consumer) => {
-			if (this.isEventForConsumer(event, consumer)) {
-				handled = true;
-				this.sendToConsumer(event, consumer);
-				this.saveEventToCache(event);
-			}
-		});
-		if (this.hasHandledPotentialRedirect || !isRedirectEvent(event)) return handled;
-		this.hasHandledPotentialRedirect = true;
-		if (!handled) {
-			this.queuedRedirectEvent = event;
-			handled = true;
-		}
-		return handled;
-	}
-	sendToConsumer(event, consumer) {
-		if (event.error && !isNullRedirectEvent(event)) {
-			const code = event.error.code?.split("auth/")[1] || "internal-error";
-			consumer.onError(_createError(this.auth, code));
-		} else consumer.onAuthEvent(event);
-	}
-	isEventForConsumer(event, consumer) {
-		const eventIdMatches = consumer.eventId === null || !!event.eventId && event.eventId === consumer.eventId;
-		return consumer.filter.includes(event.type) && eventIdMatches;
-	}
-	hasEventBeenHandled(event) {
-		if (Date.now() - this.lastProcessedEventTime >= EVENT_DUPLICATION_CACHE_DURATION_MS) this.cachedEventUids.clear();
-		return this.cachedEventUids.has(eventUid(event));
-	}
-	saveEventToCache(event) {
-		this.cachedEventUids.add(eventUid(event));
-		this.lastProcessedEventTime = Date.now();
-	}
-};
-function eventUid(e) {
-	return [
-		e.type,
-		e.eventId,
-		e.sessionId,
-		e.tenantId
-	].filter((v) => v).join("-");
-}
-function isNullRedirectEvent({ type, error }) {
-	return type === "unknown" && error?.code === `auth/no-auth-event`;
-}
-function isRedirectEvent(event) {
-	switch (event.type) {
-		case "signInViaRedirect":
-		case "linkViaRedirect":
-		case "reauthViaRedirect": return true;
-		case "unknown": return isNullRedirectEvent(event);
-		default: return false;
-	}
-}
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-async function _getProjectConfig(auth, request = {}) {
-	return _performApiRequest(auth, "GET", "/v1/projects", request);
-}
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-var IP_ADDRESS_REGEX = /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/;
-var HTTP_REGEX = /^https?/;
-async function _validateOrigin(auth) {
-	if (auth.config.emulator) return;
-	const { authorizedDomains } = await _getProjectConfig(auth);
-	for (const domain of authorizedDomains) try {
-		if (matchDomain(domain)) return;
-	} catch {}
-	_fail(auth, "unauthorized-domain");
-}
-function matchDomain(expected) {
-	const currentUrl = _getCurrentUrl();
-	const { protocol, hostname } = new URL(currentUrl);
-	if (expected.startsWith("chrome-extension://")) {
-		const ceUrl = new URL(expected);
-		if (ceUrl.hostname === "" && hostname === "") return protocol === "chrome-extension:" && expected.replace("chrome-extension://", "") === currentUrl.replace("chrome-extension://", "");
-		return protocol === "chrome-extension:" && ceUrl.hostname === hostname;
-	}
-	if (!HTTP_REGEX.test(protocol)) return false;
-	if (IP_ADDRESS_REGEX.test(expected)) return hostname === expected;
-	const escapedDomainPattern = expected.replace(/\./g, "\\.");
-	return new RegExp("^(.+\\." + escapedDomainPattern + "|" + escapedDomainPattern + ")$", "i").test(hostname);
-}
-/**
-* @license
-* Copyright 2020 Google LLC.
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-var NETWORK_TIMEOUT = new Delay(3e4, 6e4);
-/**
-* Reset unloaded GApi modules. If gapi.load fails due to a network error,
-* it will stop working after a retrial. This is a hack to fix this issue.
-*/
-function resetUnloadedGapiModules() {
-	const beacon = _window().___jsl;
-	if (beacon?.H) for (const hint of Object.keys(beacon.H)) {
-		beacon.H[hint].r = beacon.H[hint].r || [];
-		beacon.H[hint].L = beacon.H[hint].L || [];
-		beacon.H[hint].r = [...beacon.H[hint].L];
-		if (beacon.CP) for (let i = 0; i < beacon.CP.length; i++) beacon.CP[i] = null;
-	}
-}
-function loadGapi(auth) {
-	return new Promise((resolve, reject) => {
-		function loadGapiIframe() {
-			resetUnloadedGapiModules();
-			gapi.load("gapi.iframes", {
-				callback: () => {
-					resolve(gapi.iframes.getContext());
-				},
-				ontimeout: () => {
-					resetUnloadedGapiModules();
-					reject(_createError(auth, "network-request-failed"));
-				},
-				timeout: NETWORK_TIMEOUT.get()
-			});
-		}
-		if (_window().gapi?.iframes?.Iframe) resolve(gapi.iframes.getContext());
-		else if (!!_window().gapi?.load) loadGapiIframe();
-		else {
-			const cbName = _generateCallbackName("iframefcb");
-			_window()[cbName] = () => {
-				if (!!gapi.load) loadGapiIframe();
-				else reject(_createError(auth, "network-request-failed"));
-			};
-			return _loadJS(`${_gapiScriptUrl()}?onload=${cbName}`).catch((e) => reject(e));
-		}
-	}).catch((error) => {
-		cachedGApiLoader = null;
-		throw error;
-	});
-}
-var cachedGApiLoader = null;
-function _loadGapi(auth) {
-	cachedGApiLoader = cachedGApiLoader || loadGapi(auth);
-	return cachedGApiLoader;
-}
-/**
-* @license
-* Copyright 2020 Google LLC.
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-var PING_TIMEOUT = new Delay(5e3, 15e3);
-var IFRAME_PATH = "__/auth/iframe";
-var EMULATED_IFRAME_PATH = "emulator/auth/iframe";
-var IFRAME_ATTRIBUTES = {
-	style: {
-		position: "absolute",
-		top: "-100px",
-		width: "1px",
-		height: "1px"
-	},
-	"aria-hidden": "true",
-	tabindex: "-1"
-};
-var EID_FROM_APIHOST = /* @__PURE__ */ new Map([
-	["identitytoolkit.googleapis.com", "p"],
-	["staging-identitytoolkit.sandbox.googleapis.com", "s"],
-	["test-identitytoolkit.sandbox.googleapis.com", "t"]
-]);
-function getIframeUrl(auth) {
-	const config = auth.config;
-	_assert(config.authDomain, auth, "auth-domain-config-required");
-	const url = config.emulator ? _emulatorUrl(config, EMULATED_IFRAME_PATH) : `https://${auth.config.authDomain}/${IFRAME_PATH}`;
-	const params = {
-		apiKey: config.apiKey,
-		appName: auth.name,
-		v: SDK_VERSION
-	};
-	const eid = EID_FROM_APIHOST.get(auth.config.apiHost);
-	if (eid) params.eid = eid;
-	const frameworks = auth._getFrameworks();
-	if (frameworks.length) params.fw = frameworks.join(",");
-	return `${url}?${querystring(params).slice(1)}`;
-}
-async function _openIframe(auth) {
-	const context = await _loadGapi(auth);
-	const gapi = _window().gapi;
-	_assert(gapi, auth, "internal-error");
-	return context.open({
-		where: document.body,
-		url: getIframeUrl(auth),
-		messageHandlersFilter: gapi.iframes.CROSS_ORIGIN_IFRAMES_FILTER,
-		attributes: IFRAME_ATTRIBUTES,
-		dontclear: true
-	}, (iframe) => new Promise(async (resolve, reject) => {
-		await iframe.restyle({ setHideOnLeave: false });
-		const networkError = _createError(auth, "network-request-failed");
-		const networkErrorTimer = _window().setTimeout(() => {
-			reject(networkError);
-		}, PING_TIMEOUT.get());
-		function clearTimerAndResolve() {
-			_window().clearTimeout(networkErrorTimer);
-			resolve(iframe);
-		}
-		iframe.ping(clearTimerAndResolve).then(clearTimerAndResolve, () => {
-			reject(networkError);
-		});
-	}));
-}
-/**
-* @license
-* Copyright 2020 Google LLC.
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-var BASE_POPUP_OPTIONS = {
-	location: "yes",
-	resizable: "yes",
-	statusbar: "yes",
-	toolbar: "no"
-};
-var DEFAULT_WIDTH = 500;
-var DEFAULT_HEIGHT = 600;
-var TARGET_BLANK = "_blank";
-var FIREFOX_EMPTY_URL = "http://localhost";
-var AuthPopup = class {
-	constructor(window) {
-		this.window = window;
-		this.associatedEvent = null;
-	}
-	close() {
-		if (this.window) try {
-			this.window.close();
-		} catch (e) {}
-	}
-};
-function _open(auth, url, name, width = DEFAULT_WIDTH, height = DEFAULT_HEIGHT) {
-	const top = Math.max((window.screen.availHeight - height) / 2, 0).toString();
-	const left = Math.max((window.screen.availWidth - width) / 2, 0).toString();
-	let target = "";
-	const options = {
-		...BASE_POPUP_OPTIONS,
-		width: width.toString(),
-		height: height.toString(),
-		top,
-		left
-	};
-	const ua = getUA().toLowerCase();
-	if (name) target = _isChromeIOS(ua) ? TARGET_BLANK : name;
-	if (_isFirefox(ua)) {
-		url = url || FIREFOX_EMPTY_URL;
-		options.scrollbars = "yes";
-	}
-	const optionsString = Object.entries(options).reduce((accum, [key, value]) => `${accum}${key}=${value},`, "");
-	if (_isIOSStandalone(ua) && target !== "_self") {
-		openAsNewWindowIOS(url || "", target);
-		return new AuthPopup(null);
-	}
-	const newWin = window.open(url || "", target, optionsString);
-	_assert(newWin, auth, "popup-blocked");
-	try {
-		newWin.focus();
-	} catch (e) {}
-	return new AuthPopup(newWin);
-}
-function openAsNewWindowIOS(url, target) {
-	const el = document.createElement("a");
-	el.href = url;
-	el.target = target;
-	const click = document.createEvent("MouseEvent");
-	click.initMouseEvent("click", true, true, window, 1, 0, 0, 0, 0, false, false, false, false, 1, null);
-	el.dispatchEvent(click);
-}
-/**
-* @license
-* Copyright 2021 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* URL for Authentication widget which will initiate the OAuth handshake
-*
-* @internal
-*/
-var WIDGET_PATH = "__/auth/handler";
-/**
-* URL for emulated environment
-*
-* @internal
-*/
-var EMULATOR_WIDGET_PATH = "emulator/auth/handler";
-/**
-* Fragment name for the App Check token that gets passed to the widget
-*
-* @internal
-*/
-var FIREBASE_APP_CHECK_FRAGMENT_ID = encodeURIComponent("fac");
-async function _getRedirectUrl(auth, provider, authType, redirectUrl, eventId, additionalParams) {
-	_assert(auth.config.authDomain, auth, "auth-domain-config-required");
-	_assert(auth.config.apiKey, auth, "invalid-api-key");
-	const params = {
-		apiKey: auth.config.apiKey,
-		appName: auth.name,
-		authType,
-		redirectUrl,
-		v: SDK_VERSION,
-		eventId
-	};
-	if (provider instanceof FederatedAuthProvider) {
-		provider.setDefaultLanguage(auth.languageCode);
-		params.providerId = provider.providerId || "";
-		if (!isEmpty(provider.getCustomParameters())) params.customParameters = JSON.stringify(provider.getCustomParameters());
-		for (const [key, value] of Object.entries(additionalParams || {})) params[key] = value;
-	}
-	if (provider instanceof BaseOAuthProvider) {
-		const scopes = provider.getScopes().filter((scope) => scope !== "");
-		if (scopes.length > 0) params.scopes = scopes.join(",");
-	}
-	if (auth.tenantId) params.tid = auth.tenantId;
-	const paramsDict = params;
-	for (const key of Object.keys(paramsDict)) if (paramsDict[key] === void 0) delete paramsDict[key];
-	const appCheckToken = await auth._getAppCheckToken();
-	const appCheckTokenFragment = appCheckToken ? `#${FIREBASE_APP_CHECK_FRAGMENT_ID}=${encodeURIComponent(appCheckToken)}` : "";
-	return `${getHandlerBase(auth)}?${querystring(paramsDict).slice(1)}${appCheckTokenFragment}`;
-}
-function getHandlerBase({ config }) {
-	if (!config.emulator) return `https://${config.authDomain}/${WIDGET_PATH}`;
-	return _emulatorUrl(config, EMULATOR_WIDGET_PATH);
-}
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-/**
-* The special web storage event
-*
-*/
-var WEB_STORAGE_SUPPORT_KEY = "webStorageSupport";
-var BrowserPopupRedirectResolver = class {
-	constructor() {
-		this.eventManagers = {};
-		this.iframes = {};
-		this.originValidationPromises = {};
-		this._redirectPersistence = browserSessionPersistence;
-		this._completeRedirectFn = _getRedirectResult;
-		this._overrideRedirectResult = _overrideRedirectResult;
-	}
-	async _openPopup(auth, provider, authType, eventId) {
-		debugAssert(this.eventManagers[auth._key()]?.manager, "_initialize() not called before _openPopup()");
-		return _open(auth, await _getRedirectUrl(auth, provider, authType, _getCurrentUrl(), eventId), _generateEventId());
-	}
-	async _openRedirect(auth, provider, authType, eventId) {
-		await this._originValidation(auth);
-		_setWindowLocation(await _getRedirectUrl(auth, provider, authType, _getCurrentUrl(), eventId));
-		return new Promise(() => {});
-	}
-	_initialize(auth) {
-		const key = auth._key();
-		if (this.eventManagers[key]) {
-			const { manager, promise } = this.eventManagers[key];
-			if (manager) return Promise.resolve(manager);
-			else {
-				debugAssert(promise, "If manager is not set, promise should be");
-				return promise;
-			}
-		}
-		const promise = this.initAndGetManager(auth);
-		this.eventManagers[key] = { promise };
-		promise.catch(() => {
-			delete this.eventManagers[key];
-		});
-		return promise;
-	}
-	async initAndGetManager(auth) {
-		const iframe = await _openIframe(auth);
-		const manager = new AuthEventManager(auth);
-		iframe.register("authEvent", (iframeEvent) => {
-			_assert(iframeEvent?.authEvent, auth, "invalid-auth-event");
-			return { status: manager.onEvent(iframeEvent.authEvent) ? "ACK" : "ERROR" };
-		}, gapi.iframes.CROSS_ORIGIN_IFRAMES_FILTER);
-		this.eventManagers[auth._key()] = { manager };
-		this.iframes[auth._key()] = iframe;
-		return manager;
-	}
-	_isIframeWebStorageSupported(auth, cb) {
-		this.iframes[auth._key()].send(WEB_STORAGE_SUPPORT_KEY, { type: WEB_STORAGE_SUPPORT_KEY }, (result) => {
-			const isSupported = result?.[0]?.[WEB_STORAGE_SUPPORT_KEY];
-			if (isSupported !== void 0) cb(!!isSupported);
-			_fail(auth, "internal-error");
-		}, gapi.iframes.CROSS_ORIGIN_IFRAMES_FILTER);
-	}
-	_originValidation(auth) {
-		const key = auth._key();
-		if (!this.originValidationPromises[key]) this.originValidationPromises[key] = _validateOrigin(auth);
-		return this.originValidationPromises[key];
-	}
-	get _shouldInitProactively() {
-		return _isMobileBrowser() || _isSafari() || _isIOS();
-	}
-};
-/**
-* An implementation of {@link PopupRedirectResolver} suitable for browser
-* based applications.
-*
-* @remarks
-* This method does not work in a Node.js environment.
-*
-* @public
-*/
-var browserPopupRedirectResolver = BrowserPopupRedirectResolver;
-var MultiFactorAssertionImpl = class {
-	constructor(factorId) {
-		this.factorId = factorId;
-	}
-	_process(auth, session, displayName) {
-		switch (session.type) {
-			case "enroll": return this._finalizeEnroll(auth, session.credential, displayName);
-			case "signin": return this._finalizeSignIn(auth, session.credential);
-			default: return debugFail("unexpected MultiFactorSessionType");
-		}
-	}
-};
-/**
-* {@inheritdoc PhoneMultiFactorAssertion}
-*
-* @public
-*/
-var PhoneMultiFactorAssertionImpl = class PhoneMultiFactorAssertionImpl extends MultiFactorAssertionImpl {
-	constructor(credential) {
-		super("phone");
-		this.credential = credential;
-	}
-	/** @internal */
-	static _fromCredential(credential) {
-		return new PhoneMultiFactorAssertionImpl(credential);
-	}
-	/** @internal */
-	_finalizeEnroll(auth, idToken, displayName) {
-		return finalizeEnrollPhoneMfa(auth, {
-			idToken,
-			displayName,
-			phoneVerificationInfo: this.credential._makeVerificationRequest()
-		});
-	}
-	/** @internal */
-	_finalizeSignIn(auth, mfaPendingCredential) {
-		return finalizeSignInPhoneMfa(auth, {
-			mfaPendingCredential,
-			phoneVerificationInfo: this.credential._makeVerificationRequest()
-		});
-	}
-};
-/**
-* Provider for generating a {@link PhoneMultiFactorAssertion}.
-*
-* @public
-*/
-var PhoneMultiFactorGenerator = class {
-	constructor() {}
-	/**
-	* Provides a {@link PhoneMultiFactorAssertion} to confirm ownership of the phone second factor.
-	*
-	* @remarks
-	* This method does not work in a Node.js environment.
-	*
-	* @param phoneAuthCredential - A credential provided by {@link PhoneAuthProvider.credential}.
-	* @returns A {@link PhoneMultiFactorAssertion} which can be used with
-	* {@link MultiFactorResolver.resolveSignIn}
-	*/
-	static assertion(credential) {
-		return PhoneMultiFactorAssertionImpl._fromCredential(credential);
-	}
-};
-/**
-* The identifier of the phone second factor: `phone`.
-*/
-PhoneMultiFactorGenerator.FACTOR_ID = "phone";
-/**
-* Provider for generating a {@link TotpMultiFactorAssertion}.
-*
-* @public
-*/
-var TotpMultiFactorGenerator = class {
-	/**
-	* Provides a {@link TotpMultiFactorAssertion} to confirm ownership of
-	* the TOTP (time-based one-time password) second factor.
-	* This assertion is used to complete enrollment in TOTP second factor.
-	*
-	* @param secret A {@link TotpSecret} containing the shared secret key and other TOTP parameters.
-	* @param oneTimePassword One-time password from TOTP App.
-	* @returns A {@link TotpMultiFactorAssertion} which can be used with
-	* {@link MultiFactorUser.enroll}.
-	*/
-	static assertionForEnrollment(secret, oneTimePassword) {
-		return TotpMultiFactorAssertionImpl._fromSecret(secret, oneTimePassword);
-	}
-	/**
-	* Provides a {@link TotpMultiFactorAssertion} to confirm ownership of the TOTP second factor.
-	* This assertion is used to complete signIn with TOTP as the second factor.
-	*
-	* @param enrollmentId identifies the enrolled TOTP second factor.
-	* @param oneTimePassword One-time password from TOTP App.
-	* @returns A {@link TotpMultiFactorAssertion} which can be used with
-	* {@link MultiFactorResolver.resolveSignIn}.
-	*/
-	static assertionForSignIn(enrollmentId, oneTimePassword) {
-		return TotpMultiFactorAssertionImpl._fromEnrollmentId(enrollmentId, oneTimePassword);
-	}
-	/**
-	* Returns a promise to {@link TotpSecret} which contains the TOTP shared secret key and other parameters.
-	* Creates a TOTP secret as part of enrolling a TOTP second factor.
-	* Used for generating a QR code URL or inputting into a TOTP app.
-	* This method uses the auth instance corresponding to the user in the multiFactorSession.
-	*
-	* @param session The {@link MultiFactorSession} that the user is part of.
-	* @returns A promise to {@link TotpSecret}.
-	*/
-	static async generateSecret(session) {
-		const mfaSession = session;
-		_assert(typeof mfaSession.user?.auth !== "undefined", "internal-error");
-		const response = await startEnrollTotpMfa(mfaSession.user.auth, {
-			idToken: mfaSession.credential,
-			totpEnrollmentInfo: {}
-		});
-		return TotpSecret._fromStartTotpMfaEnrollmentResponse(response, mfaSession.user.auth);
-	}
-};
-/**
-* The identifier of the TOTP second factor: `totp`.
-*/
-TotpMultiFactorGenerator.FACTOR_ID = "totp";
-var TotpMultiFactorAssertionImpl = class TotpMultiFactorAssertionImpl extends MultiFactorAssertionImpl {
-	constructor(otp, enrollmentId, secret) {
-		super("totp");
-		this.otp = otp;
-		this.enrollmentId = enrollmentId;
-		this.secret = secret;
-	}
-	/** @internal */
-	static _fromSecret(secret, otp) {
-		return new TotpMultiFactorAssertionImpl(otp, void 0, secret);
-	}
-	/** @internal */
-	static _fromEnrollmentId(enrollmentId, otp) {
-		return new TotpMultiFactorAssertionImpl(otp, enrollmentId);
-	}
-	/** @internal */
-	async _finalizeEnroll(auth, idToken, displayName) {
-		_assert(typeof this.secret !== "undefined", auth, "argument-error");
-		return finalizeEnrollTotpMfa(auth, {
-			idToken,
-			displayName,
-			totpVerificationInfo: this.secret._makeTotpVerificationInfo(this.otp)
-		});
-	}
-	/** @internal */
-	async _finalizeSignIn(auth, mfaPendingCredential) {
-		_assert(this.enrollmentId !== void 0 && this.otp !== void 0, auth, "argument-error");
-		const totpVerificationInfo = { verificationCode: this.otp };
-		return finalizeSignInTotpMfa(auth, {
-			mfaPendingCredential,
-			mfaEnrollmentId: this.enrollmentId,
-			totpVerificationInfo
-		});
-	}
-};
-/**
-* Provider for generating a {@link TotpMultiFactorAssertion}.
-*
-* Stores the shared secret key and other parameters to generate time-based OTPs.
-* Implements methods to retrieve the shared secret key and generate a QR code URL.
-* @public
-*/
-var TotpSecret = class TotpSecret {
-	constructor(secretKey, hashingAlgorithm, codeLength, codeIntervalSeconds, enrollmentCompletionDeadline, sessionInfo, auth) {
-		this.sessionInfo = sessionInfo;
-		this.auth = auth;
-		this.secretKey = secretKey;
-		this.hashingAlgorithm = hashingAlgorithm;
-		this.codeLength = codeLength;
-		this.codeIntervalSeconds = codeIntervalSeconds;
-		this.enrollmentCompletionDeadline = enrollmentCompletionDeadline;
-	}
-	/** @internal */
-	static _fromStartTotpMfaEnrollmentResponse(response, auth) {
-		return new TotpSecret(response.totpSessionInfo.sharedSecretKey, response.totpSessionInfo.hashingAlgorithm, response.totpSessionInfo.verificationCodeLength, response.totpSessionInfo.periodSec, new Date(response.totpSessionInfo.finalizeEnrollmentTime).toUTCString(), response.totpSessionInfo.sessionInfo, auth);
-	}
-	/** @internal */
-	_makeTotpVerificationInfo(otp) {
-		return {
-			sessionInfo: this.sessionInfo,
-			verificationCode: otp
-		};
-	}
-	/**
-	* Returns a QR code URL as described in
-	* https://github.com/google/google-authenticator/wiki/Key-Uri-Format
-	* This can be displayed to the user as a QR code to be scanned into a TOTP app like Google Authenticator.
-	* If the optional parameters are unspecified, an accountName of <userEmail> and issuer of <firebaseAppName> are used.
-	*
-	* @param accountName the name of the account/app along with a user identifier.
-	* @param issuer issuer of the TOTP (likely the app name).
-	* @returns A QR code URL string.
-	*/
-	generateQrCodeUrl(accountName, issuer) {
-		let useDefaults = false;
-		if (_isEmptyString(accountName) || _isEmptyString(issuer)) useDefaults = true;
-		if (useDefaults) {
-			if (_isEmptyString(accountName)) accountName = this.auth.currentUser?.email || "unknownuser";
-			if (_isEmptyString(issuer)) issuer = this.auth.name;
-		}
-		return `otpauth://totp/${issuer}:${accountName}?secret=${this.secretKey}&issuer=${issuer}&algorithm=${this.hashingAlgorithm}&digits=${this.codeLength}`;
-	}
-};
-/** @internal */
-function _isEmptyString(input) {
-	return typeof input === "undefined" || input?.length === 0;
-}
-var name = "@firebase/auth";
-var version = "1.13.11";
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-var AuthInterop = class {
-	constructor(auth) {
-		this.auth = auth;
-		this.internalListeners = /* @__PURE__ */ new Map();
-	}
-	getUid() {
-		this.assertAuthConfigured();
-		return this.auth.currentUser?.uid || null;
-	}
-	async getToken(forceRefresh) {
-		this.assertAuthConfigured();
-		await this.auth._initializationPromise;
-		if (!this.auth.currentUser) return null;
-		return { accessToken: await this.auth.currentUser.getIdToken(forceRefresh) };
-	}
-	addAuthTokenListener(listener) {
-		this.assertAuthConfigured();
-		if (this.internalListeners.has(listener)) return;
-		const unsubscribe = this.auth.onIdTokenChanged((user) => {
-			listener(user?.stsTokenManager.accessToken || null);
-		});
-		this.internalListeners.set(listener, unsubscribe);
-		this.updateProactiveRefresh();
-	}
-	removeAuthTokenListener(listener) {
-		this.assertAuthConfigured();
-		const unsubscribe = this.internalListeners.get(listener);
-		if (!unsubscribe) return;
-		this.internalListeners.delete(listener);
-		unsubscribe();
-		this.updateProactiveRefresh();
-	}
-	assertAuthConfigured() {
-		_assert(this.auth._initializationPromise, "dependent-sdk-initialized-before-auth");
-	}
-	updateProactiveRefresh() {
-		if (this.internalListeners.size > 0) this.auth._startProactiveRefresh();
-		else this.auth._stopProactiveRefresh();
-	}
-};
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-function getVersionForPlatform(clientPlatform) {
-	switch (clientPlatform) {
-		case "Node": return "node";
-		case "ReactNative": return "rn";
-		case "Worker": return "webworker";
-		case "Cordova": return "cordova";
-		case "WebExtension": return "web-extension";
-		default: return;
-	}
-}
-/** @internal */
-function registerAuth(clientPlatform) {
-	_registerComponent(new Component("auth", (container, { options: deps }) => {
-		const app = container.getProvider("app").getImmediate();
-		const heartbeatServiceProvider = container.getProvider("heartbeat");
-		const appCheckServiceProvider = container.getProvider("app-check-internal");
-		const { apiKey, authDomain } = app.options;
-		_assert(apiKey && !apiKey.includes(":"), "invalid-api-key", { appName: app.name });
-		const authInstance = new AuthImpl(app, heartbeatServiceProvider, appCheckServiceProvider, {
-			apiKey,
-			authDomain,
-			clientPlatform,
-			apiHost: "identitytoolkit.googleapis.com",
-			tokenApiHost: "securetoken.googleapis.com",
-			apiScheme: "https",
-			sdkClientVersion: _getClientVersion(clientPlatform)
-		});
-		_initializeAuthInstance(authInstance, deps);
-		return authInstance;
-	}, "PUBLIC").setInstantiationMode("EXPLICIT").setInstanceCreatedCallback((container, _instanceIdentifier, _instance) => {
-		container.getProvider("auth-internal").initialize();
-	}));
-	_registerComponent(new Component("auth-internal", (container) => {
-		return ((auth) => new AuthInterop(auth))(_castAuth(container.getProvider("auth").getImmediate()));
-	}, "PRIVATE").setInstantiationMode("EXPLICIT"));
-	registerVersion(name, version, getVersionForPlatform(clientPlatform));
-	registerVersion(name, version, "esm2020");
-}
-/**
-* @license
-* Copyright 2026 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-function getScriptParentElement() {
-	return document.getElementsByTagName("head")?.[0] ?? document;
-}
-/**
-* Loads an external script by inserting a script tag into the page. The script
-* URL is set through the Firebase Trusted Types policy when Trusted Types are
-* supported, so that this works on pages that enforce Trusted Types.
-*
-* @internal
-*/
-function _loadJSInBrowser(url) {
-	return new Promise((resolve, reject) => {
-		const el = document.createElement("script");
-		try {
-			_setTrustedScriptSrc(el, url);
-		} catch (e) {
-			reject(e);
-			return;
-		}
-		el.onload = resolve;
-		el.onerror = (e) => {
-			const error = _createError("internal-error");
-			error.customData = e;
-			reject(error);
-		};
-		el.type = "text/javascript";
-		el.charset = "UTF-8";
-		getScriptParentElement().appendChild(el);
-	});
-}
-/**
-* @license
-* Copyright 2021 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-var authIdTokenMaxAge = getExperimentalSetting("authIdTokenMaxAge") || 300;
-var lastPostedIdToken = null;
-var mintCookieFactory = (url) => async (user) => {
-	const idTokenResult = user && await user.getIdTokenResult();
-	const idTokenAge = idTokenResult && ((/* @__PURE__ */ new Date()).getTime() - Date.parse(idTokenResult.issuedAtTime)) / 1e3;
-	if (idTokenAge && idTokenAge > authIdTokenMaxAge) return;
-	const idToken = idTokenResult?.token;
-	if (lastPostedIdToken === idToken) return;
-	lastPostedIdToken = idToken;
-	await fetch(url, {
-		method: idToken ? "POST" : "DELETE",
-		headers: idToken ? { "Authorization": `Bearer ${idToken}` } : {}
-	});
-};
-/**
-* Returns the Auth instance associated with the provided {@link @firebase/app#FirebaseApp}.
-* If no instance exists, initializes an Auth instance with platform-specific default dependencies.
-*
-* @param app - The Firebase App.
-*
-* @public
-*/
-function getAuth(app = getApp()) {
-	const provider = _getProvider(app, "auth");
-	if (provider.isInitialized()) return provider.getImmediate();
-	const auth = initializeAuth(app, {
-		popupRedirectResolver: browserPopupRedirectResolver,
-		persistence: [
-			indexedDBLocalPersistence,
-			browserLocalPersistence,
-			browserSessionPersistence
-		]
-	});
-	const authTokenSyncPath = getExperimentalSetting("authTokenSyncURL");
-	if (authTokenSyncPath && typeof isSecureContext === "boolean" && isSecureContext) {
-		const authTokenSyncUrl = new URL(authTokenSyncPath, location.origin);
-		if (location.origin === authTokenSyncUrl.origin) {
-			const mintCookie = mintCookieFactory(authTokenSyncUrl.toString());
-			beforeAuthStateChanged(auth, mintCookie, () => mintCookie(auth.currentUser));
-			onIdTokenChanged(auth, (user) => mintCookie(user));
-		}
-	}
-	const authEmulatorHost = getDefaultEmulatorHost("auth");
-	if (authEmulatorHost) connectAuthEmulator(auth, `http://${authEmulatorHost}`);
-	return auth;
-}
-_setExternalJSProvider({
-	loadJS: _loadJSInBrowser,
-	gapiScript: "https://apis.google.com/js/api.js",
-	recaptchaV2Script: "https://www.google.com/recaptcha/api.js",
-	recaptchaEnterpriseScript: "https://www.google.com/recaptcha/enterprise.js?render="
-});
-registerAuth("Browser");
-var firebase_applet_config_default = {
-	projectId: "gen-lang-client-0326718647",
-	appId: "1:975538038265:web:842262e479f6e14a8bc928",
-	apiKey: "AIzaSyD3k_GcN2dotEFlzO1UTushtVpxPnk99UE",
-	authDomain: "gen-lang-client-0326718647.firebaseapp.com",
-	storageBucket: "gen-lang-client-0326718647.firebasestorage.app",
-	messagingSenderId: "975538038265",
-	measurementId: "",
-	oAuthClientId: "975538038265-capbuc38i24sueqo65h9v9sd0nmpcsbd.apps.googleusercontent.com",
-	recaptchaSiteKey: ""
-};
 // src/lib/auth.ts
-var SCOPES = ["https://www.googleapis.com/auth/spreadsheets"];
-var MANUAL_TOKEN_STORAGE_KEY = "sitetrack_sheets_oauth_token_v1";
-var PERSISTED_AUTH_META_KEY = "sitetrack_sheets_auth_meta_v2";
-var cachedApp = null;
-var cachedAuth = null;
-function getSafeAuth() {
-	try {
-		if (cachedAuth) return cachedAuth;
-		cachedApp = getApps().length > 0 ? getApp() : initializeApp(firebase_applet_config_default);
-		cachedAuth = getAuth(cachedApp);
-		return cachedAuth;
-	} catch (err) {
-		console.warn("Firebase Auth initialization skipped in standalone static environment:", err);
-		return null;
-	}
+var DEFAULT_SPREADSHEET_ID = "1HNmAdZe7POIzIm9mCUPxQJL7p9BoBZEO1hXq6PZNs5M";
+var STORAGE_KEY_CONNECTION_CONFIG = "sitetrack_pro_gsheet_connection_v2";
+function isValidSpreadsheetId(id) {
+	return /^[a-zA-Z0-9_-]{15,80}$/.test((id || "").trim());
 }
-var UnauthorizedDomainError = class extends Error {
-	constructor(hostname, projectId) {
-		super(`Domain "${hostname}" is not yet in Firebase Authorized Domains for popup sign-in.`);
-		this.name = "UnauthorizedDomainError";
-		this.hostname = hostname;
-		this.projectId = projectId;
-	}
-};
-function readPersistedAuthMeta() {
-	try {
-		const rawLocal = window.localStorage.getItem(PERSISTED_AUTH_META_KEY);
-		if (rawLocal) {
-			const parsed = JSON.parse(rawLocal);
-			if (parsed && typeof parsed.token === "string" && parsed.token.trim()) return parsed;
-		}
-	} catch {}
-	try {
-		const legacySession = window.sessionStorage.getItem(MANUAL_TOKEN_STORAGE_KEY);
-		if (legacySession && legacySession.trim()) return {
-			token: legacySession.trim(),
-			savedAt: Date.now()
-		};
-	} catch {}
-	try {
-		const legacyLocal = window.localStorage.getItem(MANUAL_TOKEN_STORAGE_KEY);
-		if (legacyLocal && legacyLocal.trim()) return {
-			token: legacyLocal.trim(),
-			savedAt: Date.now()
-		};
-	} catch {}
-	return null;
+function extractSpreadsheetId(input) {
+	const trimmed = (input || "").trim();
+	if (!trimmed) return "";
+	const urlMatch = trimmed.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]{15,80})/);
+	if (urlMatch && urlMatch[1]) return urlMatch[1];
+	return trimmed;
 }
-var isSigningIn = false;
-var cachedAuthMeta = readPersistedAuthMeta();
-var cachedAccessToken = cachedAuthMeta?.token || null;
-function getSavedAuthMeta() {
-	return cachedAuthMeta;
-}
-function hasPersistedAccessToken() {
-	return Boolean(cachedAccessToken);
-}
-function setManualAccessToken(token, userEmail) {
-	const cleaned = token ? token.trim() : null;
-	cachedAccessToken = cleaned || null;
-	cachedAuthMeta = cleaned ? {
-		token: cleaned,
-		savedAt: Date.now(),
-		userEmail: userEmail ?? cachedAuthMeta?.userEmail ?? null
-	} : null;
+function isValidAppsScriptUrl(url) {
+	const trimmed = (url || "").trim();
+	if (!trimmed) return false;
 	try {
-		if (cleaned && cachedAuthMeta) {
-			window.localStorage.setItem(PERSISTED_AUTH_META_KEY, JSON.stringify(cachedAuthMeta));
-			window.localStorage.setItem(MANUAL_TOKEN_STORAGE_KEY, cleaned);
-		} else {
-			window.localStorage.removeItem(PERSISTED_AUTH_META_KEY);
-			window.localStorage.removeItem(MANUAL_TOKEN_STORAGE_KEY);
-		}
-	} catch {}
-	try {
-		if (cleaned) window.sessionStorage.setItem(MANUAL_TOKEN_STORAGE_KEY, cleaned);
-		else window.sessionStorage.removeItem(MANUAL_TOKEN_STORAGE_KEY);
-	} catch {}
-}
-function getFirebaseProjectId() {
-	return firebase_applet_config_default.projectId || "gen-lang-client-0049307975";
-}
-function createSheetsAuthProvider() {
-	const provider = new GoogleAuthProvider();
-	SCOPES.forEach((scope) => provider.addScope(scope));
-	provider.setCustomParameters({
-		prompt: "select_account consent",
-		include_granted_scopes: "true"
-	});
-	return provider;
-}
-async function verifyTokenHasSheetsScope(accessToken) {
-	try {
-		const res = await fetch(`https://www.googleapis.com/oauth2/v3/tokeninfo?access_token=${encodeURIComponent(accessToken)}`);
-		if (!res.ok) return true;
-		return ((await res.json()).scope || "").includes("https://www.googleapis.com/auth/spreadsheets");
+		const parsed = new URL(trimmed);
+		const isGoogleScriptHost = parsed.hostname === "script.google.com" || parsed.hostname === "script.googleusercontent.com";
+		const isHttps = parsed.protocol === "https:";
+		const hasExecPath = parsed.pathname.includes("/macros/s/") && (parsed.pathname.endsWith("/exec") || parsed.pathname.endsWith("/dev"));
+		return isHttps && isGoogleScriptHost && hasExecPath;
 	} catch {
-		return true;
+		return false;
 	}
 }
-var initAuth = (onAuthSuccess, onAuthFailure) => {
+function loadSheetConnectionConfig() {
+	const fallback = {
+		spreadsheetId: DEFAULT_SPREADSHEET_ID,
+		appsScriptUrl: "",
+		preferredMode: "public_gviz"
+	};
 	try {
-		if (!cachedAccessToken) {
-			const restored = readPersistedAuthMeta();
-			if (restored) {
-				cachedAuthMeta = restored;
-				cachedAccessToken = restored.token;
-			}
-		}
-		if (cachedAccessToken) {
-			if (onAuthSuccess) onAuthSuccess(null, cachedAccessToken);
-		}
-		const authInstance = getSafeAuth();
-		if (!authInstance) {
-			if (!cachedAccessToken && onAuthFailure) onAuthFailure();
-			return () => {};
-		}
-		return onAuthStateChanged(authInstance, async (user) => {
-			if (user && cachedAccessToken) {
-				if (user.email && cachedAuthMeta && !cachedAuthMeta.userEmail) setManualAccessToken(cachedAccessToken, user.email);
-				if (onAuthSuccess) onAuthSuccess(user, cachedAccessToken);
-			} else if (cachedAccessToken) {
-				if (onAuthSuccess) onAuthSuccess(null, cachedAccessToken);
-			} else if (!isSigningIn) {
-				if (onAuthFailure) onAuthFailure();
-			}
-		}, () => {
-			if (!cachedAccessToken && onAuthFailure) onAuthFailure();
-		});
-	} catch {
-		if (!cachedAccessToken && onAuthFailure) onAuthFailure();
-		return () => {};
-	}
-};
-var googleSignIn = async () => {
-	try {
-		const authInstance = getSafeAuth();
-		if (!authInstance) throw new UnauthorizedDomainError(typeof window !== "undefined" ? window.location.hostname || "local-file" : "external-host", getFirebaseProjectId());
-		isSigningIn = true;
-		const result = await signInWithPopup(authInstance, createSheetsAuthProvider());
-		const credential = GoogleAuthProvider.credentialFromResult(result);
-		if (!credential?.accessToken) throw new Error("Failed to obtain Google Sheets access token from sign-in.");
-		if (!await verifyTokenHasSheetsScope(credential.accessToken)) {
-			setManualAccessToken(null);
-			throw new Error("Google Sheets permission was not checked on the consent screen. Please click \"Sign in with Google\" again and check the box for \"See, edit, create, and delete all your Google Sheets spreadsheets\".");
-		}
-		setManualAccessToken(credential.accessToken, result.user.email);
+		const raw = window.localStorage.getItem(STORAGE_KEY_CONNECTION_CONFIG);
+		if (!raw) return fallback;
+		const parsed = JSON.parse(raw);
+		const spreadsheetId = parsed.spreadsheetId && isValidSpreadsheetId(parsed.spreadsheetId) ? parsed.spreadsheetId.trim() : DEFAULT_SPREADSHEET_ID;
+		const appsScriptUrl = parsed.appsScriptUrl && isValidAppsScriptUrl(parsed.appsScriptUrl) ? parsed.appsScriptUrl.trim() : "";
 		return {
-			user: result.user,
-			accessToken: credential.accessToken
+			spreadsheetId,
+			appsScriptUrl,
+			preferredMode: parsed.preferredMode === "apps_script" && appsScriptUrl ? "apps_script" : parsed.preferredMode === "dev_sandbox" ? "dev_sandbox" : appsScriptUrl ? "apps_script" : "public_gviz"
 		};
-	} catch (error) {
-		const errMsg = error instanceof Error ? error.message : String(error);
-		const errCode = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";
-		if (errCode === "auth/unauthorized-domain" || errMsg.includes("auth/unauthorized-domain") || errCode === "auth/operation-not-supported-in-this-environment") throw new UnauthorizedDomainError(typeof window !== "undefined" ? window.location.hostname || "github.io" : "github.io", getFirebaseProjectId());
-		console.error("Sign in error:", error);
-		throw error;
-	} finally {
-		isSigningIn = false;
+	} catch {
+		return fallback;
 	}
-};
-var getAccessToken = async () => {
-	return cachedAccessToken;
-};
-var clearAccessToken = () => {
-	setManualAccessToken(null);
-};
-var logout = async () => {
+}
+function saveSheetConnectionConfig(config) {
+	const normalized = {
+		spreadsheetId: isValidSpreadsheetId(config.spreadsheetId) ? config.spreadsheetId.trim() : DEFAULT_SPREADSHEET_ID,
+		appsScriptUrl: isValidAppsScriptUrl(config.appsScriptUrl) ? config.appsScriptUrl.trim() : "",
+		preferredMode: config.preferredMode
+	};
+	if (normalized.preferredMode === "apps_script" && !normalized.appsScriptUrl) normalized.preferredMode = "public_gviz";
 	try {
-		const authInstance = getSafeAuth();
-		if (authInstance) await authInstance.signOut();
+		window.localStorage.setItem(STORAGE_KEY_CONNECTION_CONFIG, JSON.stringify(normalized));
 	} catch {}
-	setManualAccessToken(null);
-};
+	return normalized;
+}
 // src/lib/sheetsApi.ts
-var SHEETS_BASE_URL = "https://sheets.googleapis.com/v4/spreadsheets";
+var REQUEST_TIMEOUT_MS = 25e3;
+/**
+* Preserved 8-worksheet schema and exact column header definitions.
+* Never alter worksheet names or column ordering so existing records remain 100% compatible.
+*/
 var SHEET_HEADERS = {
 	[SHEET_NAMES.SITES]: [
-		"Site Code",
-		"Site Name",
+		"SiteCode",
+		"SiteName",
 		"Developer",
-		"Region / Location",
-		"Created At"
+		"Location",
+		"CreatedAt"
 	],
 	[SHEET_NAMES.PROJECT_TYPES]: [
-		"Type Code",
-		"Type Name",
+		"TypeCode",
+		"TypeName",
 		"Description",
 		"Active",
-		"Created At"
+		"CreatedAt"
 	],
 	[SHEET_NAMES.PROJECTS]: [
-		"Project ID",
-		"Main Project Code",
-		"Site Code",
-		"Site Name",
+		"ProjectID",
+		"MainProjectCode",
+		"SiteCode",
+		"SiteName",
 		"Developer",
-		"Type Code",
-		"Type Name",
-		"Unit Identifier",
-		"Project Name",
+		"TypeCode",
+		"TypeName",
+		"UnitIdentifier",
+		"ProjectName",
 		"Status",
-		"Created At",
-		"Updated At"
+		"CreatedAt",
+		"UpdatedAt"
 	],
 	[SHEET_NAMES.SUB_PROJECTS]: [
-		"Sub-Project ID",
-		"Project ID",
-		"Main Project Code",
-		"Sub-Project Code",
-		"Sub-Project Name",
+		"SubProjectID",
+		"ProjectID",
+		"MainProjectCode",
+		"SubProjectCode",
+		"SubProjectName",
 		"Status",
-		"Progress (%)",
-		"Target Date",
+		"Progress",
+		"TargetDate",
 		"Remarks",
-		"Updated At"
+		"UpdatedAt"
 	],
 	[SHEET_NAMES.CONTRACTORS]: [
-		"Contractor Code",
-		"Contractor Name",
-		"Specialty / Trade",
-		"Contact Person",
-		"Contact Email / Phone",
+		"ContractorCode",
+		"ContractorName",
+		"Specialty",
+		"ContactPerson",
+		"ContactInfo",
 		"Active",
-		"Created At"
+		"CreatedAt"
 	],
 	[SHEET_NAMES.CONTRACTS_TCP]: [
-		"Contract ID",
-		"Sub-Project ID",
-		"Sub-Project Code",
-		"Sub-Project Name",
-		"Project ID",
-		"Main Project Code",
-		"TCP Type",
-		"TCP Amount",
-		"Contractor Code",
-		"Contractor Name",
-		"Contract Status",
-		"Award Date",
+		"ContractID",
+		"SubProjectID",
+		"SubProjectCode",
+		"SubProjectName",
+		"ProjectID",
+		"MainProjectCode",
+		"TCPType",
+		"TCPAmount",
+		"ContractorCode",
+		"ContractorName",
+		"ContractStatus",
+		"AwardDate",
 		"Remarks",
-		"Updated At",
-		"DP (%)",
-		"Progress Billing (%)",
-		"Retention (%)",
-		"Withholding Tax Applicable",
-		"Withholding Tax (%)",
-		"Payment Terms Notes",
-		"Unique TCP ID",
-		"Parent / Modified Contract ID",
-		"BIR Tax Breakdown JSON"
+		"UpdatedAt",
+		"DPPercent",
+		"ProgressBillingPercent",
+		"RetentionPercent",
+		"HasWithholdingTax",
+		"WithholdingTaxPercent",
+		"PaymentTermsNotes",
+		"TCPID",
+		"ParentContractID",
+		"BIRTaxBreakdownJSON"
 	],
 	[SHEET_NAMES.CONTRACT_PAYMENTS]: [
-		"Payment ID",
-		"Contract ID",
-		"Sub-Project ID",
-		"Sub-Project Code",
-		"Main Project Code",
-		"Contractor Code",
-		"Contractor Name",
-		"Billing Type",
-		"Payment Status",
-		"RFP Number",
-		"RFP Date",
-		"RFP Amount",
-		"RFP Payee",
-		"Retention Deducted",
-		"RFP Remarks",
-		"CV Number",
-		"CV Date",
-		"Amount in Cheque",
-		"Withheld Amount",
-		"Receipt Type Issued",
-		"Receipt Number",
-		"Receipt Date",
-		"Updated At"
+		"PaymentID",
+		"ContractID",
+		"SubProjectID",
+		"SubProjectCode",
+		"MainProjectCode",
+		"ContractorCode",
+		"ContractorName",
+		"BillingType",
+		"PaymentStatus",
+		"RFPNumber",
+		"RFPDate",
+		"RFPAmount",
+		"RFPPayee",
+		"RetentionDeducted",
+		"RFPRemarks",
+		"CVNumber",
+		"CVDate",
+		"ChequeAmount",
+		"WithheldAmount",
+		"ReceiptType",
+		"ReceiptNumber",
+		"ReceiptDate",
+		"UpdatedAt"
 	],
 	[SHEET_NAMES.USER_ACCOUNTS]: [
-		"User ID",
-		"Full Name",
+		"UserID",
+		"FullName",
 		"Email",
-		"Role Title",
+		"RoleTitle",
 		"Department",
 		"Phone",
-		"Account Status",
-		"Bio / Notes",
-		"Permissions JSON",
-		"Created At",
-		"Updated At"
+		"Status",
+		"BioNotes",
+		"PermissionsJSON",
+		"CreatedAt",
+		"UpdatedAt"
 	]
+};
+var REQUIRED_SHEET_NAMES = [
+	SHEET_NAMES.SITES,
+	SHEET_NAMES.PROJECT_TYPES,
+	SHEET_NAMES.PROJECTS,
+	SHEET_NAMES.SUB_PROJECTS,
+	SHEET_NAMES.CONTRACTORS,
+	SHEET_NAMES.CONTRACTS_TCP,
+	SHEET_NAMES.CONTRACT_PAYMENTS,
+	SHEET_NAMES.USER_ACCOUNTS
+];
+var DEFAULT_ADMIN_PERMISSIONS = {
+	projects: {
+		view: true,
+		add: true,
+		edit: true
+	},
+	contracts: {
+		view: true,
+		add: true,
+		edit: true
+	},
+	payments: {
+		view: true,
+		add: true,
+		edit: true
+	},
+	contractors: {
+		view: true,
+		add: true,
+		edit: true
+	},
+	sites: {
+		view: true,
+		add: true,
+		edit: true
+	},
+	admin: {
+		view: true,
+		add: true,
+		edit: true
+	}
 };
 function createFullPermissions() {
 	return {
@@ -21523,7 +11800,7 @@ function createFullPermissions() {
 		}
 	};
 }
-function createDefaultUserPermissions(preset = "engineer") {
+function createDefaultUserPermissions(preset = "viewer") {
 	if (preset === "admin") return createFullPermissions();
 	if (preset === "engineer") return {
 		projects: {
@@ -21533,12 +11810,12 @@ function createDefaultUserPermissions(preset = "engineer") {
 		},
 		contracts: {
 			view: true,
-			add: false,
-			edit: false
+			add: true,
+			edit: true
 		},
 		payments: {
 			view: true,
-			add: false,
+			add: true,
 			edit: false
 		},
 		contractors: {
@@ -21548,8 +11825,8 @@ function createDefaultUserPermissions(preset = "engineer") {
 		},
 		sites: {
 			view: true,
-			add: true,
-			edit: true
+			add: false,
+			edit: false
 		},
 		admin: {
 			view: false,
@@ -21622,1178 +11899,1240 @@ function createDefaultUserPermissions(preset = "engineer") {
 		}
 	};
 }
+/**
+* Strictly synthetic placeholder user accounts (zero personal names or real emails).
+*/
 var SAMPLE_USER_ACCOUNTS = [
 	{
 		userId: "USR-0001",
-		fullName: "Louie Sarmiento",
-		email: "lasarmiento.apec@gmail.com",
+		fullName: "Dev System Administrator",
+		email: "admin.dev@example.com",
 		roleTitle: "System Administrator",
-		department: "Executive & Project Controls",
-		phone: "+63 917 100 0001",
+		department: "Project Controls",
+		phone: "+63 900 000 0001",
 		status: "ACTIVE",
-		bioNotes: "Full administrative access across all project, contract, payment, and backend modules.",
-		permissions: createDefaultUserPermissions("admin")
+		bioNotes: "Placeholder dev profile with full access across all modules.",
+		permissions: DEFAULT_ADMIN_PERMISSIONS,
+		createdAt: "2025-10-01",
+		updatedAt: "2025-10-01"
 	},
 	{
 		userId: "USR-0002",
-		fullName: "Engr. Mateo Cruz",
-		email: "mcruz.ops@apec.com",
-		roleTitle: "Lead Project Engineer",
-		department: "Site Engineering & Operations",
-		phone: "+63 917 200 0002",
+		fullName: "Sample Project Manager",
+		email: "pm.dev@example.com",
+		roleTitle: "Project Manager",
+		department: "Engineering & Site Operations",
+		phone: "+63 900 000 0002",
 		status: "ACTIVE",
-		bioNotes: "Manages main project creation, linked sub-projects, and site directories.",
-		permissions: createDefaultUserPermissions("engineer")
+		bioNotes: "Placeholder dev profile for project and contract workflows.",
+		permissions: {
+			projects: {
+				view: true,
+				add: true,
+				edit: true
+			},
+			contracts: {
+				view: true,
+				add: true,
+				edit: true
+			},
+			payments: {
+				view: true,
+				add: true,
+				edit: false
+			},
+			contractors: {
+				view: true,
+				add: true,
+				edit: true
+			},
+			sites: {
+				view: true,
+				add: true,
+				edit: false
+			},
+			admin: {
+				view: true,
+				add: false,
+				edit: false
+			}
+		},
+		createdAt: "2025-10-01",
+		updatedAt: "2025-10-01"
 	},
 	{
 		userId: "USR-0003",
-		fullName: "Bianca Reyes, CPA",
-		email: "breyes.fin@apec.com",
-		roleTitle: "Contracts & Finance Officer",
-		department: "Quantity Surveying & Treasury",
-		phone: "+63 917 300 0003",
+		fullName: "Sample Finance Officer",
+		email: "finance.dev@example.com",
+		roleTitle: "Finance & Disbursement Officer",
+		department: "Finance & Accounting",
+		phone: "+63 900 000 0003",
 		status: "ACTIVE",
-		bioNotes: "Handles Sub-Project TCP contract awards, RFPs, Cheque Vouchers (CV), and OR/CR receipts.",
-		permissions: createDefaultUserPermissions("finance")
+		bioNotes: "Placeholder dev profile for RFP, CV, BIR 2307, and Receipt tracking.",
+		permissions: {
+			projects: {
+				view: true,
+				add: false,
+				edit: false
+			},
+			contracts: {
+				view: true,
+				add: false,
+				edit: false
+			},
+			payments: {
+				view: true,
+				add: true,
+				edit: true
+			},
+			contractors: {
+				view: true,
+				add: false,
+				edit: true
+			},
+			sites: {
+				view: true,
+				add: false,
+				edit: false
+			},
+			admin: {
+				view: false,
+				add: false,
+				edit: false
+			}
+		},
+		createdAt: "2025-10-01",
+		updatedAt: "2025-10-01"
 	},
 	{
 		userId: "USR-0004",
-		fullName: "Arthur Lim",
-		email: "alim.audit@apec.com",
-		roleTitle: "Internal Auditor (View-Only)",
-		department: "Compliance & Audit",
-		phone: "+63 917 400 0004",
+		fullName: "Sample Read-Only Auditor",
+		email: "auditor.dev@example.com",
+		roleTitle: "Auditor (Read-Only)",
+		department: "Internal Audit",
+		phone: "+63 900 000 0004",
 		status: "ACTIVE",
-		bioNotes: "Read-only monitoring access across projects, contracts, and payment ledgers.",
-		permissions: createDefaultUserPermissions("viewer")
+		bioNotes: "Placeholder dev profile with read-only audit visibility.",
+		permissions: {
+			projects: {
+				view: true,
+				add: false,
+				edit: false
+			},
+			contracts: {
+				view: true,
+				add: false,
+				edit: false
+			},
+			payments: {
+				view: true,
+				add: false,
+				edit: false
+			},
+			contractors: {
+				view: true,
+				add: false,
+				edit: false
+			},
+			sites: {
+				view: true,
+				add: false,
+				edit: false
+			},
+			admin: {
+				view: true,
+				add: false,
+				edit: false
+			}
+		},
+		createdAt: "2025-10-01",
+		updatedAt: "2025-10-01"
 	}
 ];
-var SAMPLE_SITES = [
-	{
-		siteCode: "MNL01",
-		siteName: "Vertis North Central",
-		developer: "Ayala Land Premier",
-		location: "Quezon City, Metro Manila"
-	},
-	{
-		siteCode: "BGC02",
-		siteName: "Park Triangle District",
-		developer: "Alveo Land Corp.",
-		location: "Bonifacio Global City, Taguig"
-	},
-	{
-		siteCode: "CEB01",
-		siteName: "Cebu IT Park Tower",
-		developer: "Cebu Holdings Inc.",
-		location: "Lahug, Cebu City"
-	},
-	{
-		siteCode: "MKT03",
-		siteName: "Circuit Makati Riverfront",
-		developer: "Avida Land Corp.",
-		location: "Makati City, Metro Manila"
-	}
+var STARTER_SITES = [
+	[
+		"SITE1",
+		"Northgate Residential Phase 1 (Sample)",
+		"Sample Development Corp",
+		"North Metro District",
+		"2025-10-01"
+	],
+	[
+		"SITE2",
+		"Central Commercial Annex (Sample)",
+		"Example Estates Inc.",
+		"Central Business District",
+		"2025-10-05"
+	],
+	[
+		"SITE3",
+		"South Logistics Hub (Sample)",
+		"Demo Industrial Holdings",
+		"South Corridor",
+		"2025-10-12"
+	]
 ];
-var SAMPLE_PROJECT_TYPES = [
-	{
-		typeCode: "RES",
-		typeName: "Residential Tower",
-		description: "High-rise residential condominium units and amenities",
-		active: true
-	},
-	{
-		typeCode: "COM",
-		typeName: "Commercial Retail",
-		description: "Retail podiums, mall expansions, and leasable spaces",
-		active: true
-	},
-	{
-		typeCode: "OFC",
-		typeName: "Corporate Office",
-		description: "Grade-A office floors and enterprise BPO headquarters",
-		active: true
-	},
-	{
-		typeCode: "INF",
-		typeName: "Site Infrastructure",
-		description: "Road networks, underground utilities, and drainage works",
-		active: true
-	},
-	{
-		typeCode: "FIT",
-		typeName: "Interior Fit-Out",
-		description: "Turnkey unit handover, MEPFS, and architectural finishes",
-		active: true
-	}
+var STARTER_PROJECT_TYPES = [
+	[
+		"ST7",
+		"Standard Unit Utility & Power Package",
+		"Unit electrical load schedule, meter base, service deposit, and line extension",
+		true,
+		"2025-10-01"
+	],
+	[
+		"CIV",
+		"Civil & Structural Works",
+		"Foundation, structural framing, concrete works, and site grading",
+		true,
+		"2025-10-01"
+	],
+	[
+		"MEP",
+		"Mechanical, Electrical & Plumbing (MEPF)",
+		"HVAC, electrical distribution, fire protection, and plumbing networks",
+		true,
+		"2025-10-01"
+	],
+	[
+		"ARC",
+		"Architectural & Fit-Out",
+		"Interior partitions, masonry, facade glazing, and finishing works",
+		true,
+		"2025-10-01"
+	]
 ];
-var SAMPLE_CONTRACTORS = [
-	{
-		contractorCode: "CTR-0001",
-		contractorName: "Makati Development Corp.",
-		specialty: "General Civil & Structural Works",
-		contactPerson: "Engr. Marco Villanueva",
-		contactInfo: "mvillanueva@mdc.com.ph",
-		active: true
-	},
-	{
-		contractorCode: "CTR-0002",
-		contractorName: "EEI Corporation",
-		specialty: "Electromechanical & MEPFS",
-		contactPerson: "Engr. Clarissa Santos",
-		contactInfo: "csantos@eei.com.ph",
-		active: true
-	},
-	{
-		contractorCode: "CTR-0003",
-		contractorName: "D.M. Consunji, Inc.",
-		specialty: "High-Rise Building & Foundation",
-		contactPerson: "Engr. Rafael Consunji",
-		contactInfo: "tenders@dmcihomes.com",
-		active: true
-	},
-	{
-		contractorCode: "CTR-0004",
-		contractorName: "DATEM Incorporated",
-		specialty: "Precast & Architectural Fit-Out",
-		contactPerson: "Ar. Patricia Gomez",
-		contactInfo: "pgomez@datem.com.ph",
-		active: true
-	}
+var STARTER_CONTRACTORS = [
+	[
+		"CTR-0001",
+		"Sample Power Engineering Services",
+		"Electrical Engineering, Sign & Seal",
+		"Sample Contact A",
+		"contact.a@example.com",
+		true,
+		"2025-10-01"
+	],
+	[
+		"CTR-0002",
+		"Demo Electrical & Civil Builders",
+		"Meter Base & Power Distribution",
+		"Sample Contact B",
+		"contact.b@example.com",
+		true,
+		"2025-10-01"
+	],
+	[
+		"CTR-0003",
+		"Sample Electric Utility Co.",
+		"Service Deposit & Line Extension",
+		"Utility Account Desk",
+		"utility@example.com",
+		true,
+		"2025-10-01"
+	],
+	[
+		"CTR-0004",
+		"Example MEPF Systems Inc.",
+		"Switchgear & Heavy MEPF",
+		"Sample Contact D",
+		"contact.d@example.com",
+		true,
+		"2025-10-10"
+	]
 ];
-var AuthRequiredError = class extends Error {
-	constructor(message = "Google Sheets authentication token expired or unavailable.") {
-		super(message);
-		this.name = "AuthRequiredError";
-	}
-};
-async function fetchWithAuth(url, options = {}) {
-	const token = await getAccessToken();
-	if (!token) throw new AuthRequiredError();
-	const response = await fetch(url, {
-		...options,
-		headers: {
-			Authorization: `Bearer ${token}`,
-			"Content-Type": "application/json",
-			...options.headers || {}
-		}
-	});
-	if (response.status === 401) {
-		clearAccessToken();
-		throw new AuthRequiredError("Your Google session expired. Please sign in again.");
-	}
-	if (!response.ok) {
-		let errorDetail = response.statusText;
-		try {
-			errorDetail = (await response.json())?.error?.message || errorDetail;
-		} catch {}
-		if (response.status === 403 && errorDetail.toLowerCase().includes("insufficient authentication scopes")) {
-			clearAccessToken();
-			throw new AuthRequiredError("Insufficient Google Sheets permissions. Please sign in again and make sure to check the box for \"See, edit, create, and delete all your Google Sheets spreadsheets\" on the Google consent screen.");
-		}
-		throw new Error(`Google Sheets API Error (${response.status}): ${errorDetail}`);
-	}
-	return response.json();
-}
-function normalizeStatus(raw) {
-	const cleaned = (raw || "").trim();
-	if (PROJECT_STATUS_OPTIONS.includes(cleaned)) return cleaned;
-	return "Started";
-}
-function normalizeTCPType(raw) {
-	const cleaned = (raw || "").trim();
-	return TCP_TYPE_OPTIONS.find((opt) => opt.toLowerCase() === cleaned.toLowerCase()) || "Original";
-}
-function normalizeContractStatus(raw) {
-	const cleaned = (raw || "").trim().toUpperCase();
-	if (CONTRACT_STATUS_OPTIONS.includes(cleaned)) return cleaned;
-	return "OPEN";
-}
-function normalizeBillingType(raw) {
-	const cleaned = (raw || "").trim();
-	return PAYMENT_BILLING_TYPE_OPTIONS.find((opt) => opt.toLowerCase() === cleaned.toLowerCase()) || "Progress Billing";
-}
-function normalizePaymentStatus(raw) {
-	const cleaned = (raw || "").trim().toUpperCase();
-	if (cleaned === "RFP_SUBMITTED" || cleaned === "CHEQUE_RELEASED" || cleaned === "RECEIVED" || cleaned === "CANCELLED") return cleaned;
-	return "RFP_SUBMITTED";
-}
-function parseNumberSafe(raw, fallback = 0) {
-	const cleaned = (raw || "").replace(/,/g, "").trim();
-	const parsed = Number.parseFloat(cleaned);
-	return Number.isNaN(parsed) ? fallback : parsed;
-}
-function parsePermissionsSafe(raw) {
-	const fallback = createFullPermissions();
-	if (!raw) return fallback;
-	try {
-		const parsed = JSON.parse(raw);
-		const keys = [
-			"projects",
-			"contracts",
-			"payments",
-			"contractors",
-			"sites",
-			"admin"
-		];
-		const result = { ...fallback };
-		for (const k of keys) if (parsed[k] && typeof parsed[k] === "object") result[k] = {
-			view: Boolean(parsed[k].view),
-			add: Boolean(parsed[k].add),
-			edit: Boolean(parsed[k].edit)
-		};
-		return result;
-	} catch {
-		return fallback;
-	}
-}
-async function inspectAndLoadSpreadsheet(spreadsheetId) {
-	const cleanId = spreadsheetId.trim();
-	const meta = await fetchWithAuth(`${SHEETS_BASE_URL}/${cleanId}`);
-	const existingSheets = (meta.sheets || []).map((s) => s.properties?.title || "").filter(Boolean);
-	const requiredSheets = [
-		SHEET_NAMES.SITES,
-		SHEET_NAMES.PROJECT_TYPES,
-		SHEET_NAMES.PROJECTS,
-		SHEET_NAMES.SUB_PROJECTS,
-		SHEET_NAMES.CONTRACTORS,
-		SHEET_NAMES.CONTRACTS_TCP,
-		SHEET_NAMES.CONTRACT_PAYMENTS,
-		SHEET_NAMES.USER_ACCOUNTS
-	];
-	const missingSheets = requiredSheets.filter((reqName) => !existingSheets.includes(reqName));
-	const presentRequiredSheets = requiredSheets.filter((reqName) => existingSheets.includes(reqName));
-	const sites = [];
-	const projectTypes = [];
-	const projects = [];
-	const subProjects = [];
-	const contractors = [];
-	const contractsTCP = [];
-	const contractPayments = [];
-	const userAccounts = [];
-	if (presentRequiredSheets.length > 0) {
-		const valueRanges = (await fetchWithAuth(`${SHEETS_BASE_URL}/${cleanId}/values:batchGet?${presentRequiredSheets.map((sheetName) => `ranges=${encodeURIComponent(`${sheetName}!A1:W2000`)}`).join("&")}`)).valueRanges || [];
-		for (const vr of valueRanges) {
-			const sheetTitle = (vr.range || "").split("!")[0]?.replace(/^'|'$/g, "");
-			const rows = vr.values || [];
-			if (sheetTitle === SHEET_NAMES.SITES) for (let i = 1; i < rows.length; i++) {
-				const row = rows[i];
-				if (!row || !row[0] && !row[1]) continue;
-				sites.push({
-					rowNumber: i + 1,
-					siteCode: (row[0] || "").trim().toUpperCase(),
-					siteName: (row[1] || "").trim(),
-					developer: (row[2] || "").trim(),
-					location: (row[3] || "").trim(),
-					createdAt: (row[4] || "").trim()
-				});
-			}
-			else if (sheetTitle === SHEET_NAMES.PROJECT_TYPES) for (let i = 1; i < rows.length; i++) {
-				const row = rows[i];
-				if (!row || !row[0] && !row[1]) continue;
-				const activeRaw = (row[3] || "TRUE").trim().toUpperCase();
-				projectTypes.push({
-					rowNumber: i + 1,
-					typeCode: (row[0] || "").trim().toUpperCase(),
-					typeName: (row[1] || "").trim(),
-					description: (row[2] || "").trim(),
-					active: activeRaw !== "FALSE" && activeRaw !== "0" && activeRaw !== "NO",
-					createdAt: (row[4] || "").trim()
-				});
-			}
-			else if (sheetTitle === SHEET_NAMES.PROJECTS) for (let i = 1; i < rows.length; i++) {
-				const row = rows[i];
-				if (!row || !row[0] && !row[1]) continue;
-				projects.push({
-					rowNumber: i + 1,
-					projectId: (row[0] || "").trim(),
-					mainProjectCode: (row[1] || "").trim().toUpperCase(),
-					siteCode: (row[2] || "").trim().toUpperCase(),
-					siteName: (row[3] || "").trim(),
-					developer: (row[4] || "").trim(),
-					typeCode: (row[5] || "").trim().toUpperCase(),
-					typeName: (row[6] || "").trim(),
-					unitIdentifier: (row[7] || "").trim().toUpperCase(),
-					projectName: (row[8] || "").trim(),
-					status: normalizeStatus(row[9]),
-					createdAt: (row[10] || "").trim(),
-					updatedAt: (row[11] || "").trim()
-				});
-			}
-			else if (sheetTitle === SHEET_NAMES.SUB_PROJECTS) for (let i = 1; i < rows.length; i++) {
-				const row = rows[i];
-				if (!row || !row[0] && !row[1]) continue;
-				const parsedProgress = Number.parseInt(row[6] || "0", 10);
-				subProjects.push({
-					rowNumber: i + 1,
-					subProjectId: (row[0] || "").trim(),
-					projectId: (row[1] || "").trim(),
-					mainProjectCode: (row[2] || "").trim().toUpperCase(),
-					subProjectCode: (row[3] || "").trim().toUpperCase(),
-					subProjectName: (row[4] || "").trim(),
-					status: normalizeStatus(row[5]),
-					progress: Number.isNaN(parsedProgress) ? 0 : Math.min(100, Math.max(0, parsedProgress)),
-					targetDate: (row[7] || "").trim(),
-					remarks: (row[8] || "").trim(),
-					updatedAt: (row[9] || "").trim()
-				});
-			}
-			else if (sheetTitle === SHEET_NAMES.CONTRACTORS) for (let i = 1; i < rows.length; i++) {
-				const row = rows[i];
-				if (!row || !row[0] && !row[1]) continue;
-				const activeRaw = (row[5] || "TRUE").trim().toUpperCase();
-				contractors.push({
-					rowNumber: i + 1,
-					contractorCode: (row[0] || "").trim().toUpperCase(),
-					contractorName: (row[1] || "").trim(),
-					specialty: (row[2] || "").trim(),
-					contactPerson: (row[3] || "").trim(),
-					contactInfo: (row[4] || "").trim(),
-					active: activeRaw !== "FALSE" && activeRaw !== "0" && activeRaw !== "NO",
-					createdAt: (row[6] || "").trim()
-				});
-			}
-			else if (sheetTitle === SHEET_NAMES.CONTRACTS_TCP) for (let i = 1; i < rows.length; i++) {
-				const row = rows[i];
-				if (!row || !row[0] && !row[1]) continue;
-				const dpPct = parseNumberSafe(row[14], 20);
-				const progPct = parseNumberSafe(row[15], 70);
-				const retPct = parseNumberSafe(row[16], 10);
-				const whtRaw = (row[17] || "TRUE").trim().toUpperCase();
-				const hasWht = whtRaw !== "FALSE" && whtRaw !== "0" && whtRaw !== "NO";
-				const whtPct = parseNumberSafe(row[18], hasWht ? 2 : 0);
-				const cId = (row[0] || "").trim();
-				const rawTcpId = (row[20] || "").trim();
-				const fallbackTcpId = cId ? `TCP-${cId.replace(/^CON-/i, "")}` : `TCP-${String(i).padStart(4, "0")}`;
-				let parsedBirTax = void 0;
-				if (row[22]) try {
-					parsedBirTax = JSON.parse(row[22]);
-				} catch {
-					parsedBirTax = void 0;
-				}
-				contractsTCP.push({
-					rowNumber: i + 1,
-					contractId: cId,
-					tcpId: rawTcpId || fallbackTcpId,
-					parentContractId: (row[21] || "").trim(),
-					subProjectId: (row[1] || "").trim(),
-					subProjectCode: (row[2] || "").trim().toUpperCase(),
-					subProjectName: (row[3] || "").trim(),
-					projectId: (row[4] || "").trim(),
-					mainProjectCode: (row[5] || "").trim().toUpperCase(),
-					tcpType: normalizeTCPType(row[6]),
-					tcpAmount: parseNumberSafe(row[7], 0),
-					contractorCode: (row[8] || "").trim().toUpperCase(),
-					contractorName: (row[9] || "").trim(),
-					contractStatus: normalizeContractStatus(row[10]),
-					awardDate: (row[11] || "").trim(),
-					remarks: (row[12] || "").trim(),
-					updatedAt: (row[13] || "").trim(),
-					dpPercent: dpPct,
-					progressBillingPercent: progPct,
-					retentionPercent: retPct,
-					hasWithholdingTax: hasWht,
-					withholdingTaxPercent: hasWht ? whtPct : 0,
-					paymentTermsNotes: (row[19] || "").trim(),
-					birTaxInfo: parsedBirTax
-				});
-			}
-			else if (sheetTitle === SHEET_NAMES.CONTRACT_PAYMENTS) for (let i = 1; i < rows.length; i++) {
-				const row = rows[i];
-				if (!row || !row[0] && !row[1]) continue;
-				contractPayments.push({
-					rowNumber: i + 1,
-					paymentId: (row[0] || "").trim(),
-					contractId: (row[1] || "").trim(),
-					subProjectId: (row[2] || "").trim(),
-					subProjectCode: (row[3] || "").trim().toUpperCase(),
-					mainProjectCode: (row[4] || "").trim().toUpperCase(),
-					contractorCode: (row[5] || "").trim().toUpperCase(),
-					contractorName: (row[6] || "").trim(),
-					billingType: normalizeBillingType(row[7]),
-					paymentStatus: normalizePaymentStatus(row[8]),
-					rfpNumber: (row[9] || "").trim().toUpperCase(),
-					rfpDate: (row[10] || "").trim(),
-					rfpAmount: parseNumberSafe(row[11], 0),
-					rfpPayee: (row[12] || "").trim(),
-					retentionDeducted: parseNumberSafe(row[13], 0),
-					rfpRemarks: (row[14] || "").trim(),
-					cvNumber: (row[15] || "").trim().toUpperCase(),
-					cvDate: (row[16] || "").trim(),
-					chequeAmount: parseNumberSafe(row[17], 0),
-					withheldAmount: parseNumberSafe(row[18], 0),
-					receiptType: (row[19] || "").trim(),
-					receiptNumber: (row[20] || "").trim().toUpperCase(),
-					receiptDate: (row[21] || "").trim(),
-					updatedAt: (row[22] || "").trim()
-				});
-			}
-			else if (sheetTitle === SHEET_NAMES.USER_ACCOUNTS) for (let i = 1; i < rows.length; i++) {
-				const row = rows[i];
-				if (!row || !row[0] && !row[1]) continue;
-				const st = (row[6] || "ACTIVE").trim().toUpperCase() === "SUSPENDED" ? "SUSPENDED" : "ACTIVE";
-				userAccounts.push({
-					rowNumber: i + 1,
-					userId: (row[0] || "").trim().toUpperCase(),
-					fullName: (row[1] || "").trim(),
-					email: (row[2] || "").trim(),
-					roleTitle: (row[3] || "").trim(),
-					department: (row[4] || "").trim(),
-					phone: (row[5] || "").trim(),
-					status: st,
-					bioNotes: (row[7] || "").trim(),
-					permissions: parsePermissionsSafe(row[8]),
-					createdAt: (row[9] || "").trim(),
-					updatedAt: (row[10] || "").trim()
-				});
-			}
-		}
-	}
-	return {
-		spreadsheetId: cleanId,
-		title: meta.properties?.title || "Project Monitoring Spreadsheet",
-		spreadsheetUrl: meta.spreadsheetUrl || `https://docs.google.com/spreadsheets/d/${cleanId}/edit`,
-		existingSheets,
-		missingSheets,
-		isSchemaReady: missingSheets.length === 0,
-		sites,
-		projectTypes,
-		projects,
-		subProjects,
-		contractors,
-		contractsTCP,
-		contractPayments,
-		userAccounts,
-		lastSyncedAt: (/* @__PURE__ */ new Date()).toISOString()
-	};
-}
-/**
-* Simple RFC-4180 CSV parser for Google Sheets gviz/tq?tqx=out:csv responses.
-*/
 function parseCsvToRows(csvText) {
 	const rows = [];
 	let currentRow = [];
-	let currentCell = "";
+	let currentVal = "";
 	let inQuotes = false;
 	for (let i = 0; i < csvText.length; i++) {
 		const ch = csvText[i];
 		const next = csvText[i + 1];
 		if (inQuotes) {
 			if (ch === "\"" && next === "\"") {
-				currentCell += "\"";
+				currentVal += "\"";
 				i++;
 			} else if (ch === "\"") inQuotes = false;
-			else currentCell += ch;
+			else currentVal += ch;
 		} else if (ch === "\"") inQuotes = true;
 		else if (ch === ",") {
-			currentRow.push(currentCell);
-			currentCell = "";
+			currentRow.push(currentVal);
+			currentVal = "";
 		} else if (ch === "\r" && next === "\n") {
-			currentRow.push(currentCell);
+			currentRow.push(currentVal);
 			rows.push(currentRow);
 			currentRow = [];
-			currentCell = "";
+			currentVal = "";
 			i++;
 		} else if (ch === "\n" || ch === "\r") {
-			currentRow.push(currentCell);
+			currentRow.push(currentVal);
 			rows.push(currentRow);
 			currentRow = [];
-			currentCell = "";
-		} else currentCell += ch;
+			currentVal = "";
+		} else currentVal += ch;
 	}
-	if (currentCell.length > 0 || currentRow.length > 0) {
-		currentRow.push(currentCell);
+	if (currentVal.length > 0 || currentRow.length > 0) {
+		currentRow.push(currentVal);
 		rows.push(currentRow);
 	}
-	return rows;
+	return rows.filter((r) => r.some((cell) => cell.trim() !== ""));
 }
 /**
-* Syncs all 8 tabs directly from a link-shared Google Sheet ("Anyone with the link can view")
-* via Google's CORS-enabled gviz CSV export endpoint. Works on GitHub Pages, Netlify, and Google Sites
-* without requiring Firebase domain allowlisting.
+* Validates that a CSV/table header row actually matches the expected worksheet.
+* Prevents the Google Visualization API missing-tab fallback bug where requesting
+* a nonexistent tab silently returns Sheet 1's rows with HTTP 200.
 */
-async function inspectAndLoadSpreadsheetPublicGviz(spreadsheetId) {
-	const cleanId = spreadsheetId.trim();
-	const requiredSheets = [
-		SHEET_NAMES.SITES,
-		SHEET_NAMES.PROJECT_TYPES,
-		SHEET_NAMES.PROJECTS,
-		SHEET_NAMES.SUB_PROJECTS,
-		SHEET_NAMES.CONTRACTORS,
-		SHEET_NAMES.CONTRACTS_TCP,
-		SHEET_NAMES.CONTRACT_PAYMENTS,
-		SHEET_NAMES.USER_ACCOUNTS
-	];
-	const sites = [];
-	const projectTypes = [];
-	const projects = [];
-	const subProjects = [];
-	const contractors = [];
-	const contractsTCP = [];
-	const contractPayments = [];
-	const userAccounts = [];
-	const existingSheets = [];
-	await Promise.all(requiredSheets.map(async (sheetTitle) => {
-		const url = `https://docs.google.com/spreadsheets/d/${encodeURIComponent(cleanId)}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetTitle)}`;
-		const res = await fetch(url, { cache: "no-store" });
-		if (!res.ok) throw new Error(`Could not fetch shared Google Sheet (${res.status}). Ensure your Google Sheet is shared as "Anyone with the link" or connect using a Google Sheets OAuth Access Token.`);
-		const text = await res.text();
-		if (text.trim().startsWith("<!DOCTYPE html") || text.trim().startsWith("<html")) throw new Error("This Google Sheet is private. Either paste a Google Sheets OAuth Access Token below, or set General Access in Google Sheets Share settings to \"Anyone with the link\".");
-		const rows = parseCsvToRows(text);
-		if (rows.length === 0) return;
-		existingSheets.push(sheetTitle);
-		if (sheetTitle === SHEET_NAMES.SITES) for (let i = 1; i < rows.length; i++) {
-			const row = rows[i];
-			if (!row || !row[0] && !row[1]) continue;
-			sites.push({
-				rowNumber: i + 1,
-				siteCode: (row[0] || "").trim().toUpperCase(),
-				siteName: (row[1] || "").trim(),
-				developer: (row[2] || "").trim(),
-				location: (row[3] || "").trim(),
-				createdAt: (row[4] || "").trim()
-			});
-		}
-		else if (sheetTitle === SHEET_NAMES.PROJECT_TYPES) for (let i = 1; i < rows.length; i++) {
-			const row = rows[i];
-			if (!row || !row[0] && !row[1]) continue;
-			const activeRaw = (row[3] || "TRUE").trim().toUpperCase();
-			projectTypes.push({
-				rowNumber: i + 1,
-				typeCode: (row[0] || "").trim().toUpperCase(),
-				typeName: (row[1] || "").trim(),
-				description: (row[2] || "").trim(),
-				active: activeRaw !== "FALSE" && activeRaw !== "0" && activeRaw !== "NO",
-				createdAt: (row[4] || "").trim()
-			});
-		}
-		else if (sheetTitle === SHEET_NAMES.PROJECTS) for (let i = 1; i < rows.length; i++) {
-			const row = rows[i];
-			if (!row || !row[0] && !row[1]) continue;
-			projects.push({
-				rowNumber: i + 1,
-				projectId: (row[0] || "").trim(),
-				mainProjectCode: (row[1] || "").trim().toUpperCase(),
-				siteCode: (row[2] || "").trim().toUpperCase(),
-				siteName: (row[3] || "").trim(),
-				developer: (row[4] || "").trim(),
-				typeCode: (row[5] || "").trim().toUpperCase(),
-				typeName: (row[6] || "").trim(),
-				unitIdentifier: (row[7] || "").trim().toUpperCase(),
-				projectName: (row[8] || "").trim(),
-				status: normalizeStatus(row[9]),
-				createdAt: (row[10] || "").trim(),
-				updatedAt: (row[11] || "").trim()
-			});
-		}
-		else if (sheetTitle === SHEET_NAMES.SUB_PROJECTS) for (let i = 1; i < rows.length; i++) {
-			const row = rows[i];
-			if (!row || !row[0] && !row[1]) continue;
-			const parsedProgress = Number.parseInt(row[6] || "0", 10);
-			subProjects.push({
-				rowNumber: i + 1,
-				subProjectId: (row[0] || "").trim(),
-				projectId: (row[1] || "").trim(),
-				mainProjectCode: (row[2] || "").trim().toUpperCase(),
-				subProjectCode: (row[3] || "").trim().toUpperCase(),
-				subProjectName: (row[4] || "").trim(),
-				status: normalizeStatus(row[5]),
-				progress: Number.isNaN(parsedProgress) ? 0 : Math.min(100, Math.max(0, parsedProgress)),
-				targetDate: (row[7] || "").trim(),
-				remarks: (row[8] || "").trim(),
-				updatedAt: (row[9] || "").trim()
-			});
-		}
-		else if (sheetTitle === SHEET_NAMES.CONTRACTORS) for (let i = 1; i < rows.length; i++) {
-			const row = rows[i];
-			if (!row || !row[0] && !row[1]) continue;
-			const activeRaw = (row[5] || "TRUE").trim().toUpperCase();
-			contractors.push({
-				rowNumber: i + 1,
-				contractorCode: (row[0] || "").trim().toUpperCase(),
-				contractorName: (row[1] || "").trim(),
-				specialty: (row[2] || "").trim(),
-				contactPerson: (row[3] || "").trim(),
-				contactInfo: (row[4] || "").trim(),
-				active: activeRaw !== "FALSE" && activeRaw !== "0" && activeRaw !== "NO",
-				createdAt: (row[6] || "").trim()
-			});
-		}
-		else if (sheetTitle === SHEET_NAMES.CONTRACTS_TCP) for (let i = 1; i < rows.length; i++) {
-			const row = rows[i];
-			if (!row || !row[0] && !row[1]) continue;
-			const dpPct = parseNumberSafe(row[14], 20);
-			const progPct = parseNumberSafe(row[15], 70);
-			const retPct = parseNumberSafe(row[16], 10);
-			const whtRaw = (row[17] || "TRUE").trim().toUpperCase();
-			const hasWht = whtRaw !== "FALSE" && whtRaw !== "0" && whtRaw !== "NO";
-			const whtPct = parseNumberSafe(row[18], hasWht ? 2 : 0);
-			const cId = (row[0] || "").trim();
-			const rawTcpId = (row[20] || "").trim();
-			const fallbackTcpId = cId ? `TCP-${cId.replace(/^CON-/i, "")}` : `TCP-${String(i).padStart(4, "0")}`;
-			let parsedBirTax = void 0;
-			if (row[22]) try {
-				parsedBirTax = JSON.parse(row[22]);
-			} catch {
-				parsedBirTax = void 0;
-			}
-			contractsTCP.push({
-				rowNumber: i + 1,
-				contractId: cId,
-				tcpId: rawTcpId || fallbackTcpId,
-				parentContractId: (row[21] || "").trim(),
-				subProjectId: (row[1] || "").trim(),
-				subProjectCode: (row[2] || "").trim().toUpperCase(),
-				subProjectName: (row[3] || "").trim(),
-				projectId: (row[4] || "").trim(),
-				mainProjectCode: (row[5] || "").trim().toUpperCase(),
-				tcpType: normalizeTCPType(row[6]),
-				tcpAmount: parseNumberSafe(row[7], 0),
-				contractorCode: (row[8] || "").trim().toUpperCase(),
-				contractorName: (row[9] || "").trim(),
-				contractStatus: normalizeContractStatus(row[10]),
-				awardDate: (row[11] || "").trim(),
-				remarks: (row[12] || "").trim(),
-				updatedAt: (row[13] || "").trim(),
-				dpPercent: dpPct,
-				progressBillingPercent: progPct,
-				retentionPercent: retPct,
-				hasWithholdingTax: hasWht,
-				withholdingTaxPercent: hasWht ? whtPct : 0,
-				paymentTermsNotes: (row[19] || "").trim(),
-				birTaxInfo: parsedBirTax
-			});
-		}
-		else if (sheetTitle === SHEET_NAMES.CONTRACT_PAYMENTS) for (let i = 1; i < rows.length; i++) {
-			const row = rows[i];
-			if (!row || !row[0] && !row[1]) continue;
-			contractPayments.push({
-				rowNumber: i + 1,
-				paymentId: (row[0] || "").trim(),
-				contractId: (row[1] || "").trim(),
-				subProjectId: (row[2] || "").trim(),
-				subProjectCode: (row[3] || "").trim().toUpperCase(),
-				mainProjectCode: (row[4] || "").trim().toUpperCase(),
-				contractorCode: (row[5] || "").trim().toUpperCase(),
-				contractorName: (row[6] || "").trim(),
-				billingType: normalizeBillingType(row[7]),
-				paymentStatus: normalizePaymentStatus(row[8]),
-				rfpNumber: (row[9] || "").trim().toUpperCase(),
-				rfpDate: (row[10] || "").trim(),
-				rfpAmount: parseNumberSafe(row[11], 0),
-				rfpPayee: (row[12] || "").trim(),
-				retentionDeducted: parseNumberSafe(row[13], 0),
-				rfpRemarks: (row[14] || "").trim(),
-				cvNumber: (row[15] || "").trim().toUpperCase(),
-				cvDate: (row[16] || "").trim(),
-				chequeAmount: parseNumberSafe(row[17], 0),
-				withheldAmount: parseNumberSafe(row[18], 0),
-				receiptType: (row[19] || "").trim(),
-				receiptNumber: (row[20] || "").trim().toUpperCase(),
-				receiptDate: (row[21] || "").trim(),
-				updatedAt: (row[22] || "").trim()
-			});
-		}
-		else if (sheetTitle === SHEET_NAMES.USER_ACCOUNTS) for (let i = 1; i < rows.length; i++) {
-			const row = rows[i];
-			if (!row || !row[0] && !row[1]) continue;
-			const st = (row[6] || "ACTIVE").trim().toUpperCase() === "SUSPENDED" ? "SUSPENDED" : "ACTIVE";
-			userAccounts.push({
-				rowNumber: i + 1,
-				userId: (row[0] || "").trim().toUpperCase(),
-				fullName: (row[1] || "").trim(),
-				email: (row[2] || "").trim(),
-				roleTitle: (row[3] || "").trim(),
-				department: (row[4] || "").trim(),
-				phone: (row[5] || "").trim(),
-				status: st,
-				bioNotes: (row[7] || "").trim(),
-				permissions: parsePermissionsSafe(row[8]),
-				createdAt: (row[9] || "").trim(),
-				updatedAt: (row[10] || "").trim()
-			});
-		}
-	}));
-	return {
-		spreadsheetId: cleanId,
-		title: "Google Sheet (Direct Shared Sync)",
-		spreadsheetUrl: `https://docs.google.com/spreadsheets/d/${cleanId}/edit`,
-		existingSheets,
-		missingSheets: [],
-		isSchemaReady: true,
-		sites,
-		projectTypes,
-		projects,
-		subProjects,
-		contractors,
-		contractsTCP,
-		contractPayments,
-		userAccounts,
-		lastSyncedAt: (/* @__PURE__ */ new Date()).toISOString()
-	};
+function doesHeaderMatchSheet(sheetName, headerRow) {
+	const expected = SHEET_HEADERS[sheetName];
+	if (!expected || !headerRow || headerRow.length < 2) return false;
+	const norm = (s) => s.replace(/^\uFEFF/, "").trim().toLowerCase();
+	const h0 = norm(headerRow[0] || "");
+	const h1 = norm(headerRow[1] || "");
+	return h0 === norm(expected[0]) && h1 === norm(expected[1]);
 }
-/**
-* Creates any missing required sheets (8 sheets total),
-* writes header rows, and optionally seeds initial sites, project types, contractors, and user accounts.
-*/
-async function initializeSpreadsheetSchema(spreadsheetId, missingSheets, seedStarterData, existingCounts) {
-	const cleanId = spreadsheetId.trim();
-	if (missingSheets.length > 0) {
-		const requests = missingSheets.map((title) => ({ addSheet: { properties: {
-			title,
-			gridProperties: {
-				rowCount: 1e3,
-				columnCount: 25,
-				frozenRowCount: 1
-			}
-		} } }));
-		await fetchWithAuth(`${SHEETS_BASE_URL}/${cleanId}:batchUpdate`, {
-			method: "POST",
-			body: JSON.stringify({ requests })
+function parseNumber(val, fallback = 0) {
+	if (typeof val === "number") return Number.isFinite(val) ? val : fallback;
+	const cleaned = String(val ?? "").replace(/,/g, "").replace(/[^\d.-]/g, "").trim();
+	const parsed = Number.parseFloat(cleaned);
+	return Number.isFinite(parsed) ? parsed : fallback;
+}
+function parseBool(val, fallback = false) {
+	if (typeof val === "boolean") return val;
+	const s = String(val ?? "").trim().toLowerCase();
+	if (s === "true" || s === "yes" || s === "1" || s === "active") return true;
+	if (s === "false" || s === "no" || s === "0" || s === "inactive") return false;
+	return fallback;
+}
+function parseProjectStatus(val) {
+	const s = String(val || "").trim();
+	if (s === "Started" || s === "Planned" || s === "In Progress" || s === "Under Review" || s === "Delayed" || s === "Completed") return s;
+	return "Started";
+}
+function parseContractStatus(val) {
+	const s = String(val || "").trim().toUpperCase();
+	if (s === "OPEN" || s === "CLOSED" || s === "CANCEL") return s;
+	if (s === "CANCELLED") return "CANCEL";
+	return "OPEN";
+}
+function parseTcpType(val) {
+	const s = String(val || "").trim();
+	if (s === "Original" || s === "Adjustment" || s === "Escalation" || s === "Addon" || s === "Contract Takeover" || s === "Other") return s;
+	if (s === "Takeover") return "Contract Takeover";
+	if (s === "Modification") return "Adjustment";
+	return "Original";
+}
+function parseBillingType(val) {
+	const s = String(val || "").trim();
+	if (s === "Downpayment (DP)" || s === "Progress Billing" || s === "Retention Release" || s === "Final Billing" || s === "Other") return s;
+	if (s === "Mobilization / Other") return "Other";
+	return "Progress Billing";
+}
+function parsePaymentStatus(val) {
+	const s = String(val || "").trim().toUpperCase();
+	if (s === "RFP_SUBMITTED" || s === "CHEQUE_RELEASED" || s === "RECEIVED" || s === "CANCELLED") return s;
+	return "RFP_SUBMITTED";
+}
+function parseUserStatus(val) {
+	const s = String(val || "").trim().toUpperCase();
+	return s === "SUSPENDED" || s === "INACTIVE" ? "SUSPENDED" : "ACTIVE";
+}
+function parseBirJson(val) {
+	const raw = String(val || "").trim();
+	if (!raw || !raw.startsWith("{")) return void 0;
+	try {
+		const parsed = JSON.parse(raw);
+		if (parsed && typeof parsed.taxMode === "string") return parsed;
+	} catch {}
+}
+function parsePermissionsJson(val) {
+	const raw = String(val || "").trim();
+	if (raw && raw.startsWith("{")) try {
+		const parsed = JSON.parse(raw);
+		const normMod = (m) => ({
+			view: Boolean(m?.view),
+			add: Boolean(m?.add),
+			edit: Boolean(m?.edit)
+		});
+		return {
+			projects: normMod(parsed.projects),
+			contracts: normMod(parsed.contracts),
+			payments: normMod(parsed.payments),
+			contractors: normMod(parsed.contractors),
+			sites: normMod(parsed.sites),
+			admin: normMod(parsed.admin)
+		};
+	} catch {}
+	return DEFAULT_ADMIN_PERMISSIONS;
+}
+function parseSitesRows(rows) {
+	if (rows.length <= 1) return [];
+	const out = [];
+	for (let i = 1; i < rows.length; i++) {
+		const r = rows[i];
+		const siteCode = (r[0] || "").trim();
+		if (!siteCode) continue;
+		out.push({
+			rowNumber: i + 1,
+			siteCode,
+			siteName: (r[1] || "").trim(),
+			developer: (r[2] || "").trim(),
+			location: (r[3] || "").trim(),
+			createdAt: (r[4] || "").trim()
 		});
 	}
-	const nowIso = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
-	const dataPayload = [
-		{
-			range: `${SHEET_NAMES.SITES}!A1:E1`,
-			values: [SHEET_HEADERS[SHEET_NAMES.SITES]]
-		},
-		{
-			range: `${SHEET_NAMES.PROJECT_TYPES}!A1:E1`,
-			values: [SHEET_HEADERS[SHEET_NAMES.PROJECT_TYPES]]
-		},
-		{
-			range: `${SHEET_NAMES.PROJECTS}!A1:L1`,
-			values: [SHEET_HEADERS[SHEET_NAMES.PROJECTS]]
-		},
-		{
-			range: `${SHEET_NAMES.SUB_PROJECTS}!A1:J1`,
-			values: [SHEET_HEADERS[SHEET_NAMES.SUB_PROJECTS]]
-		},
-		{
-			range: `${SHEET_NAMES.CONTRACTORS}!A1:G1`,
-			values: [SHEET_HEADERS[SHEET_NAMES.CONTRACTORS]]
-		},
-		{
-			range: `${SHEET_NAMES.CONTRACTS_TCP}!A1:W1`,
-			values: [SHEET_HEADERS[SHEET_NAMES.CONTRACTS_TCP]]
-		},
-		{
-			range: `${SHEET_NAMES.CONTRACT_PAYMENTS}!A1:W1`,
-			values: [SHEET_HEADERS[SHEET_NAMES.CONTRACT_PAYMENTS]]
-		},
-		{
-			range: `${SHEET_NAMES.USER_ACCOUNTS}!A1:K1`,
-			values: [SHEET_HEADERS[SHEET_NAMES.USER_ACCOUNTS]]
-		}
-	];
-	if (seedStarterData && existingCounts.sites === 0) dataPayload.push({
-		range: `${SHEET_NAMES.SITES}!A2:E${SAMPLE_SITES.length + 1}`,
-		values: SAMPLE_SITES.map((s) => [
-			s.siteCode,
-			s.siteName,
-			s.developer,
-			s.location,
-			nowIso
-		])
-	});
-	if (seedStarterData && existingCounts.projectTypes === 0) dataPayload.push({
-		range: `${SHEET_NAMES.PROJECT_TYPES}!A2:E${SAMPLE_PROJECT_TYPES.length + 1}`,
-		values: SAMPLE_PROJECT_TYPES.map((t) => [
-			t.typeCode,
-			t.typeName,
-			t.description,
-			t.active ? "TRUE" : "FALSE",
-			nowIso
-		])
-	});
-	if (seedStarterData && existingCounts.contractors === 0) dataPayload.push({
-		range: `${SHEET_NAMES.CONTRACTORS}!A2:G${SAMPLE_CONTRACTORS.length + 1}`,
-		values: SAMPLE_CONTRACTORS.map((c) => [
-			c.contractorCode,
-			c.contractorName,
-			c.specialty,
-			c.contactPerson,
-			c.contactInfo,
-			c.active ? "TRUE" : "FALSE",
-			nowIso
-		])
-	});
-	if (seedStarterData && existingCounts.userAccounts === 0) dataPayload.push({
-		range: `${SHEET_NAMES.USER_ACCOUNTS}!A2:K${SAMPLE_USER_ACCOUNTS.length + 1}`,
-		values: SAMPLE_USER_ACCOUNTS.map((u) => [
-			u.userId,
-			u.fullName,
-			u.email,
-			u.roleTitle,
-			u.department,
-			u.phone,
-			u.status,
-			u.bioNotes,
-			JSON.stringify(u.permissions),
-			nowIso,
-			nowIso
-		])
-	});
-	await fetchWithAuth(`${SHEETS_BASE_URL}/${cleanId}/values:batchUpdate`, {
+	return out;
+}
+function parseProjectTypesRows(rows) {
+	if (rows.length <= 1) return [];
+	const out = [];
+	for (let i = 1; i < rows.length; i++) {
+		const r = rows[i];
+		const typeCode = (r[0] || "").trim();
+		if (!typeCode) continue;
+		out.push({
+			rowNumber: i + 1,
+			typeCode,
+			typeName: (r[1] || "").trim(),
+			description: (r[2] || "").trim(),
+			active: parseBool(r[3], true),
+			createdAt: (r[4] || "").trim()
+		});
+	}
+	return out;
+}
+function parseProjectsRows(rows) {
+	if (rows.length <= 1) return [];
+	const out = [];
+	for (let i = 1; i < rows.length; i++) {
+		const r = rows[i];
+		const projectId = (r[0] || "").trim();
+		if (!projectId) continue;
+		out.push({
+			rowNumber: i + 1,
+			projectId,
+			mainProjectCode: (r[1] || "").trim(),
+			siteCode: (r[2] || "").trim(),
+			siteName: (r[3] || "").trim(),
+			developer: (r[4] || "").trim(),
+			typeCode: (r[5] || "").trim(),
+			typeName: (r[6] || "").trim(),
+			unitIdentifier: (r[7] || "").trim(),
+			projectName: (r[8] || "").trim(),
+			status: parseProjectStatus(r[9]),
+			createdAt: (r[10] || "").trim(),
+			updatedAt: (r[11] || "").trim()
+		});
+	}
+	return out;
+}
+function parseSubProjectsRows(rows) {
+	if (rows.length <= 1) return [];
+	const out = [];
+	for (let i = 1; i < rows.length; i++) {
+		const r = rows[i];
+		const subProjectId = (r[0] || "").trim();
+		if (!subProjectId) continue;
+		out.push({
+			rowNumber: i + 1,
+			subProjectId,
+			projectId: (r[1] || "").trim(),
+			mainProjectCode: (r[2] || "").trim(),
+			subProjectCode: (r[3] || "").trim(),
+			subProjectName: (r[4] || "").trim(),
+			status: parseProjectStatus(r[5]),
+			progress: Math.min(100, Math.max(0, parseNumber(r[6], 0))),
+			targetDate: (r[7] || "").trim(),
+			remarks: (r[8] || "").trim(),
+			updatedAt: (r[9] || "").trim()
+		});
+	}
+	return out;
+}
+function parseContractorsRows(rows) {
+	if (rows.length <= 1) return [];
+	const out = [];
+	for (let i = 1; i < rows.length; i++) {
+		const r = rows[i];
+		const contractorCode = (r[0] || "").trim();
+		if (!contractorCode) continue;
+		out.push({
+			rowNumber: i + 1,
+			contractorCode,
+			contractorName: (r[1] || "").trim(),
+			specialty: (r[2] || "").trim(),
+			contactPerson: (r[3] || "").trim(),
+			contactInfo: (r[4] || "").trim(),
+			active: parseBool(r[5], true),
+			createdAt: (r[6] || "").trim()
+		});
+	}
+	return out;
+}
+function parseContractsTCPRows(rows) {
+	if (rows.length <= 1) return [];
+	const out = [];
+	for (let i = 1; i < rows.length; i++) {
+		const r = rows[i];
+		const contractId = (r[0] || "").trim();
+		if (!contractId) continue;
+		out.push({
+			rowNumber: i + 1,
+			contractId,
+			subProjectId: (r[1] || "").trim(),
+			subProjectCode: (r[2] || "").trim(),
+			subProjectName: (r[3] || "").trim(),
+			projectId: (r[4] || "").trim(),
+			mainProjectCode: (r[5] || "").trim(),
+			tcpType: parseTcpType(r[6]),
+			tcpAmount: parseNumber(r[7], 0),
+			contractorCode: (r[8] || "").trim(),
+			contractorName: (r[9] || "").trim(),
+			contractStatus: parseContractStatus(r[10]),
+			awardDate: (r[11] || "").trim(),
+			remarks: (r[12] || "").trim(),
+			updatedAt: (r[13] || "").trim(),
+			dpPercent: parseNumber(r[14], 0),
+			progressBillingPercent: parseNumber(r[15], 100),
+			retentionPercent: parseNumber(r[16], 0),
+			hasWithholdingTax: parseBool(r[17], false),
+			withholdingTaxPercent: parseNumber(r[18], 0),
+			paymentTermsNotes: (r[19] || "").trim(),
+			tcpId: (r[20] || "").trim() || void 0,
+			parentContractId: (r[21] || "").trim() || void 0,
+			birTaxInfo: parseBirJson(r[22])
+		});
+	}
+	return out;
+}
+function parseContractPaymentsRows(rows) {
+	if (rows.length <= 1) return [];
+	const out = [];
+	for (let i = 1; i < rows.length; i++) {
+		const r = rows[i];
+		const paymentId = (r[0] || "").trim();
+		if (!paymentId) continue;
+		out.push({
+			rowNumber: i + 1,
+			paymentId,
+			contractId: (r[1] || "").trim(),
+			subProjectId: (r[2] || "").trim(),
+			subProjectCode: (r[3] || "").trim(),
+			mainProjectCode: (r[4] || "").trim(),
+			contractorCode: (r[5] || "").trim(),
+			contractorName: (r[6] || "").trim(),
+			billingType: parseBillingType(r[7]),
+			paymentStatus: parsePaymentStatus(r[8]),
+			rfpNumber: (r[9] || "").trim(),
+			rfpDate: (r[10] || "").trim(),
+			rfpAmount: parseNumber(r[11], 0),
+			rfpPayee: (r[12] || "").trim(),
+			retentionDeducted: parseNumber(r[13], 0),
+			rfpRemarks: (r[14] || "").trim(),
+			cvNumber: (r[15] || "").trim(),
+			cvDate: (r[16] || "").trim(),
+			chequeAmount: parseNumber(r[17], 0),
+			withheldAmount: parseNumber(r[18], 0),
+			receiptType: (r[19] || "").trim(),
+			receiptNumber: (r[20] || "").trim(),
+			receiptDate: (r[21] || "").trim(),
+			updatedAt: (r[22] || "").trim()
+		});
+	}
+	return out;
+}
+function parseUserAccountsRows(rows) {
+	if (rows.length <= 1) return [];
+	const out = [];
+	for (let i = 1; i < rows.length; i++) {
+		const r = rows[i];
+		const userId = (r[0] || "").trim();
+		if (!userId) continue;
+		out.push({
+			rowNumber: i + 1,
+			userId,
+			fullName: (r[1] || "").trim(),
+			email: (r[2] || "").trim(),
+			roleTitle: (r[3] || "").trim(),
+			department: (r[4] || "").trim(),
+			phone: (r[5] || "").trim(),
+			status: parseUserStatus(r[6]),
+			bioNotes: (r[7] || "").trim(),
+			permissions: parsePermissionsJson(r[8]),
+			createdAt: (r[9] || "").trim(),
+			updatedAt: (r[10] || "").trim()
+		});
+	}
+	return out;
+}
+async function fetchWithTimeout(url, init, timeoutMs = REQUEST_TIMEOUT_MS) {
+	const controller = new AbortController();
+	const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+	try {
+		return await fetch(url, {
+			...init,
+			signal: controller.signal
+		});
+	} catch (err) {
+		if (err instanceof DOMException && err.name === "AbortError") throw new Error(`Request timed out after ${Math.round(timeoutMs / 1e3)}s. Verify your Google Apps Script deployment and network connection.`);
+		throw err;
+	} finally {
+		window.clearTimeout(timer);
+	}
+}
+async function parseAppsScriptResponse(res) {
+	const trimmed = (await res.text()).trim();
+	if (!res.ok) throw new Error(`Apps Script HTTP ${res.status}: ${trimmed.slice(0, 180) || res.statusText}`);
+	if (trimmed.startsWith("<!DOCTYPE") || trimmed.startsWith("<html")) throw new Error("Apps Script returned an HTML login/error page instead of JSON. Re-deploy Code.gs as a Web App with Execute as: \"Me\" and Who has access: \"Anyone\".");
+	let parsed;
+	try {
+		parsed = JSON.parse(trimmed);
+	} catch {
+		throw new Error(`Apps Script returned invalid JSON: ${trimmed.slice(0, 160)}`);
+	}
+	if (!parsed.ok) throw new Error(parsed.error || "Apps Script rejected the operation.");
+	return parsed;
+}
+async function postToAppsScript(appsScriptUrl, payload) {
+	return parseAppsScriptResponse(await fetchWithTimeout(appsScriptUrl, {
 		method: "POST",
-		body: JSON.stringify({
-			valueInputOption: "USER_ENTERED",
-			data: dataPayload
+		redirect: "follow",
+		headers: { "Content-Type": "text/plain;charset=utf-8" },
+		body: JSON.stringify(payload)
+	}));
+}
+function buildInspectionFromTables(data) {
+	const tables = data.tables || {};
+	return {
+		spreadsheetId: data.spreadsheetId,
+		title: data.title || "SiteTrack Pro Google Sheet",
+		spreadsheetUrl: data.spreadsheetUrl || `https://docs.google.com/spreadsheets/d/${data.spreadsheetId}/edit`,
+		existingSheets: data.existingSheets || [],
+		missingSheets: data.missingSheets || [],
+		isSchemaReady: (data.missingSheets || []).length === 0,
+		lastSyncedAt: data.lastSyncedAt || (/* @__PURE__ */ new Date()).toISOString(),
+		sites: parseSitesRows(tables[SHEET_NAMES.SITES] || []),
+		projectTypes: parseProjectTypesRows(tables[SHEET_NAMES.PROJECT_TYPES] || []),
+		projects: parseProjectsRows(tables[SHEET_NAMES.PROJECTS] || []),
+		subProjects: parseSubProjectsRows(tables[SHEET_NAMES.SUB_PROJECTS] || []),
+		contractors: parseContractorsRows(tables[SHEET_NAMES.CONTRACTORS] || []),
+		contractsTCP: parseContractsTCPRows(tables[SHEET_NAMES.CONTRACTS_TCP] || []),
+		contractPayments: parseContractPaymentsRows(tables[SHEET_NAMES.CONTRACT_PAYMENTS] || []),
+		userAccounts: parseUserAccountsRows(tables[SHEET_NAMES.USER_ACCOUNTS] || [])
+	};
+}
+async function pingAppsScriptBridge(appsScriptUrl, spreadsheetId) {
+	const url = new URL(appsScriptUrl);
+	url.searchParams.set("action", "ping");
+	url.searchParams.set("spreadsheetId", spreadsheetId);
+	url.searchParams.set("_ts", String(Date.now()));
+	const envelope = await parseAppsScriptResponse(await fetchWithTimeout(url.toString(), {
+		method: "GET",
+		redirect: "follow"
+	}));
+	if (!envelope.data) throw new Error("Apps Script ping returned empty payload.");
+	return envelope.data;
+}
+async function inspectAndLoadViaAppsScript(appsScriptUrl, spreadsheetId) {
+	const url = new URL(appsScriptUrl);
+	url.searchParams.set("action", "inspectAndLoad");
+	url.searchParams.set("spreadsheetId", spreadsheetId);
+	url.searchParams.set("_ts", String(Date.now()));
+	const envelope = await parseAppsScriptResponse(await fetchWithTimeout(url.toString(), {
+		method: "GET",
+		redirect: "follow"
+	}));
+	if (!envelope.data) throw new Error("Apps Script returned empty inspection payload.");
+	return buildInspectionFromTables(envelope.data);
+}
+async function initializeSchemaViaAppsScript(appsScriptUrl, spreadsheetId, seedStarterData = false) {
+	const envelope = await postToAppsScript(appsScriptUrl, {
+		action: "initializeSchema",
+		spreadsheetId,
+		seedData: seedStarterData ? {
+			[SHEET_NAMES.SITES]: STARTER_SITES,
+			[SHEET_NAMES.PROJECT_TYPES]: STARTER_PROJECT_TYPES,
+			[SHEET_NAMES.CONTRACTORS]: STARTER_CONTRACTORS,
+			[SHEET_NAMES.USER_ACCOUNTS]: SAMPLE_USER_ACCOUNTS.map((u) => [
+				u.userId,
+				u.fullName,
+				u.email,
+				u.roleTitle,
+				u.department,
+				u.phone,
+				u.status,
+				u.bioNotes,
+				JSON.stringify(u.permissions),
+				u.createdAt,
+				u.updatedAt
+			])
+		} : void 0
+	});
+	if (!envelope.data) return inspectAndLoadViaAppsScript(appsScriptUrl, spreadsheetId);
+	return buildInspectionFromTables(envelope.data);
+}
+async function inspectAndLoadSpreadsheetPublicGviz(spreadsheetId) {
+	const cleanId = spreadsheetId.trim();
+	const tables = {};
+	const existingSheets = [];
+	const missingSheets = [];
+	let anyNetworkSuccess = false;
+	let sawHtmlLoginRedirect = false;
+	await Promise.all(REQUIRED_SHEET_NAMES.map(async (sheetTitle) => {
+		const url = `https://docs.google.com/spreadsheets/d/${encodeURIComponent(cleanId)}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetTitle)}`;
+		try {
+			const res = await fetchWithTimeout(url, { method: "GET" }, 15e3);
+			if (!res.ok) {
+				missingSheets.push(sheetTitle);
+				tables[sheetTitle] = [];
+				return;
+			}
+			const text = await res.text();
+			const trimmed = text.trim();
+			if (trimmed.startsWith("<!DOCTYPE") || trimmed.startsWith("<html") || trimmed.includes("accounts.google.com")) {
+				sawHtmlLoginRedirect = true;
+				missingSheets.push(sheetTitle);
+				tables[sheetTitle] = [];
+				return;
+			}
+			anyNetworkSuccess = true;
+			const rows = parseCsvToRows(text);
+			if (rows.length > 0 && doesHeaderMatchSheet(sheetTitle, rows[0])) {
+				existingSheets.push(sheetTitle);
+				tables[sheetTitle] = rows;
+			} else {
+				missingSheets.push(sheetTitle);
+				tables[sheetTitle] = [];
+			}
+		} catch {
+			missingSheets.push(sheetTitle);
+			tables[sheetTitle] = [];
+		}
+	}));
+	if (!anyNetworkSuccess) {
+		if (sawHtmlLoginRedirect) throw new Error("This Google Sheet is private. Deploy the included Apps Script Web App (Code.gs) for full Read & Write access, or set Google Sheet sharing to \"Anyone with the link → Viewer\" for Read-Only CSV sync.");
+		throw new Error("Unable to reach Google Sheets via public CSV feed. Check your Spreadsheet ID, network connection, or deploy the Apps Script Web App (Code.gs).");
+	}
+	return buildInspectionFromTables({
+		spreadsheetId: cleanId,
+		title: "SiteTrack Pro — Google Sheet (Read-Only CSV Feed)",
+		spreadsheetUrl: `https://docs.google.com/spreadsheets/d/${cleanId}/edit`,
+		existingSheets,
+		missingSheets,
+		lastSyncedAt: (/* @__PURE__ */ new Date()).toISOString(),
+		tables
+	});
+}
+function serializeSiteRow(site) {
+	return [
+		site.siteCode.trim().toUpperCase(),
+		site.siteName.trim(),
+		site.developer.trim(),
+		site.location.trim(),
+		site.createdAt || (/* @__PURE__ */ new Date()).toISOString().slice(0, 10)
+	];
+}
+function serializeProjectTypeRow(pt) {
+	return [
+		pt.typeCode.trim().toUpperCase(),
+		pt.typeName.trim(),
+		pt.description.trim(),
+		Boolean(pt.active),
+		pt.createdAt || (/* @__PURE__ */ new Date()).toISOString().slice(0, 10)
+	];
+}
+function serializeMainProjectRow(project) {
+	const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+	return [
+		project.projectId.trim(),
+		project.mainProjectCode.trim(),
+		project.siteCode.trim().toUpperCase(),
+		project.siteName.trim(),
+		project.developer.trim(),
+		project.typeCode.trim().toUpperCase(),
+		project.typeName.trim(),
+		project.unitIdentifier.trim(),
+		project.projectName.trim(),
+		project.status,
+		project.createdAt || today,
+		project.updatedAt || today
+	];
+}
+function serializeSubProjectRow(sp) {
+	const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+	return [
+		sp.subProjectId.trim(),
+		sp.projectId.trim(),
+		sp.mainProjectCode.trim(),
+		sp.subProjectCode.trim(),
+		sp.subProjectName.trim(),
+		sp.status,
+		Math.min(100, Math.max(0, Number(sp.progress) || 0)),
+		sp.targetDate || "",
+		sp.remarks.trim(),
+		sp.updatedAt || today
+	];
+}
+function serializeContractorRow(contractor) {
+	return [
+		contractor.contractorCode.trim().toUpperCase(),
+		contractor.contractorName.trim(),
+		contractor.specialty.trim(),
+		contractor.contactPerson.trim(),
+		contractor.contactInfo.trim(),
+		Boolean(contractor.active),
+		contractor.createdAt || (/* @__PURE__ */ new Date()).toISOString().slice(0, 10)
+	];
+}
+function serializeContractTCPRow(contract) {
+	const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+	return [
+		contract.contractId.trim(),
+		contract.subProjectId.trim(),
+		contract.subProjectCode.trim(),
+		contract.subProjectName.trim(),
+		contract.projectId.trim(),
+		contract.mainProjectCode.trim(),
+		contract.tcpType,
+		Number(contract.tcpAmount) || 0,
+		contract.contractorCode.trim().toUpperCase(),
+		contract.contractorName.trim(),
+		contract.contractStatus,
+		contract.awardDate || today,
+		contract.remarks.trim(),
+		contract.updatedAt || today,
+		Number(contract.dpPercent) || 0,
+		Number(contract.progressBillingPercent) || 0,
+		Number(contract.retentionPercent) || 0,
+		Boolean(contract.hasWithholdingTax),
+		Number(contract.withholdingTaxPercent) || 0,
+		contract.paymentTermsNotes.trim(),
+		(contract.tcpId || "").trim(),
+		(contract.parentContractId || "").trim(),
+		contract.birTaxInfo ? JSON.stringify(contract.birTaxInfo) : ""
+	];
+}
+function serializeContractPaymentRow(payment) {
+	const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+	return [
+		payment.paymentId.trim(),
+		payment.contractId.trim(),
+		payment.subProjectId.trim(),
+		payment.subProjectCode.trim(),
+		payment.mainProjectCode.trim(),
+		payment.contractorCode.trim().toUpperCase(),
+		payment.contractorName.trim(),
+		payment.billingType,
+		payment.paymentStatus,
+		payment.rfpNumber.trim(),
+		payment.rfpDate || today,
+		Number(payment.rfpAmount) || 0,
+		payment.rfpPayee.trim(),
+		Number(payment.retentionDeducted) || 0,
+		payment.rfpRemarks.trim(),
+		payment.cvNumber.trim(),
+		payment.cvDate || "",
+		Number(payment.chequeAmount) || 0,
+		Number(payment.withheldAmount) || 0,
+		payment.receiptType.trim(),
+		payment.receiptNumber.trim(),
+		payment.receiptDate || "",
+		payment.updatedAt || today
+	];
+}
+function serializeUserAccountRow(account) {
+	const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+	return [
+		account.userId.trim().toUpperCase(),
+		account.fullName.trim(),
+		account.email.trim(),
+		account.roleTitle.trim(),
+		account.department.trim(),
+		account.phone.trim(),
+		account.status,
+		account.bioNotes.trim(),
+		JSON.stringify(account.permissions),
+		account.createdAt || today,
+		account.updatedAt || today
+	];
+}
+async function appendSiteRow(target, site) {
+	await postToAppsScript(target.appsScriptUrl, {
+		action: "appendRow",
+		spreadsheetId: target.spreadsheetId,
+		sheetName: SHEET_NAMES.SITES,
+		values: serializeSiteRow(site)
+	});
+}
+async function updateSiteRow(target, rowNumber, site) {
+	await postToAppsScript(target.appsScriptUrl, {
+		action: "updateRow",
+		spreadsheetId: target.spreadsheetId,
+		sheetName: SHEET_NAMES.SITES,
+		recordId: site.siteCode.trim().toUpperCase(),
+		rowNumber,
+		values: serializeSiteRow(site)
+	});
+}
+async function deleteSiteRow(target, siteCode, rowNumber) {
+	await postToAppsScript(target.appsScriptUrl, {
+		action: "deleteRow",
+		spreadsheetId: target.spreadsheetId,
+		sheetName: SHEET_NAMES.SITES,
+		recordId: siteCode.trim().toUpperCase(),
+		rowNumber
+	});
+}
+async function appendProjectTypeRow(target, pt) {
+	await postToAppsScript(target.appsScriptUrl, {
+		action: "appendRow",
+		spreadsheetId: target.spreadsheetId,
+		sheetName: SHEET_NAMES.PROJECT_TYPES,
+		values: serializeProjectTypeRow(pt)
+	});
+}
+async function updateProjectTypeRow(target, rowNumber, pt) {
+	await postToAppsScript(target.appsScriptUrl, {
+		action: "updateRow",
+		spreadsheetId: target.spreadsheetId,
+		sheetName: SHEET_NAMES.PROJECT_TYPES,
+		recordId: pt.typeCode.trim().toUpperCase(),
+		rowNumber,
+		values: serializeProjectTypeRow(pt)
+	});
+}
+async function deleteProjectTypeRow(target, typeCode, rowNumber) {
+	await postToAppsScript(target.appsScriptUrl, {
+		action: "deleteRow",
+		spreadsheetId: target.spreadsheetId,
+		sheetName: SHEET_NAMES.PROJECT_TYPES,
+		recordId: typeCode.trim().toUpperCase(),
+		rowNumber
+	});
+}
+async function appendProjectWithSubProjects(target, project, subProjects) {
+	await postToAppsScript(target.appsScriptUrl, {
+		action: "appendRows",
+		spreadsheetId: target.spreadsheetId,
+		operations: [{
+			sheetName: SHEET_NAMES.PROJECTS,
+			rows: [serializeMainProjectRow(project)]
+		}, {
+			sheetName: SHEET_NAMES.SUB_PROJECTS,
+			rows: subProjects.map((sp) => serializeSubProjectRow(sp))
+		}]
+	});
+}
+async function appendSubProjectRow(target, sp) {
+	await postToAppsScript(target.appsScriptUrl, {
+		action: "appendRow",
+		spreadsheetId: target.spreadsheetId,
+		sheetName: SHEET_NAMES.SUB_PROJECTS,
+		values: serializeSubProjectRow(sp)
+	});
+}
+async function updateMainProjectRow(target, project, newStatus, newProjectName) {
+	const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+	await postToAppsScript(target.appsScriptUrl, {
+		action: "updateRow",
+		spreadsheetId: target.spreadsheetId,
+		sheetName: SHEET_NAMES.PROJECTS,
+		recordId: project.projectId,
+		rowNumber: project.rowNumber,
+		values: serializeMainProjectRow({
+			...project,
+			projectName: newProjectName !== void 0 ? newProjectName : project.projectName,
+			status: newStatus,
+			updatedAt: today
 		})
 	});
 }
-async function appendSiteRow(spreadsheetId, site) {
-	const cleanId = spreadsheetId.trim();
-	const nowIso = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
-	await fetchWithAuth(`${SHEETS_BASE_URL}/${cleanId}/values/${encodeURIComponent(`${SHEET_NAMES.SITES}!A:E`)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`, {
-		method: "POST",
-		body: JSON.stringify({ values: [[
-			site.siteCode.trim().toUpperCase(),
-			site.siteName.trim(),
-			site.developer.trim(),
-			site.location.trim(),
-			nowIso
-		]] })
+async function deleteMainProjectRow(target, projectId, rowNumber) {
+	await postToAppsScript(target.appsScriptUrl, {
+		action: "deleteRow",
+		spreadsheetId: target.spreadsheetId,
+		sheetName: SHEET_NAMES.PROJECTS,
+		recordId: projectId.trim(),
+		rowNumber
 	});
 }
-async function updateSiteRow(spreadsheetId, rowNumber, site) {
-	await fetchWithAuth(`${SHEETS_BASE_URL}/${spreadsheetId.trim()}/values/${encodeURIComponent(`${SHEET_NAMES.SITES}!A${rowNumber}:E${rowNumber}`)}?valueInputOption=USER_ENTERED`, {
-		method: "PUT",
-		body: JSON.stringify({ values: [[
-			site.siteCode.trim().toUpperCase(),
-			site.siteName.trim(),
-			site.developer.trim(),
-			site.location.trim(),
-			site.createdAt
-		]] })
+async function updateSubProjectRow(target, sp) {
+	const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+	await postToAppsScript(target.appsScriptUrl, {
+		action: "updateRow",
+		spreadsheetId: target.spreadsheetId,
+		sheetName: SHEET_NAMES.SUB_PROJECTS,
+		recordId: sp.subProjectId,
+		rowNumber: sp.rowNumber,
+		values: serializeSubProjectRow({
+			...sp,
+			updatedAt: today
+		})
 	});
 }
-async function appendProjectTypeRow(spreadsheetId, projectType) {
-	const cleanId = spreadsheetId.trim();
-	const nowIso = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
-	await fetchWithAuth(`${SHEETS_BASE_URL}/${cleanId}/values/${encodeURIComponent(`${SHEET_NAMES.PROJECT_TYPES}!A:E`)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`, {
-		method: "POST",
-		body: JSON.stringify({ values: [[
-			projectType.typeCode.trim().toUpperCase(),
-			projectType.typeName.trim(),
-			projectType.description.trim(),
-			projectType.active ? "TRUE" : "FALSE",
-			nowIso
-		]] })
+async function deleteSubProjectRow(target, subProjectId, rowNumber) {
+	await postToAppsScript(target.appsScriptUrl, {
+		action: "deleteRow",
+		spreadsheetId: target.spreadsheetId,
+		sheetName: SHEET_NAMES.SUB_PROJECTS,
+		recordId: subProjectId.trim(),
+		rowNumber
 	});
 }
-async function updateProjectTypeRow(spreadsheetId, rowNumber, projectType) {
-	await fetchWithAuth(`${SHEETS_BASE_URL}/${spreadsheetId.trim()}/values/${encodeURIComponent(`${SHEET_NAMES.PROJECT_TYPES}!A${rowNumber}:E${rowNumber}`)}?valueInputOption=USER_ENTERED`, {
-		method: "PUT",
-		body: JSON.stringify({ values: [[
-			projectType.typeCode.trim().toUpperCase(),
-			projectType.typeName.trim(),
-			projectType.description.trim(),
-			projectType.active ? "TRUE" : "FALSE",
-			projectType.createdAt
-		]] })
+async function appendContractorRow(target, contractor) {
+	await postToAppsScript(target.appsScriptUrl, {
+		action: "appendRow",
+		spreadsheetId: target.spreadsheetId,
+		sheetName: SHEET_NAMES.CONTRACTORS,
+		values: serializeContractorRow(contractor)
 	});
 }
-async function createProjectWithSubProjects(spreadsheetId, mainProject, subProjects) {
-	const cleanId = spreadsheetId.trim();
-	const nowIso = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
-	await fetchWithAuth(`${SHEETS_BASE_URL}/${cleanId}/values/${encodeURIComponent(`${SHEET_NAMES.PROJECTS}!A:L`)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`, {
-		method: "POST",
-		body: JSON.stringify({ values: [[
-			mainProject.projectId.trim(),
-			mainProject.mainProjectCode.trim().toUpperCase(),
-			mainProject.siteCode.trim().toUpperCase(),
-			mainProject.siteName.trim(),
-			mainProject.developer.trim(),
-			mainProject.typeCode.trim().toUpperCase(),
-			mainProject.typeName.trim(),
-			mainProject.unitIdentifier.trim().toUpperCase(),
-			mainProject.projectName.trim(),
-			mainProject.status,
-			nowIso,
-			nowIso
-		]] })
-	});
-	const subProjectRange = encodeURIComponent(`${SHEET_NAMES.SUB_PROJECTS}!A:J`);
-	const subRows = subProjects.map((sp) => [
-		sp.subProjectId.trim(),
-		mainProject.projectId.trim(),
-		mainProject.mainProjectCode.trim().toUpperCase(),
-		sp.subProjectCode.trim().toUpperCase(),
-		sp.subProjectName.trim(),
-		sp.status,
-		String(sp.progress),
-		sp.targetDate.trim(),
-		sp.remarks.trim(),
-		nowIso
-	]);
-	await fetchWithAuth(`${SHEETS_BASE_URL}/${cleanId}/values/${subProjectRange}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`, {
-		method: "POST",
-		body: JSON.stringify({ values: subRows })
+async function updateContractorRow(target, rowNumber, contractor) {
+	await postToAppsScript(target.appsScriptUrl, {
+		action: "updateRow",
+		spreadsheetId: target.spreadsheetId,
+		sheetName: SHEET_NAMES.CONTRACTORS,
+		recordId: contractor.contractorCode.trim().toUpperCase(),
+		rowNumber,
+		values: serializeContractorRow(contractor)
 	});
 }
-async function appendSubProjectToProject(spreadsheetId, subProject) {
-	const cleanId = spreadsheetId.trim();
-	const nowIso = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
-	await fetchWithAuth(`${SHEETS_BASE_URL}/${cleanId}/values/${encodeURIComponent(`${SHEET_NAMES.SUB_PROJECTS}!A:J`)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`, {
-		method: "POST",
-		body: JSON.stringify({ values: [[
-			subProject.subProjectId.trim(),
-			subProject.projectId.trim(),
-			subProject.mainProjectCode.trim().toUpperCase(),
-			subProject.subProjectCode.trim().toUpperCase(),
-			subProject.subProjectName.trim(),
-			subProject.status,
-			String(subProject.progress),
-			subProject.targetDate.trim(),
-			subProject.remarks.trim(),
-			nowIso
-		]] })
+async function deleteContractorRow(target, contractorCode, rowNumber) {
+	await postToAppsScript(target.appsScriptUrl, {
+		action: "deleteRow",
+		spreadsheetId: target.spreadsheetId,
+		sheetName: SHEET_NAMES.CONTRACTORS,
+		recordId: contractorCode.trim().toUpperCase(),
+		rowNumber
 	});
 }
-async function updateMainProjectStatus(spreadsheetId, project, newStatus, newProjectName) {
-	const cleanId = spreadsheetId.trim();
-	const nowIso = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
-	await fetchWithAuth(`${SHEETS_BASE_URL}/${cleanId}/values/${encodeURIComponent(`${SHEET_NAMES.PROJECTS}!A${project.rowNumber}:L${project.rowNumber}`)}?valueInputOption=USER_ENTERED`, {
-		method: "PUT",
-		body: JSON.stringify({ values: [[
-			project.projectId,
-			project.mainProjectCode,
-			project.siteCode,
-			project.siteName,
-			project.developer,
-			project.typeCode,
-			project.typeName,
-			project.unitIdentifier,
-			(newProjectName ?? project.projectName).trim(),
-			newStatus,
-			project.createdAt,
-			nowIso
-		]] })
+async function appendContractTCPRow(target, contract) {
+	await postToAppsScript(target.appsScriptUrl, {
+		action: "appendRow",
+		spreadsheetId: target.spreadsheetId,
+		sheetName: SHEET_NAMES.CONTRACTS_TCP,
+		values: serializeContractTCPRow(contract)
 	});
 }
-async function updateSubProjectRecord(spreadsheetId, subProject, updates) {
-	const cleanId = spreadsheetId.trim();
-	const nowIso = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
-	await fetchWithAuth(`${SHEETS_BASE_URL}/${cleanId}/values/${encodeURIComponent(`${SHEET_NAMES.SUB_PROJECTS}!A${subProject.rowNumber}:J${subProject.rowNumber}`)}?valueInputOption=USER_ENTERED`, {
-		method: "PUT",
-		body: JSON.stringify({ values: [[
-			subProject.subProjectId,
-			subProject.projectId,
-			subProject.mainProjectCode,
-			subProject.subProjectCode,
-			subProject.subProjectName,
-			updates.status,
-			String(updates.progress),
-			updates.targetDate.trim(),
-			updates.remarks.trim(),
-			nowIso
-		]] })
+async function updateContractTCPRow(target, rowNumber, contract) {
+	await postToAppsScript(target.appsScriptUrl, {
+		action: "updateRow",
+		spreadsheetId: target.spreadsheetId,
+		sheetName: SHEET_NAMES.CONTRACTS_TCP,
+		recordId: contract.contractId.trim(),
+		rowNumber,
+		values: serializeContractTCPRow(contract)
 	});
 }
-async function appendContractorRow(spreadsheetId, contractor) {
-	const cleanId = spreadsheetId.trim();
-	const nowIso = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
-	await fetchWithAuth(`${SHEETS_BASE_URL}/${cleanId}/values/${encodeURIComponent(`${SHEET_NAMES.CONTRACTORS}!A:G`)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`, {
-		method: "POST",
-		body: JSON.stringify({ values: [[
-			contractor.contractorCode.trim().toUpperCase(),
-			contractor.contractorName.trim(),
-			contractor.specialty.trim(),
-			contractor.contactPerson.trim(),
-			contractor.contactInfo.trim(),
-			contractor.active ? "TRUE" : "FALSE",
-			nowIso
-		]] })
+async function deleteContractTCPRow(target, contractId, rowNumber) {
+	await postToAppsScript(target.appsScriptUrl, {
+		action: "deleteRow",
+		spreadsheetId: target.spreadsheetId,
+		sheetName: SHEET_NAMES.CONTRACTS_TCP,
+		recordId: contractId.trim(),
+		rowNumber
 	});
 }
-async function updateContractorRow(spreadsheetId, rowNumber, contractor) {
-	await fetchWithAuth(`${SHEETS_BASE_URL}/${spreadsheetId.trim()}/values/${encodeURIComponent(`${SHEET_NAMES.CONTRACTORS}!A${rowNumber}:G${rowNumber}`)}?valueInputOption=USER_ENTERED`, {
-		method: "PUT",
-		body: JSON.stringify({ values: [[
-			contractor.contractorCode.trim().toUpperCase(),
-			contractor.contractorName.trim(),
-			contractor.specialty.trim(),
-			contractor.contactPerson.trim(),
-			contractor.contactInfo.trim(),
-			contractor.active ? "TRUE" : "FALSE",
-			contractor.createdAt
-		]] })
+async function appendContractPaymentRow(target, payment) {
+	await postToAppsScript(target.appsScriptUrl, {
+		action: "appendRow",
+		spreadsheetId: target.spreadsheetId,
+		sheetName: SHEET_NAMES.CONTRACT_PAYMENTS,
+		values: serializeContractPaymentRow(payment)
 	});
 }
-async function appendContractTCPRow(spreadsheetId, contract) {
-	const cleanId = spreadsheetId.trim();
-	const nowIso = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
-	await fetchWithAuth(`${SHEETS_BASE_URL}/${cleanId}/values/${encodeURIComponent(`${SHEET_NAMES.CONTRACTS_TCP}!A:W`)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`, {
-		method: "POST",
-		body: JSON.stringify({ values: [[
-			contract.contractId.trim(),
-			contract.subProjectId.trim(),
-			contract.subProjectCode.trim().toUpperCase(),
-			contract.subProjectName.trim(),
-			contract.projectId.trim(),
-			contract.mainProjectCode.trim().toUpperCase(),
-			contract.tcpType,
-			String(contract.tcpAmount),
-			contract.contractorCode.trim().toUpperCase(),
-			contract.contractorName.trim(),
-			contract.contractStatus,
-			contract.awardDate.trim(),
-			contract.remarks.trim(),
-			nowIso,
-			String(contract.dpPercent),
-			String(contract.progressBillingPercent),
-			String(contract.retentionPercent),
-			contract.hasWithholdingTax ? "TRUE" : "FALSE",
-			String(contract.hasWithholdingTax ? contract.withholdingTaxPercent : 0),
-			contract.paymentTermsNotes.trim(),
-			(contract.tcpId || "").trim().toUpperCase(),
-			(contract.parentContractId || "").trim().toUpperCase(),
-			contract.birTaxInfo ? JSON.stringify(contract.birTaxInfo) : ""
-		]] })
+async function updateContractPaymentRow(target, rowNumber, payment) {
+	await postToAppsScript(target.appsScriptUrl, {
+		action: "updateRow",
+		spreadsheetId: target.spreadsheetId,
+		sheetName: SHEET_NAMES.CONTRACT_PAYMENTS,
+		recordId: payment.paymentId.trim(),
+		rowNumber,
+		values: serializeContractPaymentRow(payment)
 	});
 }
-async function updateContractTCPRow(spreadsheetId, rowNumber, contract) {
-	const cleanId = spreadsheetId.trim();
-	const nowIso = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
-	await fetchWithAuth(`${SHEETS_BASE_URL}/${cleanId}/values/${encodeURIComponent(`${SHEET_NAMES.CONTRACTS_TCP}!A${rowNumber}:W${rowNumber}`)}?valueInputOption=USER_ENTERED`, {
-		method: "PUT",
-		body: JSON.stringify({ values: [[
-			contract.contractId.trim(),
-			contract.subProjectId.trim(),
-			contract.subProjectCode.trim().toUpperCase(),
-			contract.subProjectName.trim(),
-			contract.projectId.trim(),
-			contract.mainProjectCode.trim().toUpperCase(),
-			contract.tcpType,
-			String(contract.tcpAmount),
-			contract.contractorCode.trim().toUpperCase(),
-			contract.contractorName.trim(),
-			contract.contractStatus,
-			contract.awardDate.trim(),
-			contract.remarks.trim(),
-			nowIso,
-			String(contract.dpPercent),
-			String(contract.progressBillingPercent),
-			String(contract.retentionPercent),
-			contract.hasWithholdingTax ? "TRUE" : "FALSE",
-			String(contract.hasWithholdingTax ? contract.withholdingTaxPercent : 0),
-			contract.paymentTermsNotes.trim(),
-			(contract.tcpId || "").trim().toUpperCase(),
-			(contract.parentContractId || "").trim().toUpperCase(),
-			contract.birTaxInfo ? JSON.stringify(contract.birTaxInfo) : ""
-		]] })
+async function deleteContractPaymentRow(target, paymentId, rowNumber) {
+	await postToAppsScript(target.appsScriptUrl, {
+		action: "deleteRow",
+		spreadsheetId: target.spreadsheetId,
+		sheetName: SHEET_NAMES.CONTRACT_PAYMENTS,
+		recordId: paymentId.trim(),
+		rowNumber
 	});
 }
-async function appendContractPaymentRow(spreadsheetId, payment) {
-	const cleanId = spreadsheetId.trim();
-	const nowIso = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
-	await fetchWithAuth(`${SHEETS_BASE_URL}/${cleanId}/values/${encodeURIComponent(`${SHEET_NAMES.CONTRACT_PAYMENTS}!A:W`)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`, {
-		method: "POST",
-		body: JSON.stringify({ values: [[
-			payment.paymentId.trim(),
-			payment.contractId.trim(),
-			payment.subProjectId.trim(),
-			payment.subProjectCode.trim().toUpperCase(),
-			payment.mainProjectCode.trim().toUpperCase(),
-			payment.contractorCode.trim().toUpperCase(),
-			payment.contractorName.trim(),
-			payment.billingType,
-			payment.paymentStatus,
-			payment.rfpNumber.trim().toUpperCase(),
-			payment.rfpDate.trim(),
-			String(payment.rfpAmount),
-			payment.rfpPayee.trim(),
-			String(payment.retentionDeducted),
-			payment.rfpRemarks.trim(),
-			payment.cvNumber.trim().toUpperCase(),
-			payment.cvDate.trim(),
-			String(payment.chequeAmount),
-			String(payment.withheldAmount),
-			payment.receiptType.trim(),
-			payment.receiptNumber.trim().toUpperCase(),
-			payment.receiptDate.trim(),
-			nowIso
-		]] })
+async function appendUserAccountRow(target, account) {
+	await postToAppsScript(target.appsScriptUrl, {
+		action: "appendRow",
+		spreadsheetId: target.spreadsheetId,
+		sheetName: SHEET_NAMES.USER_ACCOUNTS,
+		values: serializeUserAccountRow(account)
 	});
 }
-async function updateContractPaymentRow(spreadsheetId, rowNumber, payment) {
-	const cleanId = spreadsheetId.trim();
-	const nowIso = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
-	await fetchWithAuth(`${SHEETS_BASE_URL}/${cleanId}/values/${encodeURIComponent(`${SHEET_NAMES.CONTRACT_PAYMENTS}!A${rowNumber}:W${rowNumber}`)}?valueInputOption=USER_ENTERED`, {
-		method: "PUT",
-		body: JSON.stringify({ values: [[
-			payment.paymentId.trim(),
-			payment.contractId.trim(),
-			payment.subProjectId.trim(),
-			payment.subProjectCode.trim().toUpperCase(),
-			payment.mainProjectCode.trim().toUpperCase(),
-			payment.contractorCode.trim().toUpperCase(),
-			payment.contractorName.trim(),
-			payment.billingType,
-			payment.paymentStatus,
-			payment.rfpNumber.trim().toUpperCase(),
-			payment.rfpDate.trim(),
-			String(payment.rfpAmount),
-			payment.rfpPayee.trim(),
-			String(payment.retentionDeducted),
-			payment.rfpRemarks.trim(),
-			payment.cvNumber.trim().toUpperCase(),
-			payment.cvDate.trim(),
-			String(payment.chequeAmount),
-			String(payment.withheldAmount),
-			payment.receiptType.trim(),
-			payment.receiptNumber.trim().toUpperCase(),
-			payment.receiptDate.trim(),
-			nowIso
-		]] })
+async function updateUserAccountRow(target, rowNumber, account) {
+	await postToAppsScript(target.appsScriptUrl, {
+		action: "updateRow",
+		spreadsheetId: target.spreadsheetId,
+		sheetName: SHEET_NAMES.USER_ACCOUNTS,
+		recordId: account.userId.trim().toUpperCase(),
+		rowNumber,
+		values: serializeUserAccountRow(account)
 	});
+}
+async function deleteUserAccountRow(target, userId, rowNumber) {
+	await postToAppsScript(target.appsScriptUrl, {
+		action: "deleteRow",
+		spreadsheetId: target.spreadsheetId,
+		sheetName: SHEET_NAMES.USER_ACCOUNTS,
+		recordId: userId.trim().toUpperCase(),
+		rowNumber
+	});
+}
+// src/lib/calculations.ts
+/**
+* Currency rounding to exact 2 decimal places (avoids floating point drift).
+*/
+function roundCurrency(value) {
+	if (!Number.isFinite(value)) return 0;
+	return Math.round((value + Number.EPSILON) * 100) / 100;
 }
 /**
-* Append a new User Account & Module Access Permissions to the UserAccounts sheet.
+* Returns the exact gross amount settled against Contract TCP for a released/received payment:
+* Cheque Amount + Withheld Tax (2307) when present, falling back to RFP Amount.
 */
-async function appendUserAccountRow(spreadsheetId, account) {
-	const cleanId = spreadsheetId.trim();
-	const nowIso = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
-	await fetchWithAuth(`${SHEETS_BASE_URL}/${cleanId}/values/${encodeURIComponent(`${SHEET_NAMES.USER_ACCOUNTS}!A:K`)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`, {
-		method: "POST",
-		body: JSON.stringify({ values: [[
-			account.userId.trim().toUpperCase(),
-			account.fullName.trim(),
-			account.email.trim(),
-			account.roleTitle.trim(),
-			account.department.trim(),
-			account.phone.trim(),
-			account.status,
-			account.bioNotes.trim(),
-			JSON.stringify(account.permissions),
-			nowIso,
-			nowIso
-		]] })
-	});
+function getPaymentSettledGross(payment) {
+	const settled = roundCurrency((Number(payment.chequeAmount) || 0) + (Number(payment.withheldAmount) || 0));
+	if ((payment.paymentStatus === "CHEQUE_RELEASED" || payment.paymentStatus === "RECEIVED") && settled > 0) return settled;
+	return roundCurrency(Number(payment.rfpAmount) || 0);
 }
 /**
-* Update an existing User Account & Module Access Permissions row in UserAccounts.
+* Computes financial rollups per contract, preserving the Retention Holdback Protection rule:
+* - Retention is TCP hold money (NOT a tax) and is subject to WHT when released.
+* - Progress billings must never eat into Unreleased Retention Holdback.
+* - Safe Progress Release = Remaining TCP Balance - Unreleased Retention Holdback.
 */
-async function updateUserAccountRow(spreadsheetId, rowNumber, account) {
-	const cleanId = spreadsheetId.trim();
-	const nowIso = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ");
-	await fetchWithAuth(`${SHEETS_BASE_URL}/${cleanId}/values/${encodeURIComponent(`${SHEET_NAMES.USER_ACCOUNTS}!A${rowNumber}:K${rowNumber}`)}?valueInputOption=USER_ENTERED`, {
-		method: "PUT",
-		body: JSON.stringify({ values: [[
-			account.userId.trim().toUpperCase(),
-			account.fullName.trim(),
-			account.email.trim(),
-			account.roleTitle.trim(),
-			account.department.trim(),
-			account.phone.trim(),
-			account.status,
-			account.bioNotes.trim(),
-			JSON.stringify(account.permissions),
-			account.createdAt || nowIso,
-			nowIso
-		]] })
-	});
+function computeContractRollups(contractsTCP, contractPayments) {
+	const map = {};
+	for (const c of contractsTCP) {
+		const tcpAmount = roundCurrency(Number(c.tcpAmount) || 0);
+		const retentionTargetAmount = roundCurrency(tcpAmount * (Number(c.retentionPercent) || 0) / 100);
+		const withholdingTargetAmount = c.hasWithholdingTax ? c.birTaxInfo && c.birTaxInfo.totalWithholdingAmount >= 0 ? roundCurrency(c.birTaxInfo.totalWithholdingAmount) : roundCurrency(tcpAmount * (Number(c.withholdingTaxPercent) || 0) / 100) : 0;
+		const totalDeductibleTarget = roundCurrency(retentionTargetAmount + withholdingTargetAmount);
+		const maxSafeNonRetentionBillable = Math.max(0, roundCurrency(tcpAmount - retentionTargetAmount));
+		map[c.contractId] = {
+			tcpAmount,
+			retentionTargetAmount,
+			withholdingTargetAmount,
+			totalDeductibleTarget,
+			maxSafeNonRetentionBillable,
+			nonRetentionSettledAndRequested: 0,
+			retentionReleasedGross: 0,
+			unreleasedRetentionHoldback: retentionTargetAmount,
+			safeRemainingProgressBillable: maxSafeNonRetentionBillable,
+			receivedGrossDeducted: 0,
+			receivedChequePaid: 0,
+			remainingTCPAfterReceived: tcpAmount,
+			inFlightRFPAmount: 0,
+			retentionAlreadyDeducted: 0,
+			withholdingAlreadyDeducted: 0,
+			totalAlreadyDeducted: 0,
+			remainingDeductibleBalance: totalDeductibleTarget,
+			payments: []
+		};
+	}
+	for (const p of contractPayments) {
+		const entry = map[p.contractId];
+		if (!entry) continue;
+		entry.payments.push(p);
+		if (p.paymentStatus === "CANCELLED") continue;
+		entry.retentionAlreadyDeducted = roundCurrency(entry.retentionAlreadyDeducted + (Number(p.retentionDeducted) || 0));
+		entry.withholdingAlreadyDeducted = roundCurrency(entry.withholdingAlreadyDeducted + (Number(p.withheldAmount) || 0));
+		const isReleasedOrReceived = p.paymentStatus === "CHEQUE_RELEASED" || p.paymentStatus === "RECEIVED";
+		const settledGross = roundCurrency((Number(p.chequeAmount) || 0) + (Number(p.withheldAmount) || 0));
+		const grossValue = isReleasedOrReceived && settledGross > 0 ? settledGross : roundCurrency(Number(p.rfpAmount) || 0);
+		if (p.billingType === "Retention Release") entry.retentionReleasedGross = roundCurrency(entry.retentionReleasedGross + grossValue);
+		else {
+			const netAgainstNonRetentionQuota = Math.max(0, roundCurrency(grossValue - (Number(p.retentionDeducted) || 0)));
+			entry.nonRetentionSettledAndRequested = roundCurrency(entry.nonRetentionSettledAndRequested + netAgainstNonRetentionQuota);
+		}
+		if (isReleasedOrReceived) {
+			const deductedFromTCP = settledGross > 0 ? settledGross : roundCurrency(Number(p.rfpAmount) || 0);
+			entry.receivedGrossDeducted = roundCurrency(entry.receivedGrossDeducted + deductedFromTCP);
+			entry.receivedChequePaid = roundCurrency(entry.receivedChequePaid + (Number(p.chequeAmount) || 0));
+		} else entry.inFlightRFPAmount = roundCurrency(entry.inFlightRFPAmount + (Number(p.rfpAmount) || 0));
+	}
+	for (const contractId of Object.keys(map)) {
+		const r = map[contractId];
+		r.remainingTCPAfterReceived = Math.max(0, roundCurrency(r.tcpAmount - r.receivedGrossDeducted));
+		r.unreleasedRetentionHoldback = Math.max(0, roundCurrency(r.retentionTargetAmount - r.retentionReleasedGross));
+		r.safeRemainingProgressBillable = Math.max(0, roundCurrency(r.remainingTCPAfterReceived - r.unreleasedRetentionHoldback));
+		r.totalAlreadyDeducted = roundCurrency(r.retentionAlreadyDeducted + r.withholdingAlreadyDeducted);
+		r.remainingDeductibleBalance = Math.max(0, roundCurrency(r.totalDeductibleTarget - r.totalAlreadyDeducted));
+	}
+	return map;
+}
+/**
+* Validates referential integrity before deleting a record from any worksheet.
+*/
+function checkDeleteReferentialIntegrity(params) {
+	const { entity, id, projects, subProjects, contractsTCP, contractPayments } = params;
+	if (entity === "site") {
+		const linked = projects.filter((p) => p.siteCode.toUpperCase() === id.toUpperCase());
+		if (linked.length > 0) return {
+			allowed: false,
+			reason: `Cannot delete Site "${id}": ${linked.length} Main Project(s) reference this Site (${linked.slice(0, 3).map((p) => p.mainProjectCode).join(", ")}).`
+		};
+	}
+	if (entity === "projectType") {
+		const linked = projects.filter((p) => p.typeCode.toUpperCase() === id.toUpperCase());
+		if (linked.length > 0) return {
+			allowed: false,
+			reason: `Cannot delete Project Type "${id}": ${linked.length} Main Project(s) use this classification. Disable it instead to hide it from new entries.`
+		};
+	}
+	if (entity === "project") {
+		const linkedSubs = subProjects.filter((sp) => sp.projectId === id);
+		const linkedContracts = contractsTCP.filter((c) => c.projectId === id);
+		if (linkedSubs.length > 0 || linkedContracts.length > 0) return {
+			allowed: false,
+			reason: `Cannot delete Project "${id}": it has ${linkedSubs.length} linked Sub-Project(s) and ${linkedContracts.length} linked Contract(s). Delete child records first.`
+		};
+	}
+	if (entity === "subProject") {
+		const linkedContracts = contractsTCP.filter((c) => c.subProjectId === id);
+		if (linkedContracts.length > 0) return {
+			allowed: false,
+			reason: `Cannot delete Sub-Project "${id}": ${linkedContracts.length} Contract TCP record(s) are linked to it.`
+		};
+	}
+	if (entity === "contractor") {
+		const linkedContracts = contractsTCP.filter((c) => c.contractorCode.toUpperCase() === id.toUpperCase());
+		if (linkedContracts.length > 0) return {
+			allowed: false,
+			reason: `Cannot delete Contractor "${id}": ${linkedContracts.length} Contract TCP record(s) are awarded to this contractor. Mark them Inactive instead.`
+		};
+	}
+	if (entity === "contract") {
+		const linkedPayments = contractPayments.filter((p) => p.contractId === id && p.paymentStatus !== "CANCELLED");
+		const childMods = contractsTCP.filter((c) => c.parentContractId === id);
+		if (linkedPayments.length > 0) return {
+			allowed: false,
+			reason: `Cannot delete Contract "${id}": ${linkedPayments.length} active Payment/RFP record(s) are linked to it. Cancel or delete payments first.`
+		};
+		if (childMods.length > 0) return {
+			allowed: false,
+			reason: `Cannot delete Contract "${id}": ${childMods.length} Escalation/Modification/Takeover contract(s) reference it as their parent.`
+		};
+	}
+	if (entity === "user") {
+		if (params.activeUserId && params.activeUserId === id) return {
+			allowed: false,
+			reason: `Cannot delete the currently active user profile (${id}). Switch to another Admin account first.`
+		};
+		if (params.isTargetActiveAdmin && (params.activeAdminCount ?? 0) <= 1) return {
+			allowed: false,
+			reason: `Cannot delete the last active Admin account (${id}). At least one Admin account must remain active.`
+		};
+	}
+	return { allowed: true };
 }
 // src/lib/selfPackBuilder.ts
 var LOCAL_LOGO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36" width="36" height="36" fill="none">
@@ -22839,9 +13178,14 @@ pre,
   font-feature-settings: "tnum" 1, "zero" 0;
 }
 `;
+/**
+* Strictly synthetic placeholder dataset used ONLY when the user explicitly
+* enables Dev Sandbox Mode. Contains ZERO personal names, real employee emails,
+* credentials, or confidential production business records.
+*/
 var DEFAULT_PORTABLE_DATASET = {
 	spreadsheetId: "1HNmAdZe7POIzIm9mCUPxQJL7p9BoBZEO1hXq6PZNs5M",
-	title: "SiteTrack Pro — Self-Contained Portable Construction & Contract TCP Ledger",
+	title: "SiteTrack Pro — Dev Sandbox Synthetic Dataset (Not Live Production Data)",
 	spreadsheetUrl: "./data.json",
 	existingSheets: [
 		"Sites",
@@ -22859,43 +13203,35 @@ var DEFAULT_PORTABLE_DATASET = {
 	sites: [
 		{
 			rowNumber: 2,
-			siteCode: "CRC3",
-			siteName: "Camella Riverfront Phase 3",
-			developer: "TNADC",
-			location: "Bulacan / North Metro Hub",
+			siteCode: "SITE1",
+			siteName: "Northgate Residential Phase 1 (Sample)",
+			developer: "Sample Development Corp",
+			location: "North Metro District",
 			createdAt: "2025-10-01"
 		},
 		{
 			rowNumber: 3,
-			siteCode: "BGC01",
-			siteName: "Bonifacio High Street North Tower",
-			developer: "Ayala Land Premier",
-			location: "Taguig City, Metro Manila",
+			siteCode: "SITE2",
+			siteName: "Central Commercial Annex (Sample)",
+			developer: "Example Estates Inc.",
+			location: "Central Business District",
 			createdAt: "2025-10-05"
 		},
 		{
 			rowNumber: 4,
-			siteCode: "MKT02",
-			siteName: "Makati Central Logistics Hub",
-			developer: "Rockwell Land Corp",
-			location: "Makati City, Metro Manila",
+			siteCode: "SITE3",
+			siteName: "South Logistics Hub (Sample)",
+			developer: "Demo Industrial Holdings",
+			location: "South Corridor",
 			createdAt: "2025-10-12"
-		},
-		{
-			rowNumber: 5,
-			siteCode: "CEB04",
-			siteName: "Cebu IT Park Commercial Annex",
-			developer: "Cebu Holdings Inc.",
-			location: "Cebu City, Visayas",
-			createdAt: "2025-11-01"
 		}
 	],
 	projectTypes: [
 		{
 			rowNumber: 2,
 			typeCode: "ST7",
-			typeName: "Standard Model ST7 Housing & Power Package",
-			description: "Residential unit electrical, MBase installation, service deposit, and utility connection",
+			typeName: "Standard Unit Utility & Power Package",
+			description: "Unit electrical load schedule, meter base installation, service deposit, and line extension",
 			active: true,
 			createdAt: "2025-10-01"
 		},
@@ -22928,40 +13264,40 @@ var DEFAULT_PORTABLE_DATASET = {
 		{
 			rowNumber: 2,
 			contractorCode: "CTR-0001",
-			contractorName: "One Power Pro Builders Inc",
+			contractorName: "Sample Power Engineering Services",
 			specialty: "Electrical Engineering, Sign & Seal, Load Schedule",
-			contactPerson: "Engr. Marco Villanueva",
-			contactInfo: "m.villanueva@onepowerbuilders.ph | +63 917 555 0142",
+			contactPerson: "Sample Contact A",
+			contactInfo: "contact.a@example.com | +63 900 000 0001",
 			active: true,
 			createdAt: "2025-10-01"
 		},
 		{
 			rowNumber: 3,
 			contractorCode: "CTR-0002",
-			contractorName: "CAOJ Construction & Electrical Services",
+			contractorName: "Demo Electrical & Civil Builders",
 			specialty: "Meter Base Installation, Power Distribution & Civil Works",
-			contactPerson: "Engr. Carlos O. Jimenez",
-			contactInfo: "caoj.services@construction.ph | +63 918 555 0198",
+			contactPerson: "Sample Contact B",
+			contactInfo: "contact.b@example.com | +63 900 000 0002",
 			active: true,
 			createdAt: "2025-10-01"
 		},
 		{
 			rowNumber: 4,
 			contractorCode: "CTR-0003",
-			contractorName: "MERALCO",
-			specialty: "Electric Utility Service Deposit & Cash Advance",
-			contactPerson: "Corporate Utility Account Desk",
-			contactInfo: "bizdesk@meralco.com.ph | 16211",
+			contractorName: "Sample Electric Utility Co.",
+			specialty: "Electric Utility Service Deposit & Line Advance",
+			contactPerson: "Utility Account Desk",
+			contactInfo: "utility@example.com | +63 900 000 0003",
 			active: true,
 			createdAt: "2025-10-01"
 		},
 		{
 			rowNumber: 5,
 			contractorCode: "CTR-0004",
-			contractorName: "Vanguard Structural & MEPF Corp.",
+			contractorName: "Example MEPF Systems Inc.",
 			specialty: "Heavy Structural & High-Voltage Switchgear",
-			contactPerson: "Engr. Patricia Dizon",
-			contactInfo: "pdizon@vanguardmepf.ph | +63 917 800 3311",
+			contactPerson: "Sample Contact D",
+			contactInfo: "contact.d@example.com | +63 900 000 0004",
 			active: true,
 			createdAt: "2025-10-10"
 		}
@@ -22969,28 +13305,28 @@ var DEFAULT_PORTABLE_DATASET = {
 	projects: [{
 		rowNumber: 2,
 		projectId: "PRJ-1001",
-		mainProjectCode: "CRC3-ST7-1601",
-		siteCode: "CRC3",
-		siteName: "Camella Riverfront Phase 3",
-		developer: "TNADC",
+		mainProjectCode: "SITE1-ST7-1601",
+		siteCode: "SITE1",
+		siteName: "Northgate Residential Phase 1 (Sample)",
+		developer: "Sample Development Corp",
 		typeCode: "ST7",
-		typeName: "Standard Model ST7 Housing & Power Package",
+		typeName: "Standard Unit Utility & Power Package",
 		unitIdentifier: "1601",
-		projectName: "B16 L01",
+		projectName: "Sample Block 16 Lot 01",
 		status: "In Progress",
 		createdAt: "2025-10-15",
 		updatedAt: "2026-10-30"
 	}, {
 		rowNumber: 3,
 		projectId: "PRJ-1002",
-		mainProjectCode: "BGC01-MEP-2204",
-		siteCode: "BGC01",
-		siteName: "Bonifacio High Street North Tower",
-		developer: "Ayala Land Premier",
+		mainProjectCode: "SITE2-MEP-2204",
+		siteCode: "SITE2",
+		siteName: "Central Commercial Annex (Sample)",
+		developer: "Example Estates Inc.",
 		typeCode: "MEP",
 		typeName: "Mechanical, Electrical & Plumbing (MEPF)",
 		unitIdentifier: "2204",
-		projectName: "North Podium Main Feeder & Chiller Plant",
+		projectName: "Sample North Podium Feeder & Switchgear",
 		status: "Started",
 		createdAt: "2026-08-10",
 		updatedAt: "2026-11-01"
@@ -23000,63 +13336,63 @@ var DEFAULT_PORTABLE_DATASET = {
 			rowNumber: 2,
 			subProjectId: "SUB-2001",
 			projectId: "PRJ-1001",
-			mainProjectCode: "CRC3-ST7-1601",
-			subProjectCode: "CRC3-ST7-1601-LoadSChed",
-			subProjectName: "Sign and Seal of Mechanical & Electrical Load Schedule",
+			mainProjectCode: "SITE1-ST7-1601",
+			subProjectCode: "SITE1-ST7-1601-LoadSched",
+			subProjectName: "Sign and Seal of Electrical Load Schedule",
 			status: "Completed",
-			progress: 0,
+			progress: 100,
 			targetDate: "2025-10-30",
-			remarks: "Sign and Seal of mech",
+			remarks: "Sign and Seal sample scope",
 			updatedAt: "2025-10-29"
 		},
 		{
 			rowNumber: 3,
 			subProjectId: "SUB-2002",
 			projectId: "PRJ-1001",
-			mainProjectCode: "CRC3-ST7-1601",
-			subProjectCode: "CRC3-ST7-1601-MBase-LabMat",
-			subProjectName: "MBase Installation (Labor & Materials)",
+			mainProjectCode: "SITE1-ST7-1601",
+			subProjectCode: "SITE1-ST7-1601-MBase",
+			subProjectName: "Meter Base Installation (Labor & Materials)",
 			status: "In Progress",
-			progress: 0,
+			progress: 95,
 			targetDate: "2026-11-15",
-			remarks: "MBase Installation",
+			remarks: "MBase Installation with 5% retention holdback",
 			updatedAt: "2026-10-30"
 		},
 		{
 			rowNumber: 4,
 			subProjectId: "SUB-2003",
 			projectId: "PRJ-1001",
-			mainProjectCode: "CRC3-ST7-1601",
-			subProjectCode: "CRC3-ST7-1601-SD",
+			mainProjectCode: "SITE1-ST7-1601",
+			subProjectCode: "SITE1-ST7-1601-SD",
 			subProjectName: "Utility Service Deposit",
 			status: "Started",
-			progress: 0,
+			progress: 50,
 			targetDate: "2026-11-30",
-			remarks: "Service Deposit",
+			remarks: "Service Deposit sample",
 			updatedAt: "2026-09-02"
 		},
 		{
 			rowNumber: 5,
 			subProjectId: "SUB-2004",
 			projectId: "PRJ-1001",
-			mainProjectCode: "CRC3-ST7-1601",
-			subProjectCode: "CRC3-ST7-1601-CA",
-			subProjectName: "Utility Cash Advance for Line Extension",
+			mainProjectCode: "SITE1-ST7-1601",
+			subProjectCode: "SITE1-ST7-1601-CA",
+			subProjectName: "Utility Line Extension Advance",
 			status: "Started",
-			progress: 0,
+			progress: 50,
 			targetDate: "2026-12-15",
-			remarks: "Cash Advance",
+			remarks: "Utility line advance sample",
 			updatedAt: "2026-09-02"
 		},
 		{
 			rowNumber: 6,
 			subProjectId: "SUB-2005",
 			projectId: "PRJ-1002",
-			mainProjectCode: "BGC01-MEP-2204",
-			subProjectCode: "BGC01-MEP-2204-SWG",
+			mainProjectCode: "SITE2-MEP-2204",
+			subProjectCode: "SITE2-MEP-2204-SWG",
 			subProjectName: "Main Low-Voltage Switchgear Assembly",
 			status: "In Progress",
-			progress: 0,
+			progress: 30,
 			targetDate: "2026-12-20",
 			remarks: "Switchgear supply and testing",
 			updatedAt: "2026-11-01"
@@ -23069,36 +13405,36 @@ var DEFAULT_PORTABLE_DATASET = {
 			tcpId: "TCP-0001",
 			parentContractId: "",
 			subProjectId: "SUB-2001",
-			subProjectCode: "CRC3-ST7-1601-LoadSChed",
-			subProjectName: "Sign and Seal of Mechanical & Electrical Load Schedule",
+			subProjectCode: "SITE1-ST7-1601-LoadSched",
+			subProjectName: "Sign and Seal of Electrical Load Schedule",
 			projectId: "PRJ-1001",
-			mainProjectCode: "CRC3-ST7-1601",
+			mainProjectCode: "SITE1-ST7-1601",
 			tcpType: "Original",
-			tcpAmount: 976,
+			tcpAmount: 1120,
 			contractorCode: "CTR-0001",
-			contractorName: "One Power Pro Builders Inc",
+			contractorName: "Sample Power Engineering Services",
 			contractStatus: "CLOSED",
 			awardDate: "2025-10-15",
-			remarks: "Sign and Seal of mech",
+			remarks: "Sign and Seal sample contract",
 			updatedAt: "2025-10-29",
 			dpPercent: 0,
 			progressBillingPercent: 100,
 			retentionPercent: 0,
 			hasWithholdingTax: true,
-			withholdingTaxPercent: 8.9283,
+			withholdingTaxPercent: 8.9286,
 			paymentTermsNotes: "100% upon completion with BIR 2307 WHT",
 			birTaxInfo: {
 				taxMode: "CUSTOM_MANUAL",
 				isVatInclusive: true,
 				vatRatePercent: 12,
-				laborGrossAmount: 976,
+				laborGrossAmount: 1120,
 				materialGrossAmount: 0,
 				laborEwtPercent: 10,
 				materialEwtPercent: 0,
-				computedVatAmount: 104.57,
-				computedLaborEwt: 87.14,
+				computedVatAmount: 120,
+				computedLaborEwt: 100,
 				computedMaterialEwt: 0,
-				totalWithholdingAmount: 87.14,
+				totalWithholdingAmount: 100,
 				isManualOverride: true
 			}
 		},
@@ -23108,14 +13444,14 @@ var DEFAULT_PORTABLE_DATASET = {
 			tcpId: "TCP-0002",
 			parentContractId: "",
 			subProjectId: "SUB-2002",
-			subProjectCode: "CRC3-ST7-1601-MBase-LabMat",
-			subProjectName: "MBase Installation (Labor & Materials)",
+			subProjectCode: "SITE1-ST7-1601-MBase",
+			subProjectName: "Meter Base Installation (Labor & Materials)",
 			projectId: "PRJ-1001",
-			mainProjectCode: "CRC3-ST7-1601",
+			mainProjectCode: "SITE1-ST7-1601",
 			tcpType: "Original",
-			tcpAmount: 95500,
+			tcpAmount: 1e5,
 			contractorCode: "CTR-0002",
-			contractorName: "CAOJ Construction & Electrical Services",
+			contractorName: "Demo Electrical & Civil Builders",
 			contractStatus: "OPEN",
 			awardDate: "2026-09-02",
 			remarks: "MBase Installation",
@@ -23125,12 +13461,12 @@ var DEFAULT_PORTABLE_DATASET = {
 			retentionPercent: 5,
 			hasWithholdingTax: false,
 			withholdingTaxPercent: 0,
-			paymentTermsNotes: "50% DP, 45% Progress, 5% Retention Holdback (PHP 4,775.00)",
+			paymentTermsNotes: "50% DP, 45% Progress, 5% Retention Holdback (PHP 5,000.00)",
 			birTaxInfo: {
 				taxMode: "NON_VAT_LUMP_OR_SEP",
 				isVatInclusive: false,
 				vatRatePercent: 0,
-				laborGrossAmount: 95500,
+				laborGrossAmount: 1e5,
 				materialGrossAmount: 0,
 				laborEwtPercent: 0,
 				materialEwtPercent: 0,
@@ -23147,14 +13483,14 @@ var DEFAULT_PORTABLE_DATASET = {
 			tcpId: "TCP-0003",
 			parentContractId: "",
 			subProjectId: "SUB-2003",
-			subProjectCode: "CRC3-ST7-1601-SD",
+			subProjectCode: "SITE1-ST7-1601-SD",
 			subProjectName: "Utility Service Deposit",
 			projectId: "PRJ-1001",
-			mainProjectCode: "CRC3-ST7-1601",
+			mainProjectCode: "SITE1-ST7-1601",
 			tcpType: "Original",
-			tcpAmount: 60240,
+			tcpAmount: 6e4,
 			contractorCode: "CTR-0003",
-			contractorName: "MERALCO",
+			contractorName: "Sample Electric Utility Co.",
 			contractStatus: "OPEN",
 			awardDate: "2026-09-02",
 			remarks: "Service Deposit",
@@ -23169,7 +13505,7 @@ var DEFAULT_PORTABLE_DATASET = {
 				taxMode: "NON_VAT_LUMP_OR_SEP",
 				isVatInclusive: false,
 				vatRatePercent: 0,
-				laborGrossAmount: 60240,
+				laborGrossAmount: 6e4,
 				materialGrossAmount: 0,
 				laborEwtPercent: 0,
 				materialEwtPercent: 0,
@@ -23186,17 +13522,17 @@ var DEFAULT_PORTABLE_DATASET = {
 			tcpId: "TCP-0004",
 			parentContractId: "",
 			subProjectId: "SUB-2004",
-			subProjectCode: "CRC3-ST7-1601-CA",
-			subProjectName: "Utility Cash Advance for Line Extension",
+			subProjectCode: "SITE1-ST7-1601-CA",
+			subProjectName: "Utility Line Extension Advance",
 			projectId: "PRJ-1001",
-			mainProjectCode: "CRC3-ST7-1601",
+			mainProjectCode: "SITE1-ST7-1601",
 			tcpType: "Original",
-			tcpAmount: 307576.45,
+			tcpAmount: 25e4,
 			contractorCode: "CTR-0003",
-			contractorName: "MERALCO",
+			contractorName: "Sample Electric Utility Co.",
 			contractStatus: "OPEN",
 			awardDate: "2026-09-02",
-			remarks: "Cash Advance",
+			remarks: "Utility line advance",
 			updatedAt: "2026-09-02",
 			dpPercent: 0,
 			progressBillingPercent: 100,
@@ -23208,7 +13544,7 @@ var DEFAULT_PORTABLE_DATASET = {
 				taxMode: "NON_VAT_LUMP_OR_SEP",
 				isVatInclusive: false,
 				vatRatePercent: 0,
-				laborGrossAmount: 307576.45,
+				laborGrossAmount: 25e4,
 				materialGrossAmount: 0,
 				laborEwtPercent: 0,
 				materialEwtPercent: 0,
@@ -23225,14 +13561,14 @@ var DEFAULT_PORTABLE_DATASET = {
 			tcpId: "TCP-0005",
 			parentContractId: "",
 			subProjectId: "SUB-2005",
-			subProjectCode: "BGC01-MEP-2204-SWG",
+			subProjectCode: "SITE2-MEP-2204-SWG",
 			subProjectName: "Main Low-Voltage Switchgear Assembly",
 			projectId: "PRJ-1002",
-			mainProjectCode: "BGC01-MEP-2204",
+			mainProjectCode: "SITE2-MEP-2204",
 			tcpType: "Original",
-			tcpAmount: 45e4,
+			tcpAmount: 448e3,
 			contractorCode: "CTR-0004",
-			contractorName: "Vanguard Structural & MEPF Corp.",
+			contractorName: "Example MEPF Systems Inc.",
 			contractStatus: "OPEN",
 			awardDate: "2026-10-01",
 			remarks: "Switchgear assembly & testing",
@@ -23242,19 +13578,19 @@ var DEFAULT_PORTABLE_DATASET = {
 			retentionPercent: 10,
 			hasWithholdingTax: true,
 			withholdingTaxPercent: 1.3393,
-			paymentTermsNotes: "30% DP, 60% Progress, 10% Retention Holdback",
+			paymentTermsNotes: "30% DP, 60% Progress, 10% Retention Holdback (PHP 44,800.00)",
 			birTaxInfo: {
 				taxMode: "VAT_SEPARATED_LABOR_MAT",
 				isVatInclusive: true,
 				vatRatePercent: 12,
-				laborGrossAmount: 18e4,
-				materialGrossAmount: 27e4,
+				laborGrossAmount: 179200,
+				materialGrossAmount: 268800,
 				laborEwtPercent: 2,
 				materialEwtPercent: 1,
-				computedVatAmount: 48214.29,
-				computedLaborEwt: 3214.29,
-				computedMaterialEwt: 2410.71,
-				totalWithholdingAmount: 5625,
+				computedVatAmount: 48e3,
+				computedLaborEwt: 3200,
+				computedMaterialEwt: 2400,
+				totalWithholdingAmount: 5600,
 				isManualOverride: false
 			}
 		}
@@ -23265,24 +13601,24 @@ var DEFAULT_PORTABLE_DATASET = {
 			paymentId: "PAY-4001",
 			contractId: "CON-3001",
 			subProjectId: "SUB-2001",
-			subProjectCode: "CRC3-ST7-1601-LoadSChed",
-			mainProjectCode: "CRC3-ST7-1601",
+			subProjectCode: "SITE1-ST7-1601-LoadSched",
+			mainProjectCode: "SITE1-ST7-1601",
 			contractorCode: "CTR-0001",
-			contractorName: "One Power Pro Builders Inc",
+			contractorName: "Sample Power Engineering Services",
 			billingType: "Final Billing",
 			paymentStatus: "RECEIVED",
-			rfpNumber: "2025-10-0000909",
+			rfpNumber: "RFP-2025-0001",
 			rfpDate: "2025-10-15",
-			rfpAmount: 976,
-			rfpPayee: "One Power Pro Builders Inc",
+			rfpAmount: 1120,
+			rfpPayee: "Sample Power Engineering Services",
 			retentionDeducted: 0,
-			rfpRemarks: "Sign and Seal",
-			cvNumber: "340573",
+			rfpRemarks: "Sign and Seal completion billing",
+			cvNumber: "CV-10001",
 			cvDate: "2025-10-22",
-			chequeAmount: 888.86,
-			withheldAmount: 87.14,
+			chequeAmount: 1020,
+			withheldAmount: 100,
 			receiptType: "OR (Official Receipt)",
-			receiptNumber: "0086",
+			receiptNumber: "OR-0001",
 			receiptDate: "2025-10-29",
 			updatedAt: "2025-10-29"
 		},
@@ -23291,24 +13627,24 @@ var DEFAULT_PORTABLE_DATASET = {
 			paymentId: "PAY-4002",
 			contractId: "CON-3002",
 			subProjectId: "SUB-2002",
-			subProjectCode: "CRC3-ST7-1601-MBase-LabMat",
-			mainProjectCode: "CRC3-ST7-1601",
+			subProjectCode: "SITE1-ST7-1601-MBase",
+			mainProjectCode: "SITE1-ST7-1601",
 			contractorCode: "CTR-0002",
-			contractorName: "CAOJ Construction & Electrical Services",
+			contractorName: "Demo Electrical & Civil Builders",
 			billingType: "Downpayment (DP)",
 			paymentStatus: "RECEIVED",
-			rfpNumber: "2026-09-0000149",
+			rfpNumber: "RFP-2026-0002",
 			rfpDate: "2026-09-02",
-			rfpAmount: 47750,
-			rfpPayee: "CAOJ",
+			rfpAmount: 5e4,
+			rfpPayee: "Demo Electrical & Civil Builders",
 			retentionDeducted: 0,
-			rfpRemarks: "MBase Installation - 50% DP",
-			cvNumber: "363892",
+			rfpRemarks: "50% Downpayment",
+			cvNumber: "CV-10002",
 			cvDate: "2026-09-10",
-			chequeAmount: 47750,
+			chequeAmount: 5e4,
 			withheldAmount: 0,
 			receiptType: "OR (Official Receipt)",
-			receiptNumber: "1490",
+			receiptNumber: "OR-0002",
 			receiptDate: "2026-09-16",
 			updatedAt: "2026-09-16"
 		},
@@ -23317,21 +13653,21 @@ var DEFAULT_PORTABLE_DATASET = {
 			paymentId: "PAY-4003",
 			contractId: "CON-3004",
 			subProjectId: "SUB-2004",
-			subProjectCode: "CRC3-ST7-1601-CA",
-			mainProjectCode: "CRC3-ST7-1601",
+			subProjectCode: "SITE1-ST7-1601-CA",
+			mainProjectCode: "SITE1-ST7-1601",
 			contractorCode: "CTR-0003",
-			contractorName: "MERALCO",
+			contractorName: "Sample Electric Utility Co.",
 			billingType: "Progress Billing",
 			paymentStatus: "CHEQUE_RELEASED",
-			rfpNumber: "2026-09-0000158",
+			rfpNumber: "RFP-2026-0003",
 			rfpDate: "2026-09-02",
-			rfpAmount: 307576.45,
-			rfpPayee: "MERALCO",
+			rfpAmount: 25e4,
+			rfpPayee: "Sample Electric Utility Co.",
 			retentionDeducted: 0,
-			rfpRemarks: "Cash Advance",
-			cvNumber: "363855",
+			rfpRemarks: "Utility Line Advance",
+			cvNumber: "CV-10003",
 			cvDate: "2026-09-09",
-			chequeAmount: 307576.45,
+			chequeAmount: 25e4,
 			withheldAmount: 0,
 			receiptType: "",
 			receiptNumber: "",
@@ -23343,21 +13679,21 @@ var DEFAULT_PORTABLE_DATASET = {
 			paymentId: "PAY-4004",
 			contractId: "CON-3003",
 			subProjectId: "SUB-2003",
-			subProjectCode: "CRC3-ST7-1601-SD",
-			mainProjectCode: "CRC3-ST7-1601",
+			subProjectCode: "SITE1-ST7-1601-SD",
+			mainProjectCode: "SITE1-ST7-1601",
 			contractorCode: "CTR-0003",
-			contractorName: "MERALCO",
+			contractorName: "Sample Electric Utility Co.",
 			billingType: "Progress Billing",
 			paymentStatus: "CHEQUE_RELEASED",
-			rfpNumber: "2026-09-0000157",
+			rfpNumber: "RFP-2026-0004",
 			rfpDate: "2026-09-02",
-			rfpAmount: 60240,
-			rfpPayee: "MERALCO",
+			rfpAmount: 6e4,
+			rfpPayee: "Sample Electric Utility Co.",
 			retentionDeducted: 0,
 			rfpRemarks: "Service Deposit",
-			cvNumber: "363854",
+			cvNumber: "CV-10004",
 			cvDate: "2026-09-09",
-			chequeAmount: 60240,
+			chequeAmount: 6e4,
 			withheldAmount: 0,
 			receiptType: "",
 			receiptNumber: "",
@@ -23369,21 +13705,21 @@ var DEFAULT_PORTABLE_DATASET = {
 			paymentId: "PAY-4005",
 			contractId: "CON-3002",
 			subProjectId: "SUB-2002",
-			subProjectCode: "CRC3-ST7-1601-MBase-LabMat",
-			mainProjectCode: "CRC3-ST7-1601",
+			subProjectCode: "SITE1-ST7-1601-MBase",
+			mainProjectCode: "SITE1-ST7-1601",
 			contractorCode: "CTR-0002",
-			contractorName: "CAOJ Construction & Electrical Services",
+			contractorName: "Demo Electrical & Civil Builders",
 			billingType: "Progress Billing",
 			paymentStatus: "CHEQUE_RELEASED",
-			rfpNumber: "2026-10-0001820",
+			rfpNumber: "RFP-2026-0005",
 			rfpDate: "2026-10-30",
-			rfpAmount: 42975,
-			rfpPayee: "CAOJ",
+			rfpAmount: 45e3,
+			rfpPayee: "Demo Electrical & Civil Builders",
 			retentionDeducted: 0,
-			rfpRemarks: "95% Progress (5% Retention Holdback PHP 4,775.00 retained)",
-			cvNumber: "368185",
+			rfpRemarks: "45% Progress (5% Retention Holdback PHP 5,000.00 preserved)",
+			cvNumber: "CV-10005",
 			cvDate: "2026-10-31",
-			chequeAmount: 42975,
+			chequeAmount: 45e3,
 			withheldAmount: 0,
 			receiptType: "",
 			receiptNumber: "",
@@ -23395,13 +13731,13 @@ var DEFAULT_PORTABLE_DATASET = {
 		{
 			rowNumber: 2,
 			userId: "USR-0001",
-			fullName: "Louie Sarmiento",
-			email: "louie.sarmiento@sitetrackpro.com",
+			fullName: "Dev System Administrator",
+			email: "admin.dev@example.com",
 			roleTitle: "System Administrator",
-			department: "Executive & Project Controls",
-			phone: "+63 917 100 0001",
+			department: "Project Controls",
+			phone: "+63 900 000 0001",
 			status: "ACTIVE",
-			bioNotes: "Full system access across projects, contracts, payments, and user account permissions.",
+			bioNotes: "Placeholder dev profile with full access across all modules.",
 			permissions: {
 				projects: {
 					view: true,
@@ -23440,13 +13776,13 @@ var DEFAULT_PORTABLE_DATASET = {
 		{
 			rowNumber: 3,
 			userId: "USR-0002",
-			fullName: "Engr. Camille Mendoza",
-			email: "c.mendoza@sitetrackpro.com",
-			roleTitle: "Senior Project Manager",
+			fullName: "Sample Project Manager",
+			email: "pm.dev@example.com",
+			roleTitle: "Project Manager",
 			department: "Engineering & Site Operations",
-			phone: "+63 917 200 0042",
+			phone: "+63 900 000 0002",
 			status: "ACTIVE",
-			bioNotes: "Manages main projects, sub-projects, and contract TCP awarding.",
+			bioNotes: "Placeholder dev profile for project creation and contract awarding.",
 			permissions: {
 				projects: {
 					view: true,
@@ -23485,13 +13821,13 @@ var DEFAULT_PORTABLE_DATASET = {
 		{
 			rowNumber: 4,
 			userId: "USR-0003",
-			fullName: "Rafael Villanueva",
-			email: "r.villanueva@sitetrackpro.com",
+			fullName: "Sample Finance Officer",
+			email: "finance.dev@example.com",
 			roleTitle: "Finance & Disbursement Officer",
 			department: "Finance & Accounting",
-			phone: "+63 918 330 0088",
+			phone: "+63 900 000 0003",
 			status: "ACTIVE",
-			bioNotes: "Processes RFP submissions, Cheque Vouchers (CV), withholding tax, and contractor OR/CR receipts.",
+			bioNotes: "Placeholder dev profile for RFP, CV, BIR 2307, and Receipt tracking.",
 			permissions: {
 				projects: {
 					view: true,
@@ -23530,13 +13866,13 @@ var DEFAULT_PORTABLE_DATASET = {
 		{
 			rowNumber: 5,
 			userId: "USR-0004",
-			fullName: "Patricia Lim",
-			email: "p.lim@sitetrackpro.com",
-			roleTitle: "Executive Auditor (Read-Only)",
+			fullName: "Sample Read-Only Auditor",
+			email: "auditor.dev@example.com",
+			roleTitle: "Auditor (Read-Only)",
 			department: "Internal Audit",
-			phone: "+63 917 440 0199",
+			phone: "+63 900 000 0004",
 			status: "ACTIVE",
-			bioNotes: "Read-only audit access across all project and contract payment modules.",
+			bioNotes: "Placeholder dev profile with read-only audit visibility.",
 			permissions: {
 				projects: {
 					view: true,
@@ -23675,8 +14011,8 @@ function buildZipArchive(entries) {
 /**
 * Generates the portable index.html for each deployment target.
 * ALL file links are in the main directory (./favicon.svg, ./fonts.css, ./style.css, ./app.js)
-* with ZERO root (/) references so the app works immediately in any main branch,
-* repository subpath, Netlify drop, Google Sites iframe, or local folder.
+* with ZERO root (/) references so the app works cleanly in GitHub Pages subpaths,
+* Netlify Drop, Google Sites iframe embeds, or local folders.
 */
 function buildPortableIndexHtml(target, initialDataJsonStr) {
 	const isGoogleSitesEmbed = target === "google-sites-embed";
@@ -23717,23 +14053,22 @@ function wrapPortableJsBundle(rawJs) {
 */
 function buildPortableNetlifyToml(target) {
 	return `# netlify.toml — Static Deployment Configuration for SiteTrack Pro (${target})
-# No build command required: all HTML, CSS, JS, images, fonts, and JSON data are pre-built in the main directory.
+# No build command required: all HTML, CSS, JS, SVG graphics, fonts, and synthetic sandbox data are pre-built.
 
 [build]
   publish = "."
 
-# SPA Fallback Routing (Relative to main publish directory)
+# SPA Fallback Routing (Relative to publish directory)
 [[redirects]]
   from = "/*"
   to = "./index.html"
   status = 200
 
-# Security & Iframe Embedding Headers (Supports Google Sites Embed URL & OAuth Popups)
+# Iframe Embedding & Security Headers (Supports Google Sites Embed URL)
 [[headers]]
   for = "/*"
   [headers.values]
     Content-Security-Policy = "frame-ancestors 'self' https://sites.google.com https://*.google.com https://*.googleusercontent.com *;"
-    Cross-Origin-Opener-Policy = "same-origin-allow-popups"
     Referrer-Policy = "strict-origin-when-cross-origin"
 `;
 }
@@ -23743,150 +14078,127 @@ function buildPortableNetlifyToml(target) {
 function buildPackageReadme(target) {
 	const commonStructure = `\`\`\`text
 main/
-├── index.html          # Main application entry point (all links point to ./ in main)
-├── style.css           # Complete compiled application & printable ledger CSS in main
-├── app.js              # Complete compiled application JS bundle in main
-├── fonts.css           # Local high-legibility font stack in main (Zero external CDNs)
-├── data.json           # Complete local portable dataset (8 tables) in main
-├── logo.svg            # Local brand SVG logo in main
-├── favicon.svg         # Local favicon SVG in main
-├── README.md           # Step-by-step deployment & validation guide
-${target === "github-pages" ? "├── 404.html            # GitHub Pages SPA fallback in main\n├── .nojekyll           # Disables Jekyll filtering on GitHub Pages" : "├── netlify.toml        # Netlify static publish & iframe headers config\n├── _redirects          # SPA routing rules"}
-├── assets/             # Mirrored asset copies for structured folder compatibility
-│   ├── images/logo.svg
-│   ├── icons/favicon.svg
-│   └── fonts/fonts.css
-├── css/style.css       # Mirrored stylesheet copy
-├── js/app.js           # Mirrored JS bundle copy
-└── data/data.json      # Mirrored dataset copy
+├── index.html                   # Main application entry point (all links use relative ./ paths)
+├── style.css                    # Complete compiled application & print stylesheet
+├── app.js                       # Complete compiled production React bundle (IIFE)
+├── fonts.css                    # Local high-legibility system font stack (zero external CDNs)
+├── data.json                    # Synthetic placeholder dataset for explicit Dev Sandbox mode
+├── logo.svg                     # Local SVG brand logo
+├── favicon.svg                  # Local SVG favicon
+├── google-apps-script/
+│   └── Code.gs                  # Google Apps Script Web App bridge for full Read & Write to Google Sheets
+├── README.md                    # Step-by-step deployment & Google Sheet setup guide
+${target === "github-pages" ? "├── 404.html                     # GitHub Pages SPA fallback\n└── .nojekyll                    # Disables Jekyll processing on GitHub Pages" : "├── netlify.toml                 # Netlify static publish & iframe headers config\n└── _redirects                   # SPA routing rules"}
 \`\`\``;
-	const externalServicesSection = `## Optional External Services & Separation of Concerns
+	const googleSheetsSection = `## Connecting Your Live Google Sheet (No Firebase Popup Required)
 
-### 1. Default Mode: 100% Self-Contained Local Data (\`./data.json\` + \`localStorage\`)
-- Out of the box, this package operates **100% independently** with **zero external servers or API calls required**.
-- All file links in \`index.html\` and the application point directly to the **main** directory (\`./style.css\`, \`./app.js\`, \`./fonts.css\`, \`./data.json\`, \`./logo.svg\`, \`./favicon.svg\`) — never to domain root (\`/\`).
-- On startup, the application loads the preloaded dataset and \`./data.json\` (which contains all Sites, Project Types, Main Projects, Sub-Projects, Contractors, Contracts/TCPs, RFPs/CVs/Payments, BIR Tax configurations, and User Accounts).
-- Any new projects, contracts, payments, or edits you make in the UI are automatically saved to browser \`localStorage\` (\`sitetrack_portable_data_v1\`), and you can export or update \`data.json\` at any time.
+SiteTrack Pro preserves your existing 8-worksheet Google Sheet schema (\`Sites\`, \`ProjectTypes\`, \`Projects\`, \`SubProjects\`, \`Contractors\`, \`ContractsTCP\`, \`ContractPayments\`, \`UserAccounts\`) and default Spreadsheet ID \`1HNmAdZe7POIzIm9mCUPxQJL7p9BoBZEO1hXq6PZNs5M\`.
 
-### 2. Optional External Integration: Live Google Sheets v4 API Sync
-- If you later choose to synchronize this application with a live Google Spreadsheet in the cloud:
-  1. Click **Connect Google Sheet (Optional)** in the top right header bar.
-  2. Authorize your deployed domain (e.g., \`https://<username>.github.io\` or \`https://<site-name>.netlify.app\`) in:
-     - **Firebase Console** → Authentication → Settings → **Authorized Domains**
-     - **Google Cloud Console** → APIs & Services → Credentials → OAuth 2.0 Client ID → **Authorized JavaScript Origins**
-  3. No private API keys or client secrets are stored in client-side code; authentication uses browser-side OAuth 2.0 Bearer tokens.`;
+### Mode 1 (Recommended): Full Read & Write via Google Apps Script (\`google-apps-script/Code.gs\`)
+1. Open your Google Sheet: \`https://docs.google.com/spreadsheets/d/1HNmAdZe7POIzIm9mCUPxQJL7p9BoBZEO1hXq6PZNs5M/edit\`
+2. Click **Extensions → Apps Script**.
+3. Delete any default code and paste the complete contents of **\`google-apps-script/Code.gs\`** (also available via one-click Copy inside the app's **Google Sheet Setup** modal).
+4. Click **Save**, then click **Deploy → New deployment → Web app**:
+   - **Execute as**: \`Me\`
+   - **Who has access**: \`Anyone\` (for development testing; restrict with server-side auth in Phase 2).
+5. Copy the deployed \`https://script.google.com/macros/s/.../exec\` URL.
+6. In SiteTrack Pro, click the connection badge in the header → select **Google Apps Script Web App (Full Read & Write)** → paste the \`/exec\` URL → click **Test Connection** → **Save & Sync**.
+7. Your browser remembers the Spreadsheet ID and Apps Script URL across every page refresh.
+
+### Mode 2: Link-Shared Read-Only CSV Sync
+- If your Google Sheet is shared as *"Anyone with the link → Viewer"* and no Apps Script is deployed yet, SiteTrack Pro can read all 8 worksheets directly in **Read-Only** mode. Writes are explicitly blocked with a clear notice rather than faking a save.
+
+### Mode 3: Dev Sandbox (Browser Local Only)
+- Explicitly switch to **Dev Sandbox** to test CRUD operations against the included synthetic placeholder dataset (\`./data.json\`) stored only in your browser's \`localStorage\`.
+
+> **Development-Mode Security Notice (Next Phase Required Before Production)**
+> Authentication (login, user registration, account approval, and server-side RBAC) is intentionally NOT implemented in this phase. Do not expose real confidential records via an unauthenticated public Web App URL in production — add server-side identity verification and role enforcement in the Authentication & Production Deployment phase.`;
 	const qaValidationSummary = `## Pre-Export Quality Assurance (QA) Validation Summary
-- **All File Links in Main (Zero Root \`/\` Links)**: Verified \`index.html\`${target === "github-pages" ? " and `404.html`" : ""} reference \`./favicon.svg\`, \`./fonts.css\`, \`./style.css\`, \`./app.js\`, \`./logo.svg\`, and \`./data.json\` directly in the main folder with **zero root-relative (\`/...\`) links**.
-- **CSS & Local Fonts**: Verified \`./style.css\` and \`./fonts.css\` are locally bundled with **zero external Google Fonts or CDN stylesheet links**.
-- **JavaScript Bundle**: Verified \`./app.js\` is the full production React bundle (~708 KB) wrapped in a self-executing IIFE with **zero development paths or external script CDNs**.
-- **Images & Icons**: Verified \`./logo.svg\` and \`./favicon.svg\` exist locally in the main directory.
-- **Data Portability**: Verified \`./data.json\` contains valid JSON records for all 8 application tables and is pre-hydrated in \`index.html\`.
-- **Zero Temporary URLs**: Verified zero references to temporary preview URLs or local development paths.`;
+- **All File Links in Main (Zero Root \`/\` Links)**: Verified \`index.html\`${target === "github-pages" ? " and `404.html`" : ""} reference \`./favicon.svg\`, \`./fonts.css\`, \`./style.css\`, \`./app.js\`, \`./logo.svg\`, and \`./data.json\` with **zero root-relative (\`/...\`) links**.
+- **Clean Archive (Zero Redundant Duplicate Copies)**: Only canonical files in main plus \`google-apps-script/Code.gs\`.
+- **Zero External CDNs or Dev URLs**: Verified zero Google Fonts CDN links, zero temporary preview URLs, and zero Firebase auth config keys.
+- **Zero Personal/Confidential Fixtures**: Bundled \`./data.json\` contains strictly synthetic placeholder records.`;
 	if (target === "github-pages") return `# SiteTrack Pro — GitHub Pages Self-Contained Package (\`app-github-pages.zip\`)
 
-This archive is a **100% self-contained, portable static web application** ready for deployment to **GitHub Pages** without requiring Node.js, a build command, or a backend server. All file links are located directly in the **main** folder (\`./style.css\`, \`./app.js\`, \`./fonts.css\`, \`./data.json\`, \`./logo.svg\`, \`./favicon.svg\`) — never in root (\`/\`).
+This archive is a **self-contained, portable static web application** ready for deployment to **GitHub Pages** without requiring Node.js, a build command, or a backend server. All file links use relative \`./\` paths so it works cleanly under any GitHub Pages repository subpath (\`https://<username>.github.io/<repo>/\`).
 
 ## Included File Structure
 ${commonStructure}
 
 ## Step-by-Step GitHub Pages Deployment Instructions
 
-### Method A: Upload Directly via GitHub Web Interface into \`main\`
+### Method A: Upload Directly via GitHub Web Interface
 1. **Extract \`app-github-pages.zip\`** on your computer.
 2. Open your GitHub repository on the **\`main\`** branch and click **Add file → Upload files**.
-3. Drag and drop the extracted files (\`index.html\`, \`404.html\`, \`.nojekyll\`, \`style.css\`, \`app.js\`, \`fonts.css\`, \`data.json\`, \`logo.svg\`, \`favicon.svg\`, \`README.md\`) directly into the **\`main\`** directory.
-   - Because all file links in \`index.html\` point directly to the main directory (\`./style.css\`, \`./app.js\`, \`./fonts.css\`, \`./data.json\`, \`./logo.svg\`, \`./favicon.svg\`), the app works immediately even if you only upload the main directory files!
+3. Drag and drop all extracted files (\`index.html\`, \`404.html\`, \`.nojekyll\`, \`style.css\`, \`app.js\`, \`fonts.css\`, \`data.json\`, \`logo.svg\`, \`favicon.svg\`, \`README.md\`, and the \`google-apps-script/\` folder).
 4. Click **Commit changes**.
 5. In your GitHub repository, navigate to **Settings → Pages**.
-6. Under **Build and deployment → Source**, select **Deploy from a branch**, choose branch **\`main\`**, and click **Save**.
+6. Under **Build and deployment → Source**, select **Deploy from a branch**, choose branch **\`main\`** / folder **\`/ (root)\`**, and click **Save**.
 7. Your application will be live at \`https://<your-github-username>.github.io/<repository-name>/\`.
 
-### Method B: Push via Git CLI to \`main\`
+### Method B: Push via Git CLI
 \`\`\`bash
 unzip app-github-pages.zip -d sitetrack-gh-pages
 cd sitetrack-gh-pages
 git init
 git add -A
-git commit -m "Deploy self-contained SiteTrack Pro to GitHub Pages main"
+git commit -m "Deploy self-contained SiteTrack Pro to GitHub Pages"
 git branch -M main
 git remote add origin https://github.com/<your-username>/<your-repo>.git
 git push -u origin main
 \`\`\`
 
-${externalServicesSection}
+${googleSheetsSection}
 
 ${qaValidationSummary}
 `;
 	if (target === "netlify") return `# SiteTrack Pro — Netlify Self-Contained Package (\`app-netlify.zip\`)
 
-This archive is a **100% self-contained, portable static web application** ready for instant deployment to **Netlify** (via **Netlify Drop** or Git-based deployment) with **zero build step required**. All file links are located directly in the **main** directory (\`./style.css\`, \`./app.js\`, \`./fonts.css\`, \`./data.json\`, \`./logo.svg\`, \`./favicon.svg\`).
+This archive is a **self-contained, portable static web application** ready for instant deployment to **Netlify** (via **Netlify Drop** or Git-based deployment) with **zero build step required**.
 
 ## Included File Structure
 ${commonStructure}
 
 ## Step-by-Step Netlify Deployment Instructions
 
-### Option 1: Instant Drag-and-Drop via Netlify Drop (Recommended — 10 Seconds)
+### Option 1: Instant Drag-and-Drop via Netlify Drop
 1. Open **[https://app.netlify.com/drop](https://app.netlify.com/drop)** in your browser.
 2. Drag and drop **\`app-netlify.zip\`** (or the extracted folder) directly onto the Netlify Drop target area.
-3. Netlify will immediately publish the static files and provide a live HTTPS URL (e.g., \`https://your-site-name.netlify.app\`).
-4. No build command is required because all production CSS (\`./style.css\`), JavaScript (\`./app.js\`), local fonts (\`./fonts.css\`), SVG graphics (\`./logo.svg\`, \`./favicon.svg\`), and data (\`./data.json\`) are already compiled and included in the main directory.
+3. Netlify will immediately publish the static files and provide a live HTTPS URL.
 
 ### Option 2: Git-Based Deployment on Netlify
 1. Extract \`app-netlify.zip\` and commit the files to the \`main\` branch of a Git repository.
 2. In Netlify, click **Add new site → Import an existing project** and select your repository.
 3. Netlify automatically reads the included \`netlify.toml\` (\`publish = "."\`, no build command needed).
-4. Click **Deploy site**.
 
-${externalServicesSection}
+${googleSheetsSection}
 
 ${qaValidationSummary}
 `;
 	return `# SiteTrack Pro — Google Sites Embed-Ready Package (\`app-google-sites-embed.zip\`)
 
-This archive contains the **standalone, responsive, embed-ready version** of SiteTrack Pro designed specifically to be hosted on a static hosting provider (such as Netlify or GitHub Pages) and embedded directly into **Google Sites** via the **Embed URL** feature. All file links are located directly in the **main** directory (\`./style.css\`, \`./app.js\`, \`./fonts.css\`, \`./data.json\`, \`./logo.svg\`, \`./favicon.svg\`).
+This archive contains the **standalone, responsive, embed-ready version** of SiteTrack Pro designed to be hosted on Netlify or GitHub Pages and embedded into **Google Sites** via the **Embed URL** feature.
 
 > **Important Note About Google Sites**:
-> Google Sites does not directly host or execute multi-file ZIP archives. You must first publish this static package to a free HTTPS static host (such as **Netlify Drop** or **GitHub Pages**) to obtain a live \`https://\` URL, and then embed that published URL into Google Sites.
+> Google Sites does not directly host or execute multi-file ZIP archives. First publish this static package to a free HTTPS static host (such as **Netlify Drop** or **GitHub Pages**) to obtain a live \`https://\` URL, then embed that published URL into Google Sites.
 
 ## Included File Structure
 ${commonStructure}
 
 ## Step-by-Step Instructions: Host & Embed into Google Sites
+1. Deploy \`app-google-sites-embed.zip\` to **Netlify Drop** (\`https://app.netlify.com/drop\`) or **GitHub Pages**.
+2. Open **[Google Sites](https://sites.google.com)** → **Pages** → **+ Full page embed** (or **Insert → Embed → By URL**).
+3. Paste your published HTTPS URL, click **Insert**, and click **Publish**.
 
-### Step 1: Publish the Package to Obtain an HTTPS URL (Zero Build Required)
-1. **Using Netlify Drop (Fastest — Free)**:
-   - Go to **[https://app.netlify.com/drop](https://app.netlify.com/drop)**.
-   - Drag and drop **\`app-google-sites-embed.zip\`** (or the extracted folder) onto the page.
-   - Copy your newly published HTTPS URL (for example: \`https://sitetrack-pro-embed.netlify.app\`).
-   - *Note*: The included \`netlify.toml\` configures \`Content-Security-Policy: frame-ancestors 'self' https://sites.google.com https://*.google.com *;\` so Google Sites is explicitly permitted to embed the application in an iframe.
-2. **Alternative — Using GitHub Pages**:
-   - Extract \`app-google-sites-embed.zip\`, upload the files to the \`main\` branch of a GitHub repository, and enable **Settings → Pages → Deploy from branch (\`main\`)**.
-   - Copy your published GitHub Pages HTTPS URL (e.g., \`https://<username>.github.io/<repo>/\`).
-
-### Step 2: Embed the Published URL into Google Sites
-1. Open your site in **[Google Sites](https://sites.google.com)**.
-2. Choose one of the two embedding layouts:
-   - **Option A — Dedicated Full-Page Embed (Recommended for Desktop & Mobile)**:
-     1. In the right-hand sidebar, open the **Pages** tab.
-     2. Hover over the **+** button at the bottom and click **Full page embed**.
-     3. Name the page (e.g., \`Project & TCP Tracker\`).
-     4. Click **Add embed → By URL**.
-     5. Paste your published HTTPS URL and click **Insert**.
-   - **Option B — Section Embed Inside an Existing Google Sites Page**:
-     1. In the right-hand sidebar, open the **Insert** tab and click **Embed → By URL**.
-     2. Paste your published HTTPS URL, click **Insert**, and resize the frame to full width.
-3. Click **Publish** in the top-right corner of Google Sites.
-
-${externalServicesSection}
+${googleSheetsSection}
 
 ${qaValidationSummary}
 `;
 }
 /**
-* Assembles the exact list of files (ZipEntryInput[]) for a target package.
-* Places ALL linked files directly in the main directory (style.css, app.js, fonts.css, data.json, logo.svg, favicon.svg)
-* AND mirrors them in css/, js/, assets/, data/ so both flat main-folder uploads and folder structures work 100%.
+* Assembles the exact clean list of files (ZipEntryInput[]) for a target package.
+* Zero redundant duplicate copies — all linked assets live in the main directory,
+* plus google-apps-script/Code.gs for live Google Sheets Read & Write.
 */
 function buildPortablePackageEntries(target, bundle, customDataOverride) {
 	const dataJsonStr = customDataOverride ? JSON.stringify(customDataOverride, null, 2) : bundle.defaultDataJson;
@@ -23925,32 +14237,12 @@ function buildPortablePackageEntries(target, bundle, customDataOverride) {
 		{
 			path: "README.md",
 			content: readmeMd
-		},
-		{
-			path: "css/style.css",
-			content: bundle.compiledCss
-		},
-		{
-			path: "js/app.js",
-			content: wrappedJs
-		},
-		{
-			path: "assets/images/logo.svg",
-			content: bundle.logoSvg
-		},
-		{
-			path: "assets/icons/favicon.svg",
-			content: bundle.faviconSvg
-		},
-		{
-			path: "assets/fonts/fonts.css",
-			content: bundle.fontsCss
-		},
-		{
-			path: "data/data.json",
-			content: dataJsonStr
 		}
 	];
+	if (bundle.appsScriptCodeGs && bundle.appsScriptCodeGs.trim().length > 100) commonEntries.push({
+		path: "google-apps-script/Code.gs",
+		content: bundle.appsScriptCodeGs
+	});
 	if (target === "github-pages") return [
 		...commonEntries,
 		{
@@ -24002,6 +14294,7 @@ function validatePortablePackageEntries(target, entries) {
 	const logoSvg = entryMap.get("logo.svg") || "";
 	const faviconSvg = entryMap.get("favicon.svg") || "";
 	const dataJson = entryMap.get("data.json") || "";
+	const codeGs = entryMap.get("google-apps-script/Code.gs") || "";
 	const checks = [];
 	const hasMainCssRef = indexHtml.includes("href=\"./style.css\"") && indexHtml.includes("href=\"./fonts.css\"");
 	const hasMainJsRef = indexHtml.includes("src=\"./app.js\"");
@@ -24010,9 +14303,9 @@ function validatePortablePackageEntries(target, entries) {
 	checks.push({
 		id: "html-main-dir-refs",
 		category: "HTML & Main-Directory Links",
-		description: "All file links in index.html point directly to the main directory (./style.css, ./app.js, ./fonts.css, ./favicon.svg) with zero root (/) paths",
+		description: "All file links in index.html use relative ./ paths (./style.css, ./app.js, ./fonts.css, ./favicon.svg) with zero root (/) paths",
 		passed: Boolean(indexHtml.length > 100 && hasMainCssRef && hasMainJsRef && hasMainFaviconRef && hasNoRootSlashLinks),
-		detail: hasMainCssRef && hasMainJsRef && hasMainFaviconRef && hasNoRootSlashLinks ? "Verified ./style.css, ./fonts.css, ./favicon.svg, and ./app.js in main directory (0 root \"/\" links)" : "Missing main-directory relative asset reference in index.html"
+		detail: hasMainCssRef && hasMainJsRef && hasMainFaviconRef && hasNoRootSlashLinks ? "Verified ./style.css, ./fonts.css, ./favicon.svg, and ./app.js (0 root \"/\" links)" : "Missing main-directory relative asset reference in index.html"
 	});
 	checks.push({
 		id: "css-and-fonts-present",
@@ -24047,17 +14340,19 @@ function validatePortablePackageEntries(target, entries) {
 		dataValid = false;
 	}
 	const platformConfigValid = target === "github-pages" ? entryMap.has(".nojekyll") && entryMap.has("404.html") && entryMap.has("README.md") : entryMap.has("netlify.toml") && entryMap.has("_redirects") && entryMap.has("README.md");
+	const hasAppsScript = codeGs.includes("function doGet") && codeGs.includes("function doPost");
 	checks.push({
 		id: "data-and-config-files",
-		category: "Data & Config",
-		description: "Main-directory ./data.json (8 tables), inline initial data hydration, README.md, and platform configs included",
-		passed: dataValid && platformConfigValid && indexHtml.includes("__SITETRACK_INITIAL_DATA__"),
-		detail: `${dataSummary} · Pre-hydrated + ./data.json verified`
+		category: "Data, Script & Platform Config",
+		description: "Synthetic ./data.json (8 tables), google-apps-script/Code.gs, README.md, and platform configs included",
+		passed: dataValid && platformConfigValid && hasAppsScript && indexHtml.includes("__SITETRACK_INITIAL_DATA__"),
+		detail: `${dataSummary} · Code.gs (${Math.round(codeGs.length / 1024)} KB) verified`
 	});
 	const combinedText = [
 		indexHtml,
 		styleCss,
 		fontsCss,
+		dataJson,
 		entryMap.get("README.md") || ""
 	].join("\n");
 	const gFontsDomain = [
@@ -24085,14 +14380,17 @@ function validatePortablePackageEntries(target, entries) {
 		"run",
 		"app"
 	].join(".");
+	const personalToken1 = ["louie", "sarmiento"].join(" ");
+	const personalToken2 = ["lasarmiento", "apec"].join(".");
 	const hasExternalFontCdn = indexHtml.includes(gFontsDomain) || indexHtml.includes(gStaticDomain) || fontsCss.includes(gFontsDomain) || styleCss.includes(gFontsDomain);
 	const hasTempPreviewUrl = combinedText.includes(tempDevToken) || combinedText.includes(tempPreToken) || combinedText.includes(runAppToken);
+	const hasPersonalData = combinedText.toLowerCase().includes(personalToken1) || combinedText.toLowerCase().includes(personalToken2);
 	checks.push({
 		id: "zero-external-cdn-and-temp-urls",
-		category: "Zero Root (/) or External CDN Links",
-		description: "Zero root (/...) links, zero external CDN dependencies, zero dev environment paths, and zero temporary preview URLs",
-		passed: !hasExternalFontCdn && !hasTempPreviewUrl && hasNoRootSlashLinks,
-		detail: !hasExternalFontCdn && !hasTempPreviewUrl && hasNoRootSlashLinks ? "0 root \"/\" links · 0 external CDNs · 0 dev environment paths" : "Found prohibited root link, external CDN, or dev path reference"
+		category: "Zero Root (/), CDNs, or Sensitive Data",
+		description: "Zero root (/...) links, zero external CDNs, zero temporary preview URLs, and zero embedded personal/confidential records",
+		passed: !hasExternalFontCdn && !hasTempPreviewUrl && !hasPersonalData && hasNoRootSlashLinks,
+		detail: !hasExternalFontCdn && !hasTempPreviewUrl && !hasPersonalData && hasNoRootSlashLinks ? "0 root \"/\" links · 0 external CDNs · 0 personal/confidential records" : "Found prohibited root link, external CDN, dev path, or personal data reference"
 	});
 	const hasViewportMeta = indexHtml.includes("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />");
 	checks.push({
@@ -24113,8 +14411,8 @@ function validatePortablePackageEntries(target, entries) {
 	};
 }
 /**
-* Loads the compiled portable asset bundle from ./portable-bundle-manifest.json or ./exports/portable-bundle-manifest.json
-* (or directly from ./app.js and ./style.css in the main directory).
+* Loads the compiled portable asset bundle from ./portable-bundle-manifest.json
+* or ./exports/portable-bundle-manifest.json (with fallback to ./app.js and ./style.css).
 */
 async function loadPortableAssetBundle() {
 	for (const manifestPath of ["./portable-bundle-manifest.json", "./exports/portable-bundle-manifest.json"]) try {
@@ -24449,10 +14747,63 @@ var CircleCheck = createLucideIcon("circle-check", [["circle", {
 * This source code is licensed under the ISC license.
 * See the LICENSE file in the root directory of this source tree.
 */
+var ClipboardCopy = createLucideIcon("clipboard-copy", [
+	["rect", {
+		width: "8",
+		height: "4",
+		x: "8",
+		y: "2",
+		rx: "1",
+		ry: "1",
+		key: "tgr4d6"
+	}],
+	["path", {
+		d: "M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2",
+		key: "4jdomd"
+	}],
+	["path", {
+		d: "M16 4h2a2 2 0 0 1 2 2v4",
+		key: "3hqy98"
+	}],
+	["path", {
+		d: "M21 14H11",
+		key: "1bme5i"
+	}],
+	["path", {
+		d: "m15 10-4 4 4 4",
+		key: "5dvupr"
+	}]
+]);
+/**
+* @license lucide-react v0.546.0 - ISC
+*
+* This source code is licensed under the ISC license.
+* See the LICENSE file in the root directory of this source tree.
+*/
 var Cloud = createLucideIcon("cloud", [["path", {
 	d: "M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z",
 	key: "p7xjir"
 }]]);
+/**
+* @license lucide-react v0.546.0 - ISC
+*
+* This source code is licensed under the ISC license.
+* See the LICENSE file in the root directory of this source tree.
+*/
+var CodeXml = createLucideIcon("code-xml", [
+	["path", {
+		d: "m18 16 4-4-4-4",
+		key: "1inbqp"
+	}],
+	["path", {
+		d: "m6 8-4 4 4 4",
+		key: "15zrgr"
+	}],
+	["path", {
+		d: "m14.5 4-5 16",
+		key: "e7oirm"
+	}]
+]);
 /**
 * @license lucide-react v0.546.0 - ISC
 *
@@ -24633,38 +14984,6 @@ var FilePlus = createLucideIcon("file-plus", [
 * This source code is licensed under the ISC license.
 * See the LICENSE file in the root directory of this source tree.
 */
-var FileSpreadsheet = createLucideIcon("file-spreadsheet", [
-	["path", {
-		d: "M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z",
-		key: "1rqfz7"
-	}],
-	["path", {
-		d: "M14 2v4a2 2 0 0 0 2 2h4",
-		key: "tnqrlb"
-	}],
-	["path", {
-		d: "M8 13h2",
-		key: "yr2amv"
-	}],
-	["path", {
-		d: "M14 13h2",
-		key: "un5t4a"
-	}],
-	["path", {
-		d: "M8 17h2",
-		key: "2yhykz"
-	}],
-	["path", {
-		d: "M14 17h2",
-		key: "10kma7"
-	}]
-]);
-/**
-* @license lucide-react v0.546.0 - ISC
-*
-* This source code is licensed under the ISC license.
-* See the LICENSE file in the root directory of this source tree.
-*/
 var FileText = createLucideIcon("file-text", [
 	["path", {
 		d: "M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z",
@@ -24685,6 +15004,26 @@ var FileText = createLucideIcon("file-text", [
 	["path", {
 		d: "M16 17H8",
 		key: "z1uh3a"
+	}]
+]);
+/**
+* @license lucide-react v0.546.0 - ISC
+*
+* This source code is licensed under the ISC license.
+* See the LICENSE file in the root directory of this source tree.
+*/
+var FlaskConical = createLucideIcon("flask-conical", [
+	["path", {
+		d: "M14 2v6a2 2 0 0 0 .245.96l5.51 10.08A2 2 0 0 1 18 22H6a2 2 0 0 1-1.755-2.96l5.51-10.08A2 2 0 0 0 10 8V2",
+		key: "18mbvz"
+	}],
+	["path", {
+		d: "M6.453 15h11.094",
+		key: "3shlmq"
+	}],
+	["path", {
+		d: "M8.5 2h7",
+		key: "csnxdl"
 	}]
 ]);
 /**
@@ -24848,22 +15187,6 @@ var Info = createLucideIcon("info", [
 * This source code is licensed under the ISC license.
 * See the LICENSE file in the root directory of this source tree.
 */
-var KeyRound = createLucideIcon("key-round", [["path", {
-	d: "M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z",
-	key: "1s6t7t"
-}], ["circle", {
-	cx: "16.5",
-	cy: "7.5",
-	r: ".5",
-	fill: "currentColor",
-	key: "w0ekpg"
-}]]);
-/**
-* @license lucide-react v0.546.0 - ISC
-*
-* This source code is licensed under the ISC license.
-* See the LICENSE file in the root directory of this source tree.
-*/
 var Layers = createLucideIcon("layers", [
 	["path", {
 		d: "M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z",
@@ -24947,6 +15270,16 @@ var Link2 = createLucideIcon("link-2", [
 * This source code is licensed under the ISC license.
 * See the LICENSE file in the root directory of this source tree.
 */
+var LoaderCircle = createLucideIcon("loader-circle", [["path", {
+	d: "M21 12a9 9 0 1 1-6.219-8.56",
+	key: "13zald"
+}]]);
+/**
+* @license lucide-react v0.546.0 - ISC
+*
+* This source code is licensed under the ISC license.
+* See the LICENSE file in the root directory of this source tree.
+*/
 var Lock = createLucideIcon("lock", [["rect", {
 	width: "18",
 	height: "11",
@@ -24959,26 +15292,6 @@ var Lock = createLucideIcon("lock", [["rect", {
 	d: "M7 11V7a5 5 0 0 1 10 0v4",
 	key: "fwvmzm"
 }]]);
-/**
-* @license lucide-react v0.546.0 - ISC
-*
-* This source code is licensed under the ISC license.
-* See the LICENSE file in the root directory of this source tree.
-*/
-var LogOut = createLucideIcon("log-out", [
-	["path", {
-		d: "m16 17 5-5-5-5",
-		key: "1bji2h"
-	}],
-	["path", {
-		d: "M21 12H9",
-		key: "dn1m92"
-	}],
-	["path", {
-		d: "M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4",
-		key: "1uf3rs"
-	}]
-]);
 /**
 * @license lucide-react v0.546.0 - ISC
 *
@@ -25536,16 +15849,23 @@ var require_react_jsx_runtime_production = /* @__PURE__ */ __commonJSMin(((expor
 var import_jsx_runtime = (/* @__PURE__ */ __commonJSMin(((exports, module) => {
 	module.exports = require_react_jsx_runtime_production();
 })))();
-var ConfirmActionModal = ({ config, isSubmitting, onClose }) => {
+var ConfirmActionModal = ({ config, isSubmitting, errorMessage, onClose }) => {
+	const lockRef = (0, import_react.useRef)(false);
 	if (!config) return null;
-	const handleConfirm = async () => {
-		await config.onConfirm();
+	const isDanger = config.variant === "danger" || Boolean(config.isDestructive);
+	const handleConfirmClick = async () => {
+		if (isSubmitting || lockRef.current) return;
+		lockRef.current = true;
+		try {
+			await config.onConfirm();
+		} finally {
+			lockRef.current = false;
+		}
 	};
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-		className: "fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-[1px]",
+		className: "no-print fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-[1px]",
 		role: "dialog",
 		"aria-modal": "true",
-		"aria-labelledby": "confirm-modal-title",
 		children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 			className: "w-full max-w-lg rounded-lg border border-slate-200 bg-white shadow-xl",
 			children: [
@@ -25554,64 +15874,475 @@ var ConfirmActionModal = ({ config, isSubmitting, onClose }) => {
 					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 						className: "flex items-center gap-3",
 						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-							className: `flex h-9 w-9 shrink-0 items-center justify-center rounded-md border ${config.isDestructive ? "border-red-200 bg-red-50 text-red-700" : "border-slate-200 bg-slate-50 text-slate-800"}`,
-							children: config.isDestructive ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(TriangleAlert, { className: "h-4 w-4" }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)(FileSpreadsheet, { className: "h-4 w-4" })
-						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", {
-							id: "confirm-modal-title",
-							className: "text-base font-semibold text-slate-900",
+							className: `flex h-9 w-9 shrink-0 items-center justify-center rounded-md border ${isDanger ? "border-red-200 bg-red-50 text-red-700" : "border-slate-200 bg-slate-50 text-slate-800"}`,
+							children: isDanger ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(TriangleAlert, { className: "h-4 w-4" }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ShieldCheck, { className: "h-4 w-4" })
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h3", {
+							className: "text-sm font-semibold text-slate-900",
 							children: config.title
 						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
 							className: "text-xs text-slate-500",
-							children: ["Target Sheet: ", /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-								className: "font-mono font-medium text-slate-700",
-								children: config.sheetName
-							})]
+							children: [
+								"Target Worksheet:",
+								" ",
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+									className: "font-mono font-medium text-slate-700",
+									children: config.sheetName
+								})
+							]
 						})] })]
 					}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
 						type: "button",
-						onClick: onClose,
 						disabled: isSubmitting,
-						className: "rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 disabled:opacity-50",
+						onClick: onClose,
+						className: "rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 disabled:opacity-40",
 						"aria-label": "Close confirmation dialog",
 						children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(X, { className: "h-4 w-4" })
 					})]
 				}),
 				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-					className: "px-6 py-5 space-y-4",
-					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-						className: "text-sm text-slate-600 leading-relaxed",
-						children: config.description
-					}), config.details.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-						className: "rounded-md border border-slate-200 bg-slate-50 p-3.5 space-y-2",
-						children: config.details.map((item, idx) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-							className: "flex items-baseline justify-between gap-4 text-xs",
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-								className: "text-slate-500 shrink-0",
-								children: item.label
-							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-								className: "font-mono font-medium text-slate-900 text-right break-all",
-								children: item.value
+					className: "px-6 py-4 space-y-4",
+					children: [
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+							className: "text-xs leading-relaxed text-slate-600",
+							children: config.description
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+							className: "rounded-md border border-slate-200 bg-slate-50/70 divide-y divide-slate-200",
+							children: config.details.map((item, index) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "flex items-start justify-between gap-4 px-3.5 py-2 text-xs",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+									className: "font-medium text-slate-500 shrink-0",
+									children: item.label
+								}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+									className: "font-mono text-right text-slate-900 break-all",
+									children: item.value
+								})]
+							}, index))
+						}),
+						errorMessage && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "flex items-start gap-2 rounded-md border border-red-300 bg-red-50 p-3 text-xs text-red-900",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CircleAlert, { className: "h-4 w-4 text-red-600 shrink-0 mt-0.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "space-y-0.5",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+									className: "font-semibold",
+									children: "Action Could Not Be Saved"
+								}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+									className: "text-red-800 leading-relaxed",
+									children: errorMessage
+								})]
 							})]
-						}, idx))
-					})]
+						})
+					]
 				}),
 				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-					className: "flex items-center justify-end gap-3 border-t border-slate-200 bg-slate-50/60 px-6 py-3.5",
+					className: "flex items-center justify-end gap-2.5 border-t border-slate-200 bg-slate-50/60 px-6 py-3.5 rounded-b-lg",
 					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
 						type: "button",
+						disabled: isSubmitting,
 						onClick: onClose,
-						disabled: isSubmitting,
-						className: "rounded-md border border-slate-300 bg-white px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50 whitespace-nowrap shrink-0",
+						className: "rounded-md border border-slate-300 bg-white px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40",
 						children: "Cancel"
-					}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+					}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
 						type: "button",
-						onClick: handleConfirm,
 						disabled: isSubmitting,
-						className: `rounded-md px-4 py-2 text-xs font-medium text-white transition-colors disabled:opacity-50 whitespace-nowrap shrink-0 ${config.isDestructive ? "bg-red-600 hover:bg-red-700" : "bg-slate-900 hover:bg-slate-800"}`,
-						children: isSubmitting ? "Syncing with Google Sheets..." : config.confirmLabel
+						onClick: () => void handleConfirmClick(),
+						className: `inline-flex items-center gap-2 rounded-md px-4 py-2 text-xs font-medium text-white disabled:opacity-50 ${isDanger ? "bg-red-700 hover:bg-red-800" : "bg-slate-900 hover:bg-slate-800"}`,
+						children: [isSubmitting && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(LoaderCircle, { className: "h-3.5 w-3.5 animate-spin" }), isSubmitting ? "Saving..." : config.confirmLabel || "Confirm & Save"]
 					})]
 				})
 			]
+		})
+	});
+};
+// src/lib/appsScriptTemplate.ts
+var APPS_SCRIPT_CODE_GS = "/**\n * SiteTrack Pro — Google Apps Script Web App Database Bridge (Code.gs)\n *\n * Target Spreadsheet ID (preserved): 1HNmAdZe7POIzIm9mCUPxQJL7p9BoBZEO1hXq6PZNs5M\n *\n * Preserved 8-Worksheet Schema (exact tab names & column orders):\n *   1. Sites             (A:E — 5 cols)  PK: SiteCode (Col A)\n *   2. ProjectTypes      (A:E — 5 cols)  PK: TypeCode (Col A)\n *   3. Projects          (A:L — 12 cols) PK: ProjectID (Col A)\n *   4. SubProjects       (A:J — 10 cols) PK: SubProjectID (Col A)\n *   5. Contractors       (A:G — 7 cols)  PK: ContractorCode (Col A)\n *   6. ContractsTCP      (A:W — 23 cols) PK: ContractID (Col A)\n *   7. ContractPayments  (A:W — 23 cols) PK: PaymentID (Col A)\n *   8. UserAccounts      (A:K — 11 cols) PK: UserID (Col A)\n *\n * Deployment Instructions:\n *   1. Open your Google Sheet -> Extensions -> Apps Script.\n *   2. Paste this entire file into Code.gs and Save.\n *   3. Click Deploy -> New deployment -> Select type: Web app.\n *   4. Execute as: \"Me\" | Who has access: \"Anyone\" (development mode; add server-side auth in Phase 2).\n *   5. Copy the Web App URL (https://script.google.com/macros/s/.../exec) into SiteTrack Pro.\n */\n\nvar DEFAULT_SPREADSHEET_ID = '1HNmAdZe7POIzIm9mCUPxQJL7p9BoBZEO1hXq6PZNs5M';\n\nvar REQUIRED_SHEETS = [\n  'Sites',\n  'ProjectTypes',\n  'Projects',\n  'SubProjects',\n  'Contractors',\n  'ContractsTCP',\n  'ContractPayments',\n  'UserAccounts',\n];\n\nvar SHEET_HEADERS = {\n  Sites: ['SiteCode', 'SiteName', 'Developer', 'Location', 'CreatedAt'],\n  ProjectTypes: ['TypeCode', 'TypeName', 'Description', 'Active', 'CreatedAt'],\n  Projects: [\n    'ProjectID',\n    'MainProjectCode',\n    'SiteCode',\n    'SiteName',\n    'Developer',\n    'TypeCode',\n    'TypeName',\n    'UnitIdentifier',\n    'ProjectName',\n    'Status',\n    'CreatedAt',\n    'UpdatedAt',\n  ],\n  SubProjects: [\n    'SubProjectID',\n    'ProjectID',\n    'MainProjectCode',\n    'SubProjectCode',\n    'SubProjectName',\n    'Status',\n    'Progress',\n    'TargetDate',\n    'Remarks',\n    'UpdatedAt',\n  ],\n  Contractors: [\n    'ContractorCode',\n    'ContractorName',\n    'Specialty',\n    'ContactPerson',\n    'ContactInfo',\n    'Active',\n    'CreatedAt',\n  ],\n  ContractsTCP: [\n    'ContractID',\n    'SubProjectID',\n    'SubProjectCode',\n    'SubProjectName',\n    'ProjectID',\n    'MainProjectCode',\n    'TCPType',\n    'TCPAmount',\n    'ContractorCode',\n    'ContractorName',\n    'ContractStatus',\n    'AwardDate',\n    'Remarks',\n    'UpdatedAt',\n    'DPPercent',\n    'ProgressBillingPercent',\n    'RetentionPercent',\n    'HasWithholdingTax',\n    'WithholdingTaxPercent',\n    'PaymentTermsNotes',\n    'TCPID',\n    'ParentContractID',\n    'BIRTaxBreakdownJSON',\n  ],\n  ContractPayments: [\n    'PaymentID',\n    'ContractID',\n    'SubProjectID',\n    'SubProjectCode',\n    'MainProjectCode',\n    'ContractorCode',\n    'ContractorName',\n    'BillingType',\n    'PaymentStatus',\n    'RFPNumber',\n    'RFPDate',\n    'RFPAmount',\n    'RFPPayee',\n    'RetentionDeducted',\n    'RFPRemarks',\n    'CVNumber',\n    'CVDate',\n    'ChequeAmount',\n    'WithheldAmount',\n    'ReceiptType',\n    'ReceiptNumber',\n    'ReceiptDate',\n    'UpdatedAt',\n  ],\n  UserAccounts: [\n    'UserID',\n    'FullName',\n    'Email',\n    'RoleTitle',\n    'Department',\n    'Phone',\n    'Status',\n    'BioNotes',\n    'PermissionsJSON',\n    'CreatedAt',\n    'UpdatedAt',\n  ],\n};\n\nfunction jsonResponse(payload) {\n  return ContentService.createTextOutput(JSON.stringify(payload)).setMimeType(\n    ContentService.MimeType.JSON\n  );\n}\n\nfunction getSpreadsheet(requestedId) {\n  var id = (requestedId || '').toString().trim() || DEFAULT_SPREADSHEET_ID;\n  try {\n    return SpreadsheetApp.openById(id);\n  } catch (err) {\n    var active = SpreadsheetApp.getActiveSpreadsheet();\n    if (active && (!requestedId || active.getId() === id)) {\n      return active;\n    }\n    throw new Error(\n      'Unable to open spreadsheet \"' +\n        id +\n        '\". Ensure the Apps Script owner has Editor access. Details: ' +\n        err.message\n    );\n  }\n}\n\nfunction normalizeCellValue(val) {\n  if (val === null || val === undefined) return '';\n  if (val instanceof Date) {\n    return Utilities.formatDate(\n      val,\n      Session.getScriptTimeZone() || 'UTC',\n      'yyyy-MM-dd'\n    );\n  }\n  return String(val);\n}\n\nfunction inspectSpreadsheetData(ss) {\n  var existingSheets = [];\n  var missingSheets = [];\n  var tables = {};\n\n  for (var i = 0; i < REQUIRED_SHEETS.length; i++) {\n    var name = REQUIRED_SHEETS[i];\n    var sheet = ss.getSheetByName(name);\n    if (!sheet) {\n      missingSheets.push(name);\n      tables[name] = [];\n      continue;\n    }\n    existingSheets.push(name);\n    var lastRow = sheet.getLastRow();\n    var lastCol = Math.max(sheet.getLastColumn(), SHEET_HEADERS[name].length);\n    if (lastRow === 0) {\n      tables[name] = [];\n    } else {\n      var rawValues = sheet.getRange(1, 1, lastRow, lastCol).getValues();\n      var normalized = [];\n      for (var r = 0; r < rawValues.length; r++) {\n        var rowOut = [];\n        for (var c = 0; c < rawValues[r].length; c++) {\n          rowOut.push(normalizeCellValue(rawValues[r][c]));\n        }\n        normalized.push(rowOut);\n      }\n      tables[name] = normalized;\n    }\n  }\n\n  return {\n    spreadsheetId: ss.getId(),\n    title: ss.getName(),\n    spreadsheetUrl: ss.getUrl(),\n    existingSheets: existingSheets,\n    missingSheets: missingSheets,\n    lastSyncedAt: new Date().toISOString(),\n    tables: tables,\n  };\n}\n\nfunction normalizeRowToWidth(sheetName, values) {\n  var headers = SHEET_HEADERS[sheetName];\n  if (!headers) {\n    throw new Error('Unknown worksheet: ' + sheetName);\n  }\n  if (!Array.isArray(values)) {\n    throw new Error('Row values must be an array.');\n  }\n  var out = [];\n  for (var i = 0; i < headers.length; i++) {\n    out.push(\n      i < values.length && values[i] !== undefined && values[i] !== null\n        ? values[i]\n        : ''\n    );\n  }\n  return out;\n}\n\nfunction ensureSheetWithHeaders(ss, sheetName) {\n  var headers = SHEET_HEADERS[sheetName];\n  if (!headers) {\n    throw new Error('Unknown worksheet: ' + sheetName);\n  }\n  var sheet = ss.getSheetByName(sheetName);\n  if (!sheet) {\n    sheet = ss.insertSheet(sheetName);\n  }\n  if (sheet.getLastRow() === 0) {\n    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);\n    sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold');\n  }\n  return sheet;\n}\n\nfunction findRowByPrimaryKey(sheet, recordId, fallbackRowNumber) {\n  var targetKey = (recordId || '').toString().trim().toUpperCase();\n  var lastRow = sheet.getLastRow();\n  if (lastRow >= 2 && targetKey) {\n    var keyCol = sheet.getRange(2, 1, lastRow - 1, 1).getValues();\n    for (var i = 0; i < keyCol.length; i++) {\n      var cellKey = (keyCol[i][0] || '').toString().trim().toUpperCase();\n      if (cellKey === targetKey) {\n        return i + 2;\n      }\n    }\n  }\n  if (\n    typeof fallbackRowNumber === 'number' &&\n    fallbackRowNumber >= 2 &&\n    fallbackRowNumber <= lastRow\n  ) {\n    var existingKey = (sheet.getRange(fallbackRowNumber, 1).getValue() || '')\n      .toString()\n      .trim()\n      .toUpperCase();\n    if (!targetKey || existingKey === targetKey) {\n      return fallbackRowNumber;\n    }\n  }\n  return -1;\n}\n\nfunction doGet(e) {\n  try {\n    var params = (e && e.parameter) || {};\n    var action = (params.action || 'inspectAndLoad').toString().trim();\n    var spreadsheetId = (params.spreadsheetId || '').toString().trim();\n    var ss = getSpreadsheet(spreadsheetId);\n\n    if (action === 'ping') {\n      var existing = [];\n      for (var i = 0; i < REQUIRED_SHEETS.length; i++) {\n        if (ss.getSheetByName(REQUIRED_SHEETS[i])) {\n          existing.push(REQUIRED_SHEETS[i]);\n        }\n      }\n      return jsonResponse({\n        ok: true,\n        action: 'ping',\n        data: {\n          spreadsheetId: ss.getId(),\n          title: ss.getName(),\n          spreadsheetUrl: ss.getUrl(),\n          existingSheets: existing,\n          missingSheets: REQUIRED_SHEETS.filter(function (s) {\n            return existing.indexOf(s) === -1;\n          }),\n          timestamp: new Date().toISOString(),\n        },\n      });\n    }\n\n    if (action === 'inspectAndLoad') {\n      return jsonResponse({\n        ok: true,\n        action: 'inspectAndLoad',\n        data: inspectSpreadsheetData(ss),\n      });\n    }\n\n    return jsonResponse({\n      ok: false,\n      error: 'Unsupported GET action: ' + action,\n    });\n  } catch (err) {\n    return jsonResponse({\n      ok: false,\n      error: err && err.message ? err.message : String(err),\n    });\n  }\n}\n\nfunction doPost(e) {\n  var lock = LockService.getScriptLock();\n  var lockAcquired = false;\n\n  try {\n    lock.waitLock(20000);\n    lockAcquired = true;\n\n    var rawBody =\n      e && e.postData && e.postData.contents ? e.postData.contents : '{}';\n    var payload = JSON.parse(rawBody);\n    var action = (payload.action || '').toString().trim();\n    var ss = getSpreadsheet(payload.spreadsheetId);\n\n    if (action === 'initializeSchema') {\n      var seedData = payload.seedData || null;\n      for (var i = 0; i < REQUIRED_SHEETS.length; i++) {\n        var tabName = REQUIRED_SHEETS[i];\n        var sheet = ensureSheetWithHeaders(ss, tabName);\n        if (\n          seedData &&\n          Array.isArray(seedData[tabName]) &&\n          seedData[tabName].length > 0 &&\n          sheet.getLastRow() <= 1\n        ) {\n          var normalizedSeed = seedData[tabName].map(function (row) {\n            return normalizeRowToWidth(tabName, row);\n          });\n          sheet\n            .getRange(2, 1, normalizedSeed.length, SHEET_HEADERS[tabName].length)\n            .setValues(normalizedSeed);\n        }\n      }\n      return jsonResponse({\n        ok: true,\n        action: 'initializeSchema',\n        data: inspectSpreadsheetData(ss),\n      });\n    }\n\n    if (action === 'appendRow') {\n      var sheetName = (payload.sheetName || '').toString().trim();\n      var sheetToAppend = ensureSheetWithHeaders(ss, sheetName);\n      var row = normalizeRowToWidth(sheetName, payload.values);\n      var primaryKey = (row[0] || '').toString().trim();\n      if (!primaryKey) {\n        throw new Error(\n          'Primary key (Column A) is required to append a row to ' + sheetName\n        );\n      }\n      var dupRow = findRowByPrimaryKey(sheetToAppend, primaryKey, -1);\n      if (dupRow !== -1) {\n        throw new Error(\n          'Duplicate record blocked: \"' +\n            primaryKey +\n            '\" already exists in ' +\n            sheetName +\n            ' (Row ' +\n            dupRow +\n            ').'\n        );\n      }\n      sheetToAppend.appendRow(row);\n      return jsonResponse({\n        ok: true,\n        action: 'appendRow',\n        data: {\n          sheetName: sheetName,\n          recordId: primaryKey,\n          rowNumber: sheetToAppend.getLastRow(),\n        },\n      });\n    }\n\n    if (action === 'appendRows') {\n      var operations = Array.isArray(payload.operations)\n        ? payload.operations\n        : [];\n      if (operations.length === 0) {\n        throw new Error('appendRows requires at least one operation.');\n      }\n      // Pre-validate all operations for duplicates before mutating any sheet\n      var preparedOps = [];\n      for (var opIdx = 0; opIdx < operations.length; opIdx++) {\n        var op = operations[opIdx];\n        var opSheetName = (op.sheetName || '').toString().trim();\n        var opSheet = ensureSheetWithHeaders(ss, opSheetName);\n        var opRows = Array.isArray(op.rows) ? op.rows : [];\n        var normalizedRows = [];\n        var seenKeys = {};\n\n        for (var rIdx = 0; rIdx < opRows.length; rIdx++) {\n          var normRow = normalizeRowToWidth(opSheetName, opRows[rIdx]);\n          var pk = (normRow[0] || '').toString().trim();\n          var pkUpper = pk.toUpperCase();\n          if (!pk) {\n            throw new Error(\n              'Primary key (Column A) is required in batch append for ' +\n                opSheetName\n            );\n          }\n          if (seenKeys[pkUpper]) {\n            throw new Error(\n              'Duplicate primary key \"' + pk + '\" in batch for ' + opSheetName\n            );\n          }\n          seenKeys[pkUpper] = true;\n          if (findRowByPrimaryKey(opSheet, pk, -1) !== -1) {\n            throw new Error(\n              'Duplicate record blocked: \"' +\n                pk +\n                '\" already exists in ' +\n                opSheetName +\n                '.'\n            );\n          }\n          normalizedRows.push(normRow);\n        }\n\n        preparedOps.push({\n          sheet: opSheet,\n          sheetName: opSheetName,\n          rows: normalizedRows,\n        });\n      }\n\n      for (var wIdx = 0; wIdx < preparedOps.length; wIdx++) {\n        var item = preparedOps[wIdx];\n        if (item.rows.length > 0) {\n          var startRow = item.sheet.getLastRow() + 1;\n          item.sheet\n            .getRange(\n              startRow,\n              1,\n              item.rows.length,\n              SHEET_HEADERS[item.sheetName].length\n            )\n            .setValues(item.rows);\n        }\n      }\n\n      return jsonResponse({\n        ok: true,\n        action: 'appendRows',\n        data: { committedOperations: preparedOps.length },\n      });\n    }\n\n    if (action === 'updateRow') {\n      var updSheetName = (payload.sheetName || '').toString().trim();\n      var updSheet = ss.getSheetByName(updSheetName);\n      if (!updSheet) {\n        throw new Error('Worksheet \"' + updSheetName + '\" does not exist.');\n      }\n      var updRowValues = normalizeRowToWidth(updSheetName, payload.values);\n      var updRecordId = (payload.recordId || updRowValues[0] || '')\n        .toString()\n        .trim();\n      var targetRow = findRowByPrimaryKey(\n        updSheet,\n        updRecordId,\n        payload.rowNumber\n      );\n      if (targetRow === -1) {\n        throw new Error(\n          'Record \"' +\n            updRecordId +\n            '\" was not found in ' +\n            updSheetName +\n            '. Please click Sync Sheet to refresh latest rows.'\n        );\n      }\n      updSheet\n        .getRange(targetRow, 1, 1, updRowValues.length)\n        .setValues([updRowValues]);\n      return jsonResponse({\n        ok: true,\n        action: 'updateRow',\n        data: {\n          sheetName: updSheetName,\n          recordId: updRecordId,\n          rowNumber: targetRow,\n        },\n      });\n    }\n\n    if (action === 'deleteRow') {\n      var delSheetName = (payload.sheetName || '').toString().trim();\n      var delSheet = ss.getSheetByName(delSheetName);\n      if (!delSheet) {\n        throw new Error('Worksheet \"' + delSheetName + '\" does not exist.');\n      }\n      var delRecordId = (payload.recordId || '').toString().trim();\n      if (!delRecordId) {\n        throw new Error('recordId is required to delete a row.');\n      }\n      var delRow = findRowByPrimaryKey(\n        delSheet,\n        delRecordId,\n        payload.rowNumber\n      );\n      if (delRow === -1) {\n        throw new Error(\n          'Record \"' +\n            delRecordId +\n            '\" was not found in ' +\n            delSheetName +\n            '. It may have already been deleted.'\n        );\n      }\n      delSheet.deleteRow(delRow);\n      return jsonResponse({\n        ok: true,\n        action: 'deleteRow',\n        data: {\n          sheetName: delSheetName,\n          recordId: delRecordId,\n          deletedRowNumber: delRow,\n        },\n      });\n    }\n\n    return jsonResponse({\n      ok: false,\n      error: 'Unsupported POST action: ' + action,\n    });\n  } catch (err) {\n    return jsonResponse({\n      ok: false,\n      error: err && err.message ? err.message : String(err),\n    });\n  } finally {\n    if (lockAcquired) {\n      lock.releaseLock();\n    }\n  }\n}\n";
+/**
+* Returns Code.gs with the user's selected Spreadsheet ID substituted into DEFAULT_SPREADSHEET_ID.
+*/
+function getAppsScriptCodeForSpreadsheet(spreadsheetId) {
+	const cleanId = (spreadsheetId || "").trim() || "1HNmAdZe7POIzIm9mCUPxQJL7p9BoBZEO1hXq6PZNs5M";
+	return APPS_SCRIPT_CODE_GS.replace(/var DEFAULT_SPREADSHEET_ID = '[^']*';/, `var DEFAULT_SPREADSHEET_ID = '${cleanId}';`);
+}
+// src/components/SheetConnectionModal.tsx
+var SheetConnectionModal = ({ isOpen, config, activeMode, isSyncing, onClose, onApplyConnection }) => {
+	const [spreadsheetInput, setSpreadsheetInput] = (0, import_react.useState)(config.spreadsheetId || "1HNmAdZe7POIzIm9mCUPxQJL7p9BoBZEO1hXq6PZNs5M");
+	const [appsScriptUrlInput, setAppsScriptUrlInput] = (0, import_react.useState)(config.appsScriptUrl || "");
+	const [selectedMode, setSelectedMode] = (0, import_react.useState)(config.preferredMode || (config.appsScriptUrl ? "apps_script" : "public_gviz"));
+	const [showScriptCode, setShowScriptCode] = (0, import_react.useState)(false);
+	const [copiedCode, setCopiedCode] = (0, import_react.useState)(false);
+	const [isTesting, setIsTesting] = (0, import_react.useState)(false);
+	const [testResult, setTestResult] = (0, import_react.useState)(null);
+	(0, import_react.useEffect)(() => {
+		if (isOpen) {
+			setSpreadsheetInput(config.spreadsheetId || "1HNmAdZe7POIzIm9mCUPxQJL7p9BoBZEO1hXq6PZNs5M");
+			setAppsScriptUrlInput(config.appsScriptUrl || "");
+			setSelectedMode(config.preferredMode || (config.appsScriptUrl ? "apps_script" : "public_gviz"));
+			setTestResult(null);
+		}
+	}, [isOpen, config]);
+	if (!isOpen) return null;
+	const cleanSpreadsheetId = extractSpreadsheetId(spreadsheetInput);
+	const isSheetIdValid = isValidSpreadsheetId(cleanSpreadsheetId);
+	const cleanScriptUrl = appsScriptUrlInput.trim();
+	const isScriptValid = isValidAppsScriptUrl(cleanScriptUrl);
+	const scriptSource = getAppsScriptCodeForSpreadsheet(isSheetIdValid ? cleanSpreadsheetId : DEFAULT_SPREADSHEET_ID);
+	const sheetUrl = `https://docs.google.com/spreadsheets/d/${isSheetIdValid ? cleanSpreadsheetId : DEFAULT_SPREADSHEET_ID}/edit`;
+	const handleCopyCode = async () => {
+		try {
+			await navigator.clipboard.writeText(scriptSource);
+			setCopiedCode(true);
+			window.setTimeout(() => setCopiedCode(false), 2500);
+		} catch {
+			setTestResult({
+				type: "error",
+				message: "Clipboard copy was blocked by browser permissions. Expand the Code.gs preview below or click \"Download Code.gs\"."
+			});
+		}
+	};
+	const handleDownloadCode = () => {
+		const blob = new Blob([scriptSource], { type: "text/plain;charset=utf-8" });
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement("a");
+		a.href = url;
+		a.download = "Code.gs";
+		document.body.appendChild(a);
+		a.click();
+		document.body.removeChild(a);
+		URL.revokeObjectURL(url);
+	};
+	const handleTestAppsScript = async () => {
+		if (!isSheetIdValid) {
+			setTestResult({
+				type: "error",
+				message: "Enter a valid Google Spreadsheet ID or full Google Sheets URL."
+			});
+			return;
+		}
+		if (!isScriptValid) {
+			setTestResult({
+				type: "error",
+				message: "Paste a valid Apps Script Web App URL ending in /exec (https://script.google.com/macros/s/.../exec)."
+			});
+			return;
+		}
+		setIsTesting(true);
+		setTestResult(null);
+		try {
+			const ping = await pingAppsScriptBridge(cleanScriptUrl, cleanSpreadsheetId);
+			setTestResult({
+				type: "success",
+				message: `Connected to "${ping.title}" — ${ping.existingSheets.length}/8 worksheets detected${ping.missingSheets.length > 0 ? ` (Missing: ${ping.missingSheets.join(", ")})` : " (All 8 tabs ready)"}.`
+			});
+		} catch (err) {
+			setTestResult({
+				type: "error",
+				message: err instanceof Error ? err.message : "Apps Script connection test failed."
+			});
+		} finally {
+			setIsTesting(false);
+		}
+	};
+	const handleSubmit = async (e) => {
+		e.preventDefault();
+		if (selectedMode !== "dev_sandbox" && !isSheetIdValid) {
+			setTestResult({
+				type: "error",
+				message: "Please provide a valid Google Spreadsheet ID or URL."
+			});
+			return;
+		}
+		if (selectedMode === "apps_script" && !isScriptValid) {
+			setTestResult({
+				type: "error",
+				message: "Apps Script Read & Write mode requires a valid deployed Web App URL (https://script.google.com/macros/s/.../exec)."
+			});
+			return;
+		}
+		await onApplyConnection({
+			spreadsheetId: isSheetIdValid ? cleanSpreadsheetId : DEFAULT_SPREADSHEET_ID,
+			appsScriptUrl: isScriptValid ? cleanScriptUrl : "",
+			preferredMode: selectedMode
+		});
+	};
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+		className: "no-print fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-xs",
+		role: "dialog",
+		"aria-modal": "true",
+		children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+			className: "w-full max-w-2xl rounded-lg border border-slate-200 bg-white shadow-2xl overflow-hidden text-xs",
+			children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: "flex items-center justify-between border-b border-slate-200 bg-slate-50 px-5 py-3.5",
+				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+					className: "flex items-center gap-2",
+					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Link2, { className: "h-4 w-4 text-slate-900" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", {
+						className: "text-sm font-bold text-slate-900",
+						children: "Google Sheet Connection & Apps Script Bridge"
+					}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
+						className: "text-[11px] text-slate-500",
+						children: [
+							"Current Mode:",
+							" ",
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", {
+								className: "font-mono text-slate-800",
+								children: activeMode === "apps_script" ? "Apps Script Web App (Read & Write)" : activeMode === "public_gviz" ? "Google Sheet CSV (Read-Only)" : "Dev Sandbox (Browser Local Only)"
+							}),
+							" ",
+							"· Saved in browser storage across refreshes"
+						]
+					})] })]
+				}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+					type: "button",
+					onClick: onClose,
+					className: "rounded p-1 text-slate-500 hover:bg-slate-200/60 hover:text-slate-800",
+					children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(X, { className: "h-4 w-4" })
+				})]
+			}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("form", {
+				onSubmit: handleSubmit,
+				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+					className: "p-5 space-y-4 max-h-[75vh] overflow-y-auto",
+					children: [
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "rounded-lg border border-slate-200 bg-slate-50 p-3.5 space-y-2",
+							children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "flex items-center justify-between gap-2",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", {
+										className: "font-bold text-slate-900",
+										children: "1. Target Google Spreadsheet URL or ID"
+									}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+										className: "flex items-center gap-3",
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("a", {
+											href: sheetUrl,
+											target: "_blank",
+											rel: "noreferrer",
+											className: "inline-flex items-center gap-1 text-[11px] font-semibold text-blue-700 hover:underline",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Open Sheet" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ExternalLink, { className: "h-3 w-3" })]
+										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+											type: "button",
+											onClick: () => setSpreadsheetInput(DEFAULT_SPREADSHEET_ID),
+											className: "text-[11px] font-semibold text-slate-600 hover:text-slate-900 underline",
+											children: "Use Default Sheet ID"
+										})]
+									})]
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+									type: "text",
+									value: spreadsheetInput,
+									onChange: (e) => setSpreadsheetInput(e.target.value),
+									placeholder: "Paste Google Sheets URL or Spreadsheet ID...",
+									className: "w-full rounded border border-slate-300 bg-white px-3 py-2 font-mono text-xs text-slate-900 focus:border-slate-500 focus:outline-none"
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "text-[11px] text-slate-500",
+									children: [
+										"Extracted ID:",
+										" ",
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", {
+											className: "font-mono font-semibold text-slate-800",
+											children: cleanSpreadsheetId || "(empty)"
+										}),
+										" ",
+										isSheetIdValid ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+											className: "text-emerald-700 font-semibold",
+											children: "· Valid"
+										}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+											className: "text-red-600 font-semibold",
+											children: "· Invalid ID"
+										})
+									]
+								})
+							]
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "space-y-2",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+								className: "font-bold text-slate-900",
+								children: "2. Select Data Connection Mode"
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "grid grid-cols-1 sm:grid-cols-3 gap-2.5",
+								children: [
+									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+										type: "button",
+										onClick: () => setSelectedMode("apps_script"),
+										className: `rounded-lg border p-3 text-left transition-colors ${selectedMode === "apps_script" ? "border-emerald-600 bg-emerald-50/70 ring-1 ring-emerald-600" : "border-slate-200 bg-white hover:bg-slate-50"}`,
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+											className: "flex items-center gap-1.5 font-bold text-slate-900",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Cloud, { className: "h-3.5 w-3.5 text-emerald-700" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Apps Script (R/W)" })]
+										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+											className: "mt-1 text-[11px] text-slate-600",
+											children: "Full Create, Read, Update & Delete directly on Google Sheets. Works on GitHub Pages."
+										})]
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+										type: "button",
+										onClick: () => setSelectedMode("public_gviz"),
+										className: `rounded-lg border p-3 text-left transition-colors ${selectedMode === "public_gviz" ? "border-blue-600 bg-blue-50/70 ring-1 ring-blue-600" : "border-slate-200 bg-white hover:bg-slate-50"}`,
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+											className: "flex items-center gap-1.5 font-bold text-slate-900",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Database, { className: "h-3.5 w-3.5 text-blue-700" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Sheet CSV (Read-Only)" })]
+										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+											className: "mt-1 text-[11px] text-slate-600",
+											children: "Reads link-shared Google Sheets without a script. Writes are blocked to prevent fake saves."
+										})]
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+										type: "button",
+										onClick: () => setSelectedMode("dev_sandbox"),
+										className: `rounded-lg border p-3 text-left transition-colors ${selectedMode === "dev_sandbox" ? "border-amber-600 bg-amber-50/70 ring-1 ring-amber-600" : "border-slate-200 bg-white hover:bg-slate-50"}`,
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+											className: "flex items-center gap-1.5 font-bold text-slate-900",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(FlaskConical, { className: "h-3.5 w-3.5 text-amber-700" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Dev Sandbox (Local)" })]
+										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+											className: "mt-1 text-[11px] text-slate-600",
+											children: "Test CRUD locally using synthetic placeholder data in browser storage only."
+										})]
+									})
+								]
+							})]
+						}),
+						selectedMode === "apps_script" && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "rounded-lg border border-emerald-200 bg-emerald-50/40 p-4 space-y-3",
+							children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "flex flex-wrap items-center justify-between gap-2",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+										className: "font-bold text-slate-900",
+										children: [
+											"3. Deploy ",
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", {
+												className: "font-mono",
+												children: "Code.gs"
+											}),
+											" to Your Google Sheet (One-Time Setup)"
+										]
+									}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+										className: "flex flex-wrap items-center gap-1.5",
+										children: [
+											/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+												type: "button",
+												onClick: handleCopyCode,
+												className: "inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-800 hover:bg-slate-50",
+												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(ClipboardCopy, { className: "h-3 w-3" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: copiedCode ? "Copied Code.gs!" : "Copy Code.gs" })]
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+												type: "button",
+												onClick: handleDownloadCode,
+												className: "inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-800 hover:bg-slate-50",
+												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Download, { className: "h-3 w-3" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Download Code.gs" })]
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+												type: "button",
+												onClick: () => setShowScriptCode((v) => !v),
+												className: "inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-800 hover:bg-slate-50",
+												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CodeXml, { className: "h-3 w-3" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: showScriptCode ? "Hide Script" : "View Script" })]
+											})
+										]
+									})]
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("ol", {
+									className: "list-decimal list-inside space-y-1 text-[11px] text-slate-700 leading-relaxed",
+									children: [
+										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("li", { children: [
+											"Open your Google Sheet and click",
+											" ",
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Extensions → Apps Script" }),
+											"."
+										] }),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("li", { children: [
+											"Replace the editor contents with",
+											" ",
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", {
+												className: "font-mono font-semibold",
+												children: "Code.gs"
+											}),
+											" ",
+											"(using Copy or Download above) and click",
+											" ",
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Save" }),
+											"."
+										] }),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("li", { children: [
+											"Click ",
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Deploy → New deployment → Web app" }),
+											". Set ",
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Execute as: Me" }),
+											" and",
+											" ",
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Who has access: Anyone" }),
+											", then authorize and copy the ",
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", {
+												className: "font-mono",
+												children: "/exec"
+											}),
+											" URL."
+										] })
+									]
+								}),
+								showScriptCode && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("pre", {
+									className: "max-h-56 overflow-auto rounded border border-slate-300 bg-slate-900 p-3 font-mono text-[10px] leading-relaxed text-slate-100",
+									children: scriptSource
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "space-y-1.5 pt-1",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
+										className: "block font-semibold text-slate-900",
+										children: [
+											"Deployed Apps Script Web App URL (ends with",
+											" ",
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", {
+												className: "font-mono",
+												children: "/exec"
+											}),
+											")"
+										]
+									}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+										className: "flex flex-col sm:flex-row gap-2",
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+											type: "url",
+											value: appsScriptUrlInput,
+											onChange: (e) => setAppsScriptUrlInput(e.target.value),
+											placeholder: "https://script.google.com/macros/s/AKfycb.../exec",
+											className: "flex-1 rounded border border-slate-300 bg-white px-3 py-2 font-mono text-xs text-slate-900 focus:border-slate-500 focus:outline-none"
+										}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+											type: "button",
+											disabled: isTesting || !isScriptValid || !isSheetIdValid,
+											onClick: () => void handleTestAppsScript(),
+											className: "inline-flex items-center justify-center gap-1.5 rounded border border-slate-300 bg-white px-3 py-2 font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-40 shrink-0",
+											children: [isTesting ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(LoaderCircle, { className: "h-3.5 w-3.5 animate-spin" }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)(CircleCheck, { className: "h-3.5 w-3.5 text-emerald-700" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Test Connection" })]
+										})]
+									})]
+								})
+							]
+						}),
+						testResult && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: `flex items-start gap-2 rounded-md border p-3 text-xs ${testResult.type === "success" ? "border-emerald-300 bg-emerald-50 text-emerald-900" : "border-red-300 bg-red-50 text-red-900"}`,
+							children: [testResult.type === "success" ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(CircleCheck, { className: "h-4 w-4 text-emerald-600 shrink-0 mt-0.5" }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)(CircleAlert, { className: "h-4 w-4 text-red-600 shrink-0 mt-0.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+								className: "leading-relaxed",
+								children: testResult.message
+							})]
+						})
+					]
+				}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+					className: "flex items-center justify-between border-t border-slate-200 bg-slate-50 px-5 py-3",
+					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+						className: "text-[11px] text-slate-500",
+						children: "Connection settings persist automatically in browser storage."
+					}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "flex items-center gap-2",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+							type: "button",
+							onClick: onClose,
+							className: "rounded border border-slate-300 bg-white px-3.5 py-1.5 font-semibold text-slate-700 hover:bg-slate-100",
+							children: "Cancel"
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+							type: "submit",
+							disabled: isSyncing,
+							className: "inline-flex items-center gap-1.5 rounded bg-slate-900 px-4 py-1.5 font-semibold text-white hover:bg-slate-800 disabled:opacity-50",
+							children: [isSyncing && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(LoaderCircle, { className: "h-3.5 w-3.5 animate-spin" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Save & Sync" })]
+						})]
+					})]
+				})]
+			})]
 		})
 	});
 };
@@ -26226,7 +16957,7 @@ var UserProfileModal = ({ isOpen, activeUser, allUsers, onClose, onSelectUser, o
 		})
 	});
 };
-var AdminAccountManagementDashboard = ({ userAccounts, activeUser, canAddAccount, canEditAccount, onSelectActiveUser, onCreateUserAccount, onUpdateUserAccount, requestConfirmation }) => {
+var AdminAccountManagementDashboard = ({ userAccounts, activeUser, canAddAccount, canEditAccount, onSelectActiveUser, onCreateUserAccount, onUpdateUserAccount, onDeleteUserAccount, requestConfirmation }) => {
 	const [isCreateOpen, setIsCreateOpen] = (0, import_react.useState)(true);
 	const [fullName, setFullName] = (0, import_react.useState)("");
 	const [email, setEmail] = (0, import_react.useState)("");
@@ -26381,8 +17112,15 @@ var AdminAccountManagementDashboard = ({ userAccounts, activeUser, canAddAccount
 			permissions: JSON.parse(JSON.stringify(u.permissions))
 		});
 	};
+	const editDuplicateEmail = (0, import_react.useMemo)(() => {
+		if (!editDraft) return null;
+		const clean = editDraft.email.trim().toLowerCase();
+		if (!clean) return null;
+		return userAccounts.find((u) => u.userId !== editDraft.userId && u.email.trim().toLowerCase() === clean) || null;
+	}, [userAccounts, editDraft]);
+	const activeAdminCount = (0, import_react.useMemo)(() => userAccounts.filter((u) => u.status === "ACTIVE" && u.permissions.admin.edit).length, [userAccounts]);
 	const handleSaveEditedUser = () => {
-		if (!editDraft || !canEditAccount) return;
+		if (!editDraft || !canEditAccount || !editDraft.fullName.trim() || !editDraft.email.trim() || editDuplicateEmail) return;
 		const enabledModulesSummary = APP_MODULES.map((m) => {
 			const p = editDraft.permissions[m.key];
 			const flags = [
@@ -26399,11 +17137,11 @@ var AdminAccountManagementDashboard = ({ userAccounts, activeUser, canAddAccount
 			details: [
 				{
 					label: "User ID & Name",
-					value: `${editDraft.userId} — ${editDraft.fullName}`
+					value: `${editDraft.userId} — ${editDraft.fullName.trim()}`
 				},
 				{
 					label: "Role & Department",
-					value: `${editDraft.roleTitle} · ${editDraft.department || "—"}`
+					value: `${editDraft.roleTitle.trim()} · ${editDraft.department.trim() || "—"}`
 				},
 				{
 					label: "Status",
@@ -26416,10 +17154,52 @@ var AdminAccountManagementDashboard = ({ userAccounts, activeUser, canAddAccount
 			],
 			confirmLabel: "Confirm & Save Account Permissions",
 			onConfirm: async () => {
-				if (editDraft.rowNumber > 0) await onUpdateUserAccount(editDraft.rowNumber, editDraft);
-				else await onCreateUserAccount(editDraft);
+				const cleanedDraft = {
+					...editDraft,
+					fullName: editDraft.fullName.trim(),
+					email: editDraft.email.trim(),
+					roleTitle: editDraft.roleTitle.trim(),
+					department: editDraft.department.trim()
+				};
+				if (editDraft.rowNumber > 0) await onUpdateUserAccount(editDraft.rowNumber, cleanedDraft);
+				else await onCreateUserAccount(cleanedDraft);
 				setEditingUserId(null);
 				setEditDraft(null);
+			}
+		});
+	};
+	const handleDeleteUser = (u) => {
+		if (!canEditAccount || !onDeleteUserAccount) return;
+		requestConfirmation({
+			title: `Delete User Account — ${u.userId}`,
+			description: `This will permanently delete user account "${u.fullName}" (${u.email}) from the "${SHEET_NAMES.USER_ACCOUNTS}" sheet. The active session profile and last active System Administrator cannot be deleted.`,
+			sheetName: `${SHEET_NAMES.USER_ACCOUNTS}!A${u.rowNumber}:K${u.rowNumber}`,
+			isDestructive: true,
+			details: [
+				{
+					label: "User ID",
+					value: u.userId
+				},
+				{
+					label: "Full Name",
+					value: u.fullName
+				},
+				{
+					label: "Email",
+					value: u.email
+				},
+				{
+					label: "Role & Status",
+					value: `${u.roleTitle} (${u.status})`
+				}
+			],
+			confirmLabel: "Confirm & Delete User Account",
+			onConfirm: async () => {
+				await onDeleteUserAccount(u);
+				if (editingUserId === u.userId) {
+					setEditingUserId(null);
+					setEditDraft(null);
+				}
 			}
 		});
 	};
@@ -27002,12 +17782,19 @@ var AdminAccountManagementDashboard = ({ userAccounts, activeUser, canAddAccount
 													onClick: () => onSelectActiveUser(u.userId),
 													className: "rounded border border-slate-300 bg-white px-2 py-1 text-[11px] font-medium text-slate-800 hover:bg-slate-100",
 													children: "Switch Profile"
-												}), canEditAccount && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+												}), canEditAccount && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
 													type: "button",
 													onClick: () => isEditing ? setEditingUserId(null) : startEditingUser(u),
 													className: "inline-flex items-center gap-1 rounded border border-slate-200 px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-100",
 													children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(PenLine, { className: "h-3 w-3" }), isEditing ? "Close" : "Edit Access"]
-												})]
+												}), onDeleteUserAccount && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+													type: "button",
+													onClick: () => handleDeleteUser(u),
+													disabled: isCurrentActive || u.status === "ACTIVE" && u.permissions.admin.edit && activeAdminCount <= 1,
+													title: isCurrentActive ? "Cannot delete active session profile" : u.status === "ACTIVE" && u.permissions.admin.edit && activeAdminCount <= 1 ? "Cannot delete the last active System Administrator" : `Delete user account ${u.userId}`,
+													className: "inline-flex items-center gap-1 rounded border border-red-200 bg-red-50/60 px-2 py-1 text-[11px] font-medium text-red-700 hover:bg-red-100 disabled:opacity-35 disabled:cursor-not-allowed",
+													children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Trash2, { className: "h-3 w-3" }), "Delete"]
+												})] })]
 											})
 										})
 									]
@@ -27059,18 +17846,29 @@ var AdminAccountManagementDashboard = ({ userAccounts, activeUser, canAddAccount
 															}),
 															className: "mt-1 w-full rounded border border-slate-300 px-2.5 py-1.5 text-xs"
 														})] }),
-														/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", {
-															className: "block text-[11px] font-medium text-slate-600",
-															children: "Email"
-														}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-															type: "email",
-															value: editDraft.email,
-															onChange: (e) => setEditDraft({
-																...editDraft,
-																email: e.target.value
+														/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
+															/* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", {
+																className: "block text-[11px] font-medium text-slate-600",
+																children: "Email"
 															}),
-															className: "mt-1 w-full rounded border border-slate-300 px-2.5 py-1.5 text-xs"
-														})] }),
+															/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+																type: "email",
+																value: editDraft.email,
+																onChange: (e) => setEditDraft({
+																	...editDraft,
+																	email: e.target.value
+																}),
+																className: `mt-1 w-full rounded border px-2.5 py-1.5 text-xs ${editDuplicateEmail ? "border-red-400 bg-red-50/50 text-red-900" : "border-slate-300"}`
+															}),
+															editDuplicateEmail && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
+																className: "mt-1 text-[11px] text-red-600",
+																children: [
+																	"Email already used (",
+																	editDuplicateEmail.userId,
+																	")"
+																]
+															})
+														] }),
 														/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", {
 															className: "block text-[11px] font-medium text-slate-600",
 															children: "Role Title"
@@ -27201,7 +17999,8 @@ var AdminAccountManagementDashboard = ({ userAccounts, activeUser, canAddAccount
 													}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
 														type: "button",
 														onClick: handleSaveEditedUser,
-														className: "rounded bg-slate-900 px-4 py-1.5 text-xs font-semibold text-white hover:bg-slate-800",
+														disabled: !editDraft.fullName.trim() || !editDraft.email.trim() || Boolean(editDuplicateEmail),
+														className: "rounded bg-slate-900 px-4 py-1.5 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-40",
 														children: "Save Account & Module Permissions"
 													})]
 												})
@@ -27226,7 +18025,7 @@ function formatCurrency(amount) {
 		maximumFractionDigits: 2
 	}).format(amount);
 }
-var ContractorsSheetView = ({ contractors, contractsTCP, modulePermission, activeUser, onSelectActiveUser, onOpenProfileModal, onOpenAdminAccounts, onAddContractor, onUpdateContractor, requestConfirmation }) => {
+var ContractorsSheetView = ({ contractors, contractsTCP, modulePermission, activeUser, onSelectActiveUser, onOpenProfileModal, onOpenAdminAccounts, onAddContractor, onUpdateContractor, onDeleteContractor, requestConfirmation }) => {
 	const [contractorName, setContractorName] = (0, import_react.useState)("");
 	const [specialty, setSpecialty] = (0, import_react.useState)("");
 	const [contactPerson, setContactPerson] = (0, import_react.useState)("");
@@ -27347,8 +18146,18 @@ var ContractorsSheetView = ({ contractors, contractsTCP, modulePermission, activ
 			createdAt: c.createdAt
 		});
 	};
+	const editDuplicateContractorName = (0, import_react.useMemo)(() => {
+		if (!editForm) return null;
+		const cleanName = editForm.contractorName.trim().toLowerCase();
+		if (!cleanName) return null;
+		return contractors.find((c) => c.rowNumber !== editingRow && c.contractorName.trim().toLowerCase() === cleanName) || null;
+	}, [
+		contractors,
+		editForm,
+		editingRow
+	]);
 	const handleSaveEdit = (rowNumber) => {
-		if (!modulePermission.edit || !editForm || !editForm.contractorName.trim()) return;
+		if (!modulePermission.edit || !editForm || !editForm.contractorName.trim() || editDuplicateContractorName) return;
 		requestConfirmation({
 			title: `Update Contractor Row #${rowNumber}`,
 			description: `This will update row ${rowNumber} in the "${SHEET_NAMES.CONTRACTORS}" sheet of your Google Spreadsheet.`,
@@ -27377,9 +18186,48 @@ var ContractorsSheetView = ({ contractors, contractsTCP, modulePermission, activ
 			],
 			confirmLabel: "Confirm & Update Contractor",
 			onConfirm: async () => {
-				await onUpdateContractor(rowNumber, editForm);
+				await onUpdateContractor(rowNumber, {
+					...editForm,
+					contractorName: editForm.contractorName.trim(),
+					specialty: editForm.specialty.trim(),
+					contactPerson: editForm.contactPerson.trim(),
+					contactInfo: editForm.contactInfo.trim()
+				});
 				setEditingRow(null);
 				setEditForm(null);
+			}
+		});
+	};
+	const handleDeleteContractor = (c) => {
+		if (!modulePermission.edit) return;
+		const st = contractorStats[c.contractorCode.toUpperCase()];
+		const linkedContracts = (st?.openCount || 0) + (st?.closedCount || 0) + (st?.cancelCount || 0);
+		requestConfirmation({
+			title: `Delete Contractor — ${c.contractorCode}`,
+			description: `This will permanently delete "${c.contractorCode} (${c.contractorName})" from the "${SHEET_NAMES.CONTRACTORS}" sheet. Contractors with awarded contracts cannot be deleted (mark them Inactive instead).`,
+			sheetName: `${SHEET_NAMES.CONTRACTORS}!A${c.rowNumber}:G${c.rowNumber}`,
+			isDestructive: true,
+			details: [
+				{
+					label: "Contractor Code",
+					value: c.contractorCode
+				},
+				{
+					label: "Contractor Name",
+					value: c.contractorName
+				},
+				{
+					label: "Linked Contracts",
+					value: String(linkedContracts)
+				}
+			],
+			confirmLabel: "Confirm & Delete Contractor",
+			onConfirm: async () => {
+				await onDeleteContractor(c);
+				if (editingRow === c.rowNumber) {
+					setEditingRow(null);
+					setEditForm(null);
+				}
 			}
 		});
 	};
@@ -27682,14 +18530,24 @@ var ContractorsSheetView = ({ contractors, contractsTCP, modulePermission, activ
 											}),
 											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
 												className: "py-3 px-4 font-medium text-slate-900",
-												children: isEditing ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-													type: "text",
-													value: editForm.contractorName,
-													onChange: (e) => setEditForm({
-														...editForm,
-														contractorName: e.target.value
-													}),
-													className: "w-full rounded border border-slate-300 px-2 py-1 text-xs"
+												children: isEditing ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+													className: "space-y-1",
+													children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+														type: "text",
+														value: editForm.contractorName,
+														onChange: (e) => setEditForm({
+															...editForm,
+															contractorName: e.target.value
+														}),
+														className: `w-full rounded border px-2 py-1 text-xs ${editDuplicateContractorName ? "border-red-400 bg-red-50/50 text-red-900" : "border-slate-300"}`
+													}), editDuplicateContractorName && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
+														className: "text-[11px] text-red-600",
+														children: [
+															"Duplicate name (",
+															editDuplicateContractorName.contractorCode,
+															")"
+														]
+													})]
 												}) : c.contractorName
 											}),
 											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
@@ -27794,7 +18652,8 @@ var ContractorsSheetView = ({ contractors, contractsTCP, modulePermission, activ
 													children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
 														type: "button",
 														onClick: () => handleSaveEdit(c.rowNumber),
-														className: "rounded bg-slate-900 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-slate-800",
+														disabled: !editForm.contractorName.trim() || Boolean(editDuplicateContractorName),
+														className: "rounded bg-slate-900 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-slate-800 disabled:opacity-40",
 														children: "Save"
 													}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
 														type: "button",
@@ -27805,11 +18664,21 @@ var ContractorsSheetView = ({ contractors, contractsTCP, modulePermission, activ
 														className: "rounded border border-slate-300 p-1 text-slate-500 hover:bg-slate-100",
 														children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(X, { className: "h-3.5 w-3.5" })
 													})]
-												}) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-													type: "button",
-													onClick: () => startEditing(c),
-													className: "inline-flex items-center gap-1 rounded border border-slate-200 px-2 py-1 text-[11px] font-medium text-slate-600 hover:border-slate-300 hover:bg-slate-100",
-													children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(PenLine, { className: "h-3 w-3" }), "Edit"]
+												}) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+													className: "flex items-center justify-end gap-1.5",
+													children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+														type: "button",
+														onClick: () => startEditing(c),
+														className: "inline-flex items-center gap-1 rounded border border-slate-200 px-2 py-1 text-[11px] font-medium text-slate-600 hover:border-slate-300 hover:bg-slate-100",
+														children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(PenLine, { className: "h-3 w-3" }), "Edit"]
+													}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+														type: "button",
+														onClick: () => handleDeleteContractor(c),
+														disabled: st.openCount + st.closedCount + st.cancelCount > 0,
+														title: st.openCount + st.closedCount + st.cancelCount > 0 ? "Cannot delete contractor with awarded contracts; mark Inactive instead" : `Delete contractor ${c.contractorCode}`,
+														className: "inline-flex items-center gap-1 rounded border border-red-200 bg-red-50/60 px-2 py-1 text-[11px] font-medium text-red-700 hover:bg-red-100 disabled:opacity-35 disabled:cursor-not-allowed",
+														children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Trash2, { className: "h-3 w-3" }), "Delete"]
+													})]
 												})
 											})
 										]
@@ -27836,7 +18705,7 @@ function createInitialSubDraft(index = 1) {
 		remarks: ""
 	};
 }
-var ProjectCreationAndList = ({ sites, projectTypes, projects, subProjects, contractsTCP, modulePermission, canAwardContracts, activeUser, onSelectActiveUser, onOpenProfileModal, onOpenAdminAccounts, onCreateProject, onAddSubProjectToExisting, onUpdateMainProjectStatus, onUpdateSubProject, onNavigateTab, onOpenAwardTCPForSubProject, requestConfirmation }) => {
+var ProjectCreationAndList = ({ sites, projectTypes, projects, subProjects, contractsTCP, modulePermission, canAwardContracts, activeUser, onSelectActiveUser, onOpenProfileModal, onOpenAdminAccounts, onCreateProject, onAddSubProjectToExisting, onUpdateMainProjectStatus, onDeleteMainProject, onUpdateSubProject, onDeleteSubProject, onNavigateTab, onOpenAwardTCPForSubProject, requestConfirmation }) => {
 	const activeProjectTypes = (0, import_react.useMemo)(() => projectTypes.filter((t) => t.active), [projectTypes]);
 	const [isCreateProjectModalOpen, setIsCreateProjectModalOpen] = (0, import_react.useState)(false);
 	const [selectedSiteCode, setSelectedSiteCode] = (0, import_react.useState)("");
@@ -28252,13 +19121,14 @@ var ProjectCreationAndList = ({ sites, projectTypes, projects, subProjects, cont
 		if (!modulePermission.edit) return;
 		setEditingSubRow(sp.rowNumber);
 		setEditSubForm({
+			subProjectName: sp.subProjectName,
 			status: sp.status,
 			targetDate: sp.targetDate,
 			remarks: sp.remarks
 		});
 	};
 	const handleSaveSubUpdate = (sp) => {
-		if (!modulePermission.edit || !editSubForm) return;
+		if (!modulePermission.edit || !editSubForm || !editSubForm.subProjectName.trim()) return;
 		requestConfirmation({
 			title: `Update Sub-Project ${sp.subProjectCode}`,
 			description: `This will update row ${sp.rowNumber} in the "${SHEET_NAMES.SUB_PROJECTS}" sheet.`,
@@ -28267,6 +19137,10 @@ var ProjectCreationAndList = ({ sites, projectTypes, projects, subProjects, cont
 				{
 					label: "Sub-Project Code",
 					value: sp.subProjectCode
+				},
+				{
+					label: "Sub-Project Name",
+					value: editSubForm.subProjectName.trim()
 				},
 				{
 					label: "Parent Main Code",
@@ -28282,19 +19156,90 @@ var ProjectCreationAndList = ({ sites, projectTypes, projects, subProjects, cont
 				},
 				{
 					label: "Remarks",
-					value: editSubForm.remarks || "—"
+					value: editSubForm.remarks.trim() || "—"
 				}
 			],
 			confirmLabel: "Confirm Sub-Project Update",
 			onConfirm: async () => {
 				await onUpdateSubProject(sp, {
+					subProjectName: editSubForm.subProjectName.trim(),
 					status: editSubForm.status,
 					progress: sp.progress || 0,
 					targetDate: editSubForm.targetDate,
-					remarks: editSubForm.remarks
+					remarks: editSubForm.remarks.trim()
 				});
 				setEditingSubRow(null);
 				setEditSubForm(null);
+			}
+		});
+	};
+	const handleDeleteMainProject = (proj) => {
+		if (!modulePermission.edit) return;
+		const linkedSubsCount = (subProjectsByProjectId[proj.projectId] || []).length;
+		const linkedContractsCount = contractsTCP.filter((c) => c.projectId === proj.projectId).length;
+		requestConfirmation({
+			title: `Delete Main Project — ${proj.mainProjectCode}`,
+			description: `This will permanently delete "${proj.mainProjectCode}" (${proj.projectId}) from the "${SHEET_NAMES.PROJECTS}" sheet. Projects with linked Sub-Projects or Contracts cannot be deleted until child records are removed.`,
+			sheetName: `${SHEET_NAMES.PROJECTS}!A${proj.rowNumber}:L${proj.rowNumber}`,
+			isDestructive: true,
+			details: [
+				{
+					label: "Project ID",
+					value: proj.projectId
+				},
+				{
+					label: "Main Project Code",
+					value: proj.mainProjectCode
+				},
+				{
+					label: "Linked Sub-Projects",
+					value: String(linkedSubsCount)
+				},
+				{
+					label: "Linked Contracts",
+					value: String(linkedContractsCount)
+				}
+			],
+			confirmLabel: "Confirm & Delete Main Project",
+			onConfirm: async () => {
+				await onDeleteMainProject(proj);
+				if (selectedMainProjectId === proj.projectId) setSelectedMainProjectId(null);
+			}
+		});
+	};
+	const handleDeleteSubProject = (sp) => {
+		if (!modulePermission.edit) return;
+		const linkedContractsCount = (tcpBySubProjectId[sp.subProjectId]?.contracts || []).length;
+		requestConfirmation({
+			title: `Delete Sub-Project — ${sp.subProjectCode}`,
+			description: `This will permanently delete "${sp.subProjectCode}" (${sp.subProjectId}) from the "${SHEET_NAMES.SUB_PROJECTS}" sheet. Sub-Projects with awarded Contract TCP records cannot be deleted.`,
+			sheetName: `${SHEET_NAMES.SUB_PROJECTS}!A${sp.rowNumber}:J${sp.rowNumber}`,
+			isDestructive: true,
+			details: [
+				{
+					label: "Sub-Project ID",
+					value: sp.subProjectId
+				},
+				{
+					label: "Sub-Project Code",
+					value: sp.subProjectCode
+				},
+				{
+					label: "Parent Project",
+					value: sp.mainProjectCode
+				},
+				{
+					label: "Linked Contracts",
+					value: String(linkedContractsCount)
+				}
+			],
+			confirmLabel: "Confirm & Delete Sub-Project",
+			onConfirm: async () => {
+				await onDeleteSubProject(sp);
+				if (editingSubRow === sp.rowNumber) {
+					setEditingSubRow(null);
+					setEditSubForm(null);
+				}
 			}
 		});
 	};
@@ -28737,11 +19682,21 @@ var ProjectCreationAndList = ({ sites, projectTypes, projects, subProjects, cont
 									className: "mt-0.5 text-xs text-slate-600",
 									children: activeMainProject.projectName
 								})
-							] }), modulePermission.add && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-								type: "button",
-								onClick: () => openAddSubProjectPopup(activeMainProject),
-								className: "inline-flex items-center gap-1.5 rounded-md bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800 whitespace-nowrap shrink-0",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Plus, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Add Sub-Project" })]
+							] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "flex flex-wrap items-center gap-1.5 shrink-0",
+								children: [modulePermission.add && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+									type: "button",
+									onClick: () => openAddSubProjectPopup(activeMainProject),
+									className: "inline-flex items-center gap-1.5 rounded-md bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800 whitespace-nowrap",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Plus, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Add Sub-Project" })]
+								}), modulePermission.edit && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+									type: "button",
+									onClick: () => handleDeleteMainProject(activeMainProject),
+									disabled: activeProjectSubProjects.length > 0 || contractsTCP.some((c) => c.projectId === activeMainProject.projectId),
+									title: activeProjectSubProjects.length > 0 ? "Delete linked Sub-Projects first before deleting this Main Project" : `Delete Main Project ${activeMainProject.mainProjectCode}`,
+									className: "inline-flex items-center gap-1 rounded-md border border-red-200 bg-red-50/70 px-2.5 py-1.5 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-35 disabled:cursor-not-allowed whitespace-nowrap",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Trash2, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Delete Project" })]
+								})]
 							})]
 						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 							className: "grid grid-cols-3 gap-2 rounded border border-slate-200 bg-white p-2.5 text-xs",
@@ -28835,49 +19790,69 @@ var ProjectCreationAndList = ({ sites, projectTypes, projects, subProjects, cont
 									})]
 								}), isEditingSub && editSubForm ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 									className: "rounded border border-slate-200 bg-slate-50 p-3 space-y-3 text-xs",
-									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-										className: "grid grid-cols-1 sm:grid-cols-2 gap-3",
-										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", {
+									children: [
+										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
 											className: "block text-xs font-medium text-slate-700",
-											children: "Target Date"
-										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-											type: "date",
-											value: editSubForm.targetDate,
-											onChange: (e) => setEditSubForm({
-												...editSubForm,
-												targetDate: e.target.value
-											}),
-											className: "mt-1 w-full rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-mono"
-										})] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", {
-											className: "block text-xs font-medium text-slate-700",
-											children: "Scope / Remarks"
+											children: ["Sub-Project Name ", /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+												className: "text-red-600",
+												children: "*"
+											})]
 										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
 											type: "text",
-											value: editSubForm.remarks,
+											value: editSubForm.subProjectName,
 											onChange: (e) => setEditSubForm({
 												...editSubForm,
-												remarks: e.target.value
+												subProjectName: e.target.value
 											}),
-											placeholder: "Notes...",
+											placeholder: "Sub-project scope name...",
 											className: "mt-1 w-full rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs"
-										})] })]
-									}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-										className: "flex items-center justify-end gap-2",
-										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-											type: "button",
-											onClick: () => {
-												setEditingSubRow(null);
-												setEditSubForm(null);
-											},
-											className: "rounded border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700",
-											children: "Cancel"
-										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-											type: "button",
-											onClick: () => handleSaveSubUpdate(sp),
-											className: "rounded bg-slate-900 px-3 py-1 text-xs font-semibold text-white",
-											children: "Save Sub-Project"
-										})]
-									})]
+										})] }),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+											className: "grid grid-cols-1 sm:grid-cols-2 gap-3",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", {
+												className: "block text-xs font-medium text-slate-700",
+												children: "Target Date"
+											}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+												type: "date",
+												value: editSubForm.targetDate,
+												onChange: (e) => setEditSubForm({
+													...editSubForm,
+													targetDate: e.target.value
+												}),
+												className: "mt-1 w-full rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-mono"
+											})] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", {
+												className: "block text-xs font-medium text-slate-700",
+												children: "Scope / Remarks"
+											}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+												type: "text",
+												value: editSubForm.remarks,
+												onChange: (e) => setEditSubForm({
+													...editSubForm,
+													remarks: e.target.value
+												}),
+												placeholder: "Notes...",
+												className: "mt-1 w-full rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs"
+											})] })]
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+											className: "flex items-center justify-end gap-2",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+												type: "button",
+												onClick: () => {
+													setEditingSubRow(null);
+													setEditSubForm(null);
+												},
+												className: "rounded border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700",
+												children: "Cancel"
+											}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+												type: "button",
+												onClick: () => handleSaveSubUpdate(sp),
+												disabled: !editSubForm.subProjectName.trim(),
+												className: "rounded bg-slate-900 px-3 py-1 text-xs font-semibold text-white disabled:opacity-40",
+												children: "Save Sub-Project"
+											})]
+										})
+									]
 								}) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 									className: "rounded border border-slate-200 bg-slate-50/60 p-2.5 space-y-2 text-xs",
 									children: [
@@ -28933,12 +19908,19 @@ var ProjectCreationAndList = ({ sites, projectTypes, projects, subProjects, cont
 													onClick: () => onOpenAwardTCPForSubProject(sp.subProjectId),
 													className: "inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-800 hover:bg-slate-100",
 													children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(FileText, { className: "h-3 w-3" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Award TCP" })]
-												}), modulePermission.edit && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+												}), modulePermission.edit && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
 													type: "button",
 													onClick: () => startEditSub(sp),
 													className: "inline-flex items-center gap-1 rounded border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100",
 													children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(PenLine, { className: "h-3 w-3" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Edit" })]
-												})]
+												}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+													type: "button",
+													onClick: () => handleDeleteSubProject(sp),
+													disabled: subTCPInfo.contracts.length > 0,
+													title: subTCPInfo.contracts.length > 0 ? `Cannot delete: ${subTCPInfo.contracts.length} Contract TCP record(s) linked` : `Delete Sub-Project ${sp.subProjectCode}`,
+													className: "inline-flex items-center gap-1 rounded border border-red-200 bg-red-50/60 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-35 disabled:cursor-not-allowed",
+													children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Trash2, { className: "h-3 w-3" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Delete" })]
+												})] })]
 											})]
 										})
 									]
@@ -30531,7 +21513,7 @@ var PrintableDashboardView = ({ projects, subProjects, contractsTCP, contractPay
 							}),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
 								className: "printable-ledger-td text-center font-mono",
-								children: formatDisplayDate(rfp.rfpDate)
+								children: formatDisplayDate(rfp.updatedAt || rfp.rfpDate)
 							}),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
 								className: "printable-ledger-td text-center font-medium",
@@ -31226,7 +22208,7 @@ function computeBirTaxBreakdown(params) {
 		effectiveWhtPercentOfGross
 	};
 }
-var ContractsTCPView = ({ subProjects, contractors, contractsTCP, contractPayments, contractsPermission, paymentsPermission, activeUser, onSelectActiveUser, onOpenProfileModal, onOpenAdminAccounts, preselectedSubProjectId, onClearPreselectedSubProject, onAwardContractTCP, onUpdateContractTCP, onCreateContractPayment, onUpdateContractPayment, onNavigateTab, requestConfirmation }) => {
+var ContractsTCPView = ({ subProjects, contractors, contractsTCP, contractPayments, contractsPermission, paymentsPermission, activeUser, onSelectActiveUser, onOpenProfileModal, onOpenAdminAccounts, preselectedSubProjectId, onClearPreselectedSubProject, onAwardContractTCP, onUpdateContractTCP, onDeleteContractTCP, onCreateContractPayment, onUpdateContractPayment, onDeleteContractPayment, onNavigateTab, requestConfirmation }) => {
 	const activeContractors = (0, import_react.useMemo)(() => contractors.filter((c) => c.active), [contractors]);
 	const [activeSection, setActiveSection] = (0, import_react.useState)("contracts_and_rollups");
 	const [showBirGuide, setShowBirGuide] = (0, import_react.useState)(false);
@@ -31411,65 +22393,7 @@ var ContractsTCPView = ({ subProjects, contractors, contractsTCP, contractPaymen
 		hasWithholdingTax,
 		draftBirTax
 	]);
-	const rollupByContractId = (0, import_react.useMemo)(() => {
-		const map = {};
-		for (const c of contractsTCP) {
-			const retentionTargetAmount = Number((c.tcpAmount * ((c.retentionPercent || 0) / 100)).toFixed(2));
-			const withholdingTargetAmount = c.hasWithholdingTax ? c.birTaxInfo?.totalWithholdingAmount ?? c.tcpAmount * ((c.withholdingTaxPercent || 0) / 100) : 0;
-			const totalDeductibleTarget = retentionTargetAmount + withholdingTargetAmount;
-			const maxSafeNonRetentionBillable = Math.max(0, Number((c.tcpAmount - retentionTargetAmount).toFixed(2)));
-			map[c.contractId] = {
-				tcpAmount: c.tcpAmount,
-				retentionTargetAmount,
-				withholdingTargetAmount,
-				totalDeductibleTarget,
-				maxSafeNonRetentionBillable,
-				nonRetentionSettledAndRequested: 0,
-				retentionReleasedGross: 0,
-				unreleasedRetentionHoldback: retentionTargetAmount,
-				safeRemainingProgressBillable: maxSafeNonRetentionBillable,
-				receivedGrossDeducted: 0,
-				receivedChequePaid: 0,
-				remainingTCPAfterReceived: c.tcpAmount,
-				inFlightRFPAmount: 0,
-				retentionAlreadyDeducted: 0,
-				withholdingAlreadyDeducted: 0,
-				totalAlreadyDeducted: 0,
-				remainingDeductibleBalance: totalDeductibleTarget,
-				payments: []
-			};
-		}
-		for (const p of contractPayments) {
-			const entry = map[p.contractId];
-			if (!entry) continue;
-			entry.payments.push(p);
-			if (p.paymentStatus === "CANCELLED") continue;
-			entry.retentionAlreadyDeducted += p.retentionDeducted;
-			entry.withholdingAlreadyDeducted += p.withheldAmount;
-			const isReleasedOrReceived = p.paymentStatus === "CHEQUE_RELEASED" || p.paymentStatus === "RECEIVED";
-			const settledGross = (Number(p.chequeAmount) || 0) + (Number(p.withheldAmount) || 0);
-			const grossValue = isReleasedOrReceived && settledGross > 0 ? settledGross : Number(p.rfpAmount) || 0;
-			if (p.billingType === "Retention Release") entry.retentionReleasedGross += grossValue;
-			else {
-				const netAgainstNonRetentionQuota = Math.max(0, grossValue - (Number(p.retentionDeducted) || 0));
-				entry.nonRetentionSettledAndRequested += netAgainstNonRetentionQuota;
-			}
-			if (p.paymentStatus === "RECEIVED" || p.paymentStatus === "CHEQUE_RELEASED") {
-				const deductedFromTCP = settledGross > 0 ? settledGross : p.rfpAmount > 0 ? p.rfpAmount : p.chequeAmount + p.withheldAmount;
-				entry.receivedGrossDeducted += deductedFromTCP;
-				entry.receivedChequePaid += p.chequeAmount;
-			} else entry.inFlightRFPAmount += p.rfpAmount;
-		}
-		for (const contractId of Object.keys(map)) {
-			const r = map[contractId];
-			r.remainingTCPAfterReceived = Math.max(0, Number((r.tcpAmount - r.receivedGrossDeducted).toFixed(2)));
-			r.unreleasedRetentionHoldback = Math.max(0, Number((r.retentionTargetAmount - r.retentionReleasedGross).toFixed(2)));
-			r.safeRemainingProgressBillable = Math.max(0, Number((r.remainingTCPAfterReceived - r.unreleasedRetentionHoldback).toFixed(2)));
-			r.totalAlreadyDeducted = r.retentionAlreadyDeducted + r.withholdingAlreadyDeducted;
-			r.remainingDeductibleBalance = Math.max(0, r.totalDeductibleTarget - r.totalAlreadyDeducted);
-		}
-		return map;
-	}, [contractsTCP, contractPayments]);
+	const rollupByContractId = (0, import_react.useMemo)(() => computeContractRollups(contractsTCP, contractPayments), [contractsTCP, contractPayments]);
 	const portfolioSummary = (0, import_react.useMemo)(() => {
 		let totalActiveTCP = 0;
 		let totalDeductedPaymentsReceived = 0;
@@ -31777,17 +22701,27 @@ var ContractsTCPView = ({ subProjects, contractors, contractsTCP, contractPaymen
 		setWithheldAmountInput(String(defaultWht));
 		setChequeAmountInput(String(defaultCheque));
 	};
+	const duplicateCvCheck = (0, import_react.useMemo)(() => {
+		const cleanCv = cvNumber.trim().toUpperCase();
+		if (!cleanCv || !cvModalPayment) return null;
+		return contractPayments.find((p) => p.paymentId !== cvModalPayment.paymentId && p.paymentStatus !== "CANCELLED" && p.cvNumber.trim().toUpperCase() === cleanCv) || null;
+	}, [
+		cvNumber,
+		cvModalPayment,
+		contractPayments
+	]);
 	const applyCvBirAutoCalculation = (mode, labStr, matStr) => {
 		if (!cvModalPayment) return;
+		const parentContract = contractsTCP.find((c) => c.contractId === cvModalPayment.contractId);
 		const calc = computeBirTaxBreakdown({
 			grossAmount: cvModalPayment.rfpAmount,
 			taxMode: mode,
-			isVatInclusive: true,
-			vatRatePercent: 12,
+			isVatInclusive: parentContract?.birTaxInfo?.isVatInclusive ?? true,
+			vatRatePercent: parentContract?.birTaxInfo?.vatRatePercent ?? 12,
 			laborSplitAmount: Number.parseFloat(labStr) || 0,
 			materialSplitAmount: Number.parseFloat(matStr) || 0,
-			laborEwtPercent: 2,
-			materialEwtPercent: 1,
+			laborEwtPercent: parentContract?.birTaxInfo?.laborEwtPercent ?? 2,
+			materialEwtPercent: parentContract?.birTaxInfo?.materialEwtPercent ?? 1,
 			isManualOverride: false
 		});
 		setWithheldAmountInput(String(calc.totalWithholdingAmount));
@@ -31803,7 +22737,7 @@ var ContractsTCPView = ({ subProjects, contractors, contractsTCP, contractPaymen
 	};
 	const handleReleaseChequeSubmit = (e) => {
 		e.preventDefault();
-		if (!cvModalPayment) return;
+		if (!cvModalPayment || duplicateCvCheck) return;
 		const cleanCv = cvNumber.trim().toUpperCase();
 		const chequeAmt = Number.parseFloat(chequeAmountInput) || 0;
 		const whtAmt = Number.parseFloat(withheldAmountInput) || 0;
@@ -31873,9 +22807,10 @@ var ContractsTCPView = ({ subProjects, contractors, contractsTCP, contractPaymen
 		const cleanRecNo = receiptNumber.trim().toUpperCase();
 		if (!cleanRecNo || !receiptType.trim()) return;
 		const targetPayment = receiptModalPayment;
+		const settledGrossDisplay = getPaymentSettledGross(targetPayment);
 		requestConfirmation({
 			title: `Confirm Contractor Receipt (${receiptType} #${cleanRecNo})`,
-			description: `This will mark Payment ${targetPayment.paymentId} as RECEIVED by contractor and deduct ${formatCurrency(targetPayment.rfpAmount)} from Contract ${targetContractLabel(targetPayment.contractId)}'s remaining balance.`,
+			description: `This will mark Payment ${targetPayment.paymentId} as RECEIVED by contractor and deduct ${formatCurrency(settledGrossDisplay)} from Contract ${targetContractLabel(targetPayment.contractId)}'s remaining balance.`,
 			sheetName: `${SHEET_NAMES.CONTRACT_PAYMENTS}!A${targetPayment.rowNumber}:W${targetPayment.rowNumber}`,
 			details: [
 				{
@@ -31899,8 +22834,8 @@ var ContractsTCPView = ({ subProjects, contractors, contractsTCP, contractPaymen
 					value: receiptDate
 				},
 				{
-					label: "Gross Deducted from Contract TCP",
-					value: formatCurrency(targetPayment.rfpAmount)
+					label: "Gross Deducted from Contract TCP (Cheque + WHT)",
+					value: formatCurrency(settledGrossDisplay)
 				}
 			],
 			confirmLabel: "Confirm Payment Received",
@@ -32000,12 +22935,114 @@ var ContractsTCPView = ({ subProjects, contractors, contractsTCP, contractPaymen
 		setEditingRow(record.rowNumber);
 		setEditForm({ ...record });
 	};
+	const handleDeletePayment = (payment) => {
+		if (!paymentsPermission.edit) return;
+		requestConfirmation({
+			title: `Delete Payment Row — ${payment.paymentId}`,
+			description: `This will permanently delete Payment ${payment.paymentId} (RFP #${payment.rfpNumber}) from the "${SHEET_NAMES.CONTRACT_PAYMENTS}" sheet and restore any deducted TCP/retention/withholding amounts.`,
+			sheetName: `${SHEET_NAMES.CONTRACT_PAYMENTS}!A${payment.rowNumber}:W${payment.rowNumber}`,
+			isDestructive: true,
+			details: [
+				{
+					label: "Payment ID",
+					value: payment.paymentId
+				},
+				{
+					label: "Contract ID",
+					value: payment.contractId
+				},
+				{
+					label: "RFP / CV Number",
+					value: `${payment.rfpNumber} / ${payment.cvNumber || "—"}`
+				},
+				{
+					label: "RFP Gross Amount",
+					value: formatCurrency(payment.rfpAmount)
+				},
+				{
+					label: "Stage",
+					value: PAYMENT_STAGE_STATUS_LABELS[payment.paymentStatus]
+				}
+			],
+			confirmLabel: "Confirm & Delete Payment Row",
+			onConfirm: async () => {
+				await onDeleteContractPayment(payment);
+			}
+		});
+	};
+	const handleDeleteContract = (record) => {
+		if (!contractsPermission.edit) return;
+		const activePaymentsCount = contractPayments.filter((p) => p.contractId === record.contractId && p.paymentStatus !== "CANCELLED").length;
+		const childModsCount = contractsTCP.filter((c) => c.parentContractId === record.contractId).length;
+		requestConfirmation({
+			title: `Delete Contract — ${record.contractId}`,
+			description: `This will permanently delete Contract ${record.contractId} from "${SHEET_NAMES.CONTRACTS_TCP}". Contracts with active payments or child Escalation/Modification records cannot be deleted (set status to CANCEL instead).`,
+			sheetName: `${SHEET_NAMES.CONTRACTS_TCP}!A${record.rowNumber}:W${record.rowNumber}`,
+			isDestructive: true,
+			details: [
+				{
+					label: "Contract ID & TCP ID",
+					value: `${record.contractId} (${record.tcpId || "—"})`
+				},
+				{
+					label: "Sub-Project",
+					value: `${record.subProjectCode} — ${record.subProjectName}`
+				},
+				{
+					label: "TCP Amount",
+					value: formatCurrency(record.tcpAmount)
+				},
+				{
+					label: "Active Linked Payments",
+					value: String(activePaymentsCount)
+				},
+				{
+					label: "Linked Modifications",
+					value: String(childModsCount)
+				}
+			],
+			confirmLabel: "Confirm & Delete Contract",
+			onConfirm: async () => {
+				await onDeleteContractTCP(record);
+				if (editingRow === record.rowNumber) {
+					setEditingRow(null);
+					setEditForm(null);
+				}
+			}
+		});
+	};
 	const handleSaveEdit = () => {
-		if (!editForm) return;
+		if (!editForm || !Number.isFinite(editForm.tcpAmount) || editForm.tcpAmount === 0) return;
 		const updatedContractorName = contractors.find((c) => c.contractorCode === editForm.contractorCode)?.contractorName || editForm.contractorName;
+		const prevBir = editForm.birTaxInfo;
+		const recalcBir = editForm.hasWithholdingTax ? computeBirTaxBreakdown({
+			grossAmount: Math.abs(editForm.tcpAmount),
+			taxMode: prevBir?.taxMode || "VAT_LUMP_SUM_2PCT",
+			isVatInclusive: prevBir?.isVatInclusive ?? true,
+			vatRatePercent: prevBir?.vatRatePercent ?? 12,
+			laborSplitAmount: prevBir && prevBir.laborGrossAmount + prevBir.materialGrossAmount > 0 ? Number((Math.abs(editForm.tcpAmount) * (prevBir.laborGrossAmount / (prevBir.laborGrossAmount + prevBir.materialGrossAmount))).toFixed(2)) : Math.abs(editForm.tcpAmount),
+			materialSplitAmount: prevBir && prevBir.laborGrossAmount + prevBir.materialGrossAmount > 0 ? Number((Math.abs(editForm.tcpAmount) * (prevBir.materialGrossAmount / (prevBir.laborGrossAmount + prevBir.materialGrossAmount))).toFixed(2)) : 0,
+			laborEwtPercent: prevBir?.laborEwtPercent ?? (editForm.withholdingTaxPercent || 2),
+			materialEwtPercent: prevBir?.materialEwtPercent ?? 1,
+			isManualOverride: false
+		}) : void 0;
+		const updatedBirInfo = recalcBir ? {
+			taxMode: recalcBir.taxMode,
+			isVatInclusive: recalcBir.isVatInclusive,
+			vatRatePercent: recalcBir.vatRatePercent,
+			laborGrossAmount: recalcBir.laborGrossAmount,
+			materialGrossAmount: recalcBir.materialGrossAmount,
+			laborEwtPercent: recalcBir.laborEwtPercent,
+			materialEwtPercent: recalcBir.materialEwtPercent,
+			computedVatAmount: recalcBir.computedVatAmount,
+			computedLaborEwt: recalcBir.computedLaborEwt,
+			computedMaterialEwt: recalcBir.computedMaterialEwt,
+			totalWithholdingAmount: recalcBir.totalWithholdingAmount,
+			isManualOverride: recalcBir.isManualOverride
+		} : void 0;
 		requestConfirmation({
 			title: `Update Contract ${editForm.contractId} & Payment Terms`,
-			description: `This will update row ${editForm.rowNumber} in the "${SHEET_NAMES.CONTRACTS_TCP}" sheet.`,
+			description: `This will update row ${editForm.rowNumber} in the "${SHEET_NAMES.CONTRACTS_TCP}" sheet and recalculate BIR tax values for the updated TCP.`,
 			sheetName: `${SHEET_NAMES.CONTRACTS_TCP}!A${editForm.rowNumber}:W${editForm.rowNumber}`,
 			details: [
 				{
@@ -32022,7 +23059,7 @@ var ContractsTCPView = ({ subProjects, contractors, contractsTCP, contractPaymen
 				},
 				{
 					label: "Payment Terms",
-					value: `DP ${editForm.dpPercent}% · Prog ${editForm.progressBillingPercent}% · Ret ${editForm.retentionPercent}% · WHT ${editForm.hasWithholdingTax ? `${editForm.withholdingTaxPercent}%` : "0%"}`
+					value: `DP ${editForm.dpPercent}% · Prog ${editForm.progressBillingPercent}% · Ret ${editForm.retentionPercent}% · WHT ${editForm.hasWithholdingTax ? `${recalcBir ? recalcBir.effectiveWhtPercentOfGross : editForm.withholdingTaxPercent}%` : "0%"}`
 				},
 				{
 					label: "Contractor",
@@ -32033,7 +23070,9 @@ var ContractsTCPView = ({ subProjects, contractors, contractsTCP, contractPaymen
 			onConfirm: async () => {
 				await onUpdateContractTCP(editForm.rowNumber, {
 					...editForm,
-					contractorName: updatedContractorName
+					contractorName: updatedContractorName,
+					withholdingTaxPercent: editForm.hasWithholdingTax ? recalcBir ? recalcBir.effectiveWhtPercentOfGross : editForm.withholdingTaxPercent : 0,
+					birTaxInfo: updatedBirInfo
 				});
 				setEditingRow(null);
 				setEditForm(null);
@@ -33549,12 +24588,19 @@ var ContractsTCPView = ({ subProjects, contractors, contractsTCP, contractPaymen
 														className: "inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-800 hover:bg-slate-100 whitespace-nowrap",
 														children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(GitBranch, { className: "h-3 w-3" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Modify / Takeover" })]
 													}),
-													contractsPermission.edit && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+													contractsPermission.edit && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
 														type: "button",
 														onClick: () => startEditing(record),
 														className: "inline-flex items-center gap-1 rounded border border-slate-200 px-2 py-1 text-xs font-medium text-slate-600 hover:border-slate-300 hover:bg-slate-100",
 														children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(PenLine, { className: "h-3 w-3" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Edit" })]
-													})
+													}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+														type: "button",
+														onClick: () => handleDeleteContract(record),
+														disabled: rollup.payments.some((p) => p.paymentStatus !== "CANCELLED") || contractsTCP.some((c) => c.parentContractId === record.contractId),
+														title: rollup.payments.some((p) => p.paymentStatus !== "CANCELLED") ? "Cannot delete contract with active payments (cancel/delete payments first or set status to CANCEL)" : `Delete contract ${record.contractId}`,
+														className: "inline-flex items-center gap-1 rounded border border-red-200 bg-red-50/60 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-35 disabled:cursor-not-allowed",
+														children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Trash2, { className: "h-3 w-3" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Delete" })]
+													})] })
 												]
 											})
 										})
@@ -33895,9 +24941,9 @@ var ContractsTCPView = ({ subProjects, contractors, contractsTCP, contractPaymen
 																			children: PAYMENT_STAGE_STATUS_LABELS[p.paymentStatus]
 																		})
 																	}),
-																	/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+																	/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
 																		className: "py-2.5 px-3 text-right whitespace-nowrap",
-																		children: p.paymentStatus !== "CANCELLED" && (paymentsPermission.edit ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+																		children: [p.paymentStatus !== "CANCELLED" && (paymentsPermission.edit ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 																			className: "flex items-center justify-end gap-1.5",
 																			children: [
 																				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
@@ -33918,12 +24964,25 @@ var ContractsTCPView = ({ subProjects, contractors, contractsTCP, contractPaymen
 																					className: "inline-flex items-center gap-1 rounded border border-red-200 bg-red-50/60 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100",
 																					title: "Cancel Payment Request",
 																					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Ban, { className: "h-3 w-3" }), "Cancel"]
+																				}),
+																				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+																					type: "button",
+																					onClick: () => handleDeletePayment(p),
+																					className: "inline-flex items-center gap-1 rounded border border-red-200 bg-white px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50",
+																					title: "Delete Payment Row",
+																					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Trash2, { className: "h-3 w-3" }), "Delete"]
 																				})
 																			]
 																		}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
 																			className: "text-xs font-mono text-slate-400",
 																			children: "Read-Only"
-																		}))
+																		})), p.paymentStatus === "CANCELLED" && paymentsPermission.edit && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+																			type: "button",
+																			onClick: () => handleDeletePayment(p),
+																			className: "inline-flex items-center gap-1 rounded border border-red-200 bg-white px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50",
+																			title: "Permanently Delete Cancelled Payment Row",
+																			children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Trash2, { className: "h-3 w-3" }), "Delete"]
+																		})]
 																	})
 																]
 															}, `${p.paymentId}-${p.rowNumber}`))
@@ -34147,9 +25206,9 @@ var ContractsTCPView = ({ subProjects, contractors, contractsTCP, contractPaymen
 											children: PAYMENT_STAGE_STATUS_LABELS[p.paymentStatus]
 										})
 									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
 										className: "py-3 px-3 text-right whitespace-nowrap",
-										children: p.paymentStatus !== "CANCELLED" && (paymentsPermission.edit ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+										children: [p.paymentStatus !== "CANCELLED" && (paymentsPermission.edit ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 											className: "flex items-center justify-end gap-1.5",
 											children: [
 												/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
@@ -34169,12 +25228,23 @@ var ContractsTCPView = ({ subProjects, contractors, contractsTCP, contractPaymen
 													onClick: () => handleCancelPayment(p),
 													className: "inline-flex items-center gap-1 rounded border border-red-200 bg-red-50/60 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100",
 													children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Ban, { className: "h-3 w-3" }), "Cancel"]
+												}),
+												/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+													type: "button",
+													onClick: () => handleDeletePayment(p),
+													className: "inline-flex items-center gap-1 rounded border border-red-200 bg-white px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50",
+													children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Trash2, { className: "h-3 w-3" }), "Delete"]
 												})
 											]
 										}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
 											className: "text-xs font-mono text-slate-400",
 											children: "Read-Only"
-										}))
+										})), p.paymentStatus === "CANCELLED" && paymentsPermission.edit && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+											type: "button",
+											onClick: () => handleDeletePayment(p),
+											className: "inline-flex items-center gap-1 rounded border border-red-200 bg-white px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Trash2, { className: "h-3 w-3" }), "Delete"]
+										})]
 									})
 								]
 							}, `${p.paymentId}-${p.rowNumber}`))
@@ -34663,20 +25733,37 @@ var ContractsTCPView = ({ subProjects, contractors, contractsTCP, contractPaymen
 								}),
 								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 									className: "grid grid-cols-2 gap-4",
-									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
-										className: "block text-xs font-medium text-slate-700",
-										children: ["CV Number ", /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-											className: "text-red-600",
-											children: "*"
-										})]
-									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-										type: "text",
-										value: cvNumber,
-										onChange: (e) => setCvNumber(e.target.value.toUpperCase()),
-										placeholder: "e.g. CV-2026-0085",
-										required: true,
-										className: "mt-1.5 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-xs font-mono uppercase text-slate-900"
-									})] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
+										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
+											className: "block text-xs font-medium text-slate-700",
+											children: ["CV Number ", /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+												className: "text-red-600",
+												children: "*"
+											})]
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+											type: "text",
+											value: cvNumber,
+											onChange: (e) => setCvNumber(e.target.value.toUpperCase()),
+											placeholder: "e.g. CV-2026-0085",
+											required: true,
+											className: `mt-1.5 w-full rounded-md border px-3 py-2 text-xs font-mono uppercase ${duplicateCvCheck ? "border-red-500 bg-red-50/50 text-red-900" : "border-slate-300 bg-white text-slate-900"}`
+										}),
+										duplicateCvCheck && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
+											className: "mt-1 flex items-center gap-1 text-[11px] text-red-600",
+											children: [
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CircleAlert, { className: "h-3 w-3 shrink-0" }),
+												"Duplicate CV #",
+												duplicateCvCheck.cvNumber,
+												" already used by",
+												" ",
+												duplicateCvCheck.paymentId,
+												" (",
+												duplicateCvCheck.contractId,
+												")."
+											]
+										})
+									] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
 										className: "block text-xs font-medium text-slate-700",
 										children: ["CV Date ", /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
 											className: "text-red-600",
@@ -34786,7 +25873,7 @@ var ContractsTCPView = ({ subProjects, contractors, contractsTCP, contractPaymen
 										children: "Cancel"
 									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
 										type: "submit",
-										disabled: !cvNumber.trim() || !(Number.parseFloat(chequeAmountInput) > 0),
+										disabled: !cvNumber.trim() || !(Number.parseFloat(chequeAmountInput) > 0) || Boolean(duplicateCvCheck),
 										className: "rounded-md bg-slate-900 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-40",
 										children: "Record Cheque Release (CV)"
 									})]
@@ -34835,10 +25922,10 @@ var ContractsTCPView = ({ subProjects, contractors, contractsTCP, contractPaymen
 										className: "flex justify-between",
 										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
 											className: "text-slate-500",
-											children: "Gross Deducted from Contract TCP:"
+											children: "Gross Deducted from Contract TCP (Cheque + WHT):"
 										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", {
 											className: "text-emerald-700",
-											children: formatCurrency(receiptModalPayment.rfpAmount)
+											children: formatCurrency(getPaymentSettledGross(receiptModalPayment))
 										})]
 									}),
 									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
@@ -34941,7 +26028,7 @@ var ContractsTCPView = ({ subProjects, contractors, contractsTCP, contractPaymen
 	});
 };
 // src/components/SitesSheetView.tsx
-var SitesSheetView = ({ sites, projects, modulePermission, activeUser, onSelectActiveUser, onOpenProfileModal, onOpenAdminAccounts, onAddSite, onUpdateSite, requestConfirmation }) => {
+var SitesSheetView = ({ sites, projects, modulePermission, activeUser, onSelectActiveUser, onOpenProfileModal, onOpenAdminAccounts, onAddSite, onUpdateSite, onDeleteSite, requestConfirmation }) => {
 	const [siteCode, setSiteCode] = (0, import_react.useState)("");
 	const [siteName, setSiteName] = (0, import_react.useState)("");
 	const [developer, setDeveloper] = (0, import_react.useState)("");
@@ -35020,8 +26107,18 @@ var SitesSheetView = ({ sites, projects, modulePermission, activeUser, onSelectA
 			createdAt: site.createdAt
 		});
 	};
+	const editDuplicateSiteName = (0, import_react.useMemo)(() => {
+		if (!editForm) return null;
+		const cleanName = editForm.siteName.trim().toLowerCase();
+		if (!cleanName) return null;
+		return sites.find((s) => s.rowNumber !== editingRow && s.siteName.trim().toLowerCase() === cleanName) || null;
+	}, [
+		sites,
+		editForm,
+		editingRow
+	]);
 	const handleSaveEdit = (rowNumber) => {
-		if (!modulePermission.edit || !editForm || !editForm.siteName.trim() || !editForm.developer.trim()) return;
+		if (!modulePermission.edit || !editForm || !editForm.siteName.trim() || !editForm.developer.trim() || editDuplicateSiteName) return;
 		requestConfirmation({
 			title: `Update Site Row #${rowNumber}`,
 			description: `This will update row ${rowNumber} in the "${SHEET_NAMES.SITES}" sheet of your Google Spreadsheet.`,
@@ -35046,9 +26143,49 @@ var SitesSheetView = ({ sites, projects, modulePermission, activeUser, onSelectA
 			],
 			confirmLabel: "Confirm & Update Row",
 			onConfirm: async () => {
-				await onUpdateSite(rowNumber, editForm);
+				await onUpdateSite(rowNumber, {
+					...editForm,
+					siteName: editForm.siteName.trim(),
+					developer: editForm.developer.trim(),
+					location: editForm.location.trim()
+				});
 				setEditingRow(null);
 				setEditForm(null);
+			}
+		});
+	};
+	const handleDeleteSite = (site) => {
+		if (!modulePermission.edit) return;
+		requestConfirmation({
+			title: `Delete Site — ${site.siteCode}`,
+			description: `This will permanently delete "${site.siteCode} (${site.siteName})" from the "${SHEET_NAMES.SITES}" sheet. Deletion is blocked if any Main Projects still reference this Site.`,
+			sheetName: `${SHEET_NAMES.SITES}!A${site.rowNumber}:E${site.rowNumber}`,
+			isDestructive: true,
+			details: [
+				{
+					label: "Site Code",
+					value: site.siteCode
+				},
+				{
+					label: "Site Name",
+					value: site.siteName
+				},
+				{
+					label: "Developer",
+					value: site.developer
+				},
+				{
+					label: "Linked Projects",
+					value: String(projectCountBySite[site.siteCode] || 0)
+				}
+			],
+			confirmLabel: "Confirm & Delete Site",
+			onConfirm: async () => {
+				await onDeleteSite(site);
+				if (editingRow === site.rowNumber) {
+					setEditingRow(null);
+					setEditForm(null);
+				}
 			}
 		});
 	};
@@ -35345,14 +26482,24 @@ var SitesSheetView = ({ sites, projects, modulePermission, activeUser, onSelectA
 											}),
 											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
 												className: "py-3 px-4 font-medium text-slate-900",
-												children: isEditing ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-													type: "text",
-													value: editForm.siteName,
-													onChange: (e) => setEditForm({
-														...editForm,
-														siteName: e.target.value
-													}),
-													className: "w-full rounded border border-slate-300 px-2 py-1 text-xs"
+												children: isEditing ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+													className: "space-y-1",
+													children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+														type: "text",
+														value: editForm.siteName,
+														onChange: (e) => setEditForm({
+															...editForm,
+															siteName: e.target.value
+														}),
+														className: `w-full rounded border px-2 py-1 text-xs ${editDuplicateSiteName ? "border-red-400 bg-red-50/50 text-red-900" : "border-slate-300"}`
+													}), editDuplicateSiteName && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
+														className: "text-[11px] text-red-600",
+														children: [
+															"Duplicate name (",
+															editDuplicateSiteName.siteCode,
+															")"
+														]
+													})]
 												}) : site.siteName
 											}),
 											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
@@ -35393,7 +26540,8 @@ var SitesSheetView = ({ sites, projects, modulePermission, activeUser, onSelectA
 													children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
 														type: "button",
 														onClick: () => handleSaveEdit(site.rowNumber),
-														className: "rounded bg-slate-900 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-slate-800 whitespace-nowrap",
+														disabled: !editForm.siteName.trim() || !editForm.developer.trim() || Boolean(editDuplicateSiteName),
+														className: "rounded bg-slate-900 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-slate-800 disabled:opacity-40 whitespace-nowrap",
 														children: "Save"
 													}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
 														type: "button",
@@ -35405,11 +26553,21 @@ var SitesSheetView = ({ sites, projects, modulePermission, activeUser, onSelectA
 														title: "Cancel edit",
 														children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(X, { className: "h-3.5 w-3.5" })
 													})]
-												}) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-													type: "button",
-													onClick: () => startEditing(site),
-													className: "inline-flex items-center gap-1 rounded border border-slate-200 px-2 py-1 text-[11px] font-medium text-slate-600 hover:border-slate-300 hover:bg-slate-100 whitespace-nowrap",
-													children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(PenLine, { className: "h-3 w-3" }), "Edit"]
+												}) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+													className: "flex items-center justify-end gap-1.5",
+													children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+														type: "button",
+														onClick: () => startEditing(site),
+														className: "inline-flex items-center gap-1 rounded border border-slate-200 px-2 py-1 text-[11px] font-medium text-slate-600 hover:border-slate-300 hover:bg-slate-100 whitespace-nowrap",
+														children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(PenLine, { className: "h-3 w-3" }), "Edit"]
+													}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+														type: "button",
+														onClick: () => handleDeleteSite(site),
+														disabled: linkedCount > 0,
+														title: linkedCount > 0 ? `Cannot delete: ${linkedCount} linked project(s) reference this site` : `Delete site ${site.siteCode}`,
+														className: "inline-flex items-center gap-1 rounded border border-red-200 bg-red-50/60 px-2 py-1 text-[11px] font-medium text-red-700 hover:bg-red-100 disabled:opacity-35 disabled:cursor-not-allowed whitespace-nowrap",
+														children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Trash2, { className: "h-3 w-3" }), "Delete"]
+													})]
 												})
 											})
 										]
@@ -35428,14 +26586,17 @@ var HostingPackagesPanel = ({ spreadsheetId, sheetData }) => {
 	const [selectedTarget, setSelectedTarget] = (0, import_react.useState)("github-pages");
 	const [assetBundle, setAssetBundle] = (0, import_react.useState)(null);
 	const [isLoadingBundle, setIsLoadingBundle] = (0, import_react.useState)(true);
-	const [includeCurrentLocalEdits, setIncludeCurrentLocalEdits] = (0, import_react.useState)(true);
+	const [includeCurrentLocalEdits, setIncludeCurrentLocalEdits] = (0, import_react.useState)(false);
 	const [copiedId, setCopiedId] = (0, import_react.useState)(null);
 	(0, import_react.useEffect)(() => {
 		let mounted = true;
 		setIsLoadingBundle(true);
 		loadPortableAssetBundle().then((bundle) => {
 			if (mounted) {
-				setAssetBundle(bundle);
+				setAssetBundle({
+					...bundle,
+					appsScriptCodeGs: bundle.appsScriptCodeGs || getAppsScriptCodeForSpreadsheet(spreadsheetId)
+				});
 				setIsLoadingBundle(false);
 			}
 		}).catch(() => {
@@ -35444,7 +26605,7 @@ var HostingPackagesPanel = ({ spreadsheetId, sheetData }) => {
 		return () => {
 			mounted = false;
 		};
-	}, []);
+	}, [spreadsheetId]);
 	const packageReports = (0, import_react.useMemo)(() => {
 		if (!assetBundle) return null;
 		const dataToInclude = includeCurrentLocalEdits ? sheetData : null;
@@ -35856,26 +27017,29 @@ var HostingPackagesPanel = ({ spreadsheetId, sheetData }) => {
 					}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 						className: "font-semibold text-slate-900",
 						children: [
-							"Include Current Application Records in",
+							"Embed Active Session Snapshot in",
 							" ",
 							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", {
 								className: "font-mono",
-								children: "data/data.json"
+								children: "./data.json"
 							}),
-							" Inside Exported ZIPs (",
-							sheetData ? `${sheetData.projects.length} Projects · ${sheetData.subProjects.length} Sub-Projects · ${sheetData.contractsTCP.length} Contracts · ${sheetData.contractPayments.length} Payments` : "Default Dataset",
-							")"
+							" (Off by default to keep public ZIPs sanitized)"
 						]
 					}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
 						className: "text-[11px] text-slate-600",
 						children: [
-							"Ensures any projects, contracts, RFPs, payments, or user accounts you created or edited in this session are bundled directly inside",
+							"Leave unchecked to bundle strictly synthetic placeholder records in ",
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", {
+								className: "font-mono",
+								children: "./data.json"
+							}),
+							" so real company/employee data is never published in static GitHub Pages files. Live data is loaded dynamically from Google Sheets via",
 							" ",
 							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", {
 								className: "font-mono",
-								children: "data/data.json"
+								children: "google-apps-script/Code.gs"
 							}),
-							" in all three ZIP packages."
+							"."
 						]
 					})] })]
 				})
@@ -35963,30 +27127,30 @@ var HostingPackagesPanel = ({ spreadsheetId, sheetData }) => {
 							className: "rounded-md border border-slate-200 bg-slate-50 p-3.5 space-y-1.5 text-xs",
 							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 								className: "font-bold text-slate-900",
-								children: "Remaining External Services & Separation Summary"
+								children: "Google Sheets Bridge & Separation Summary"
 							}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
 								className: "text-[11px] text-slate-600 leading-relaxed",
 								children: [
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "None required for core operation." }),
-									" The exported application runs 100% self-contained using",
+									"Every ZIP includes",
 									" ",
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", {
 										className: "font-mono",
-										children: "./data/data.json"
+										children: "google-apps-script/Code.gs"
 									}),
-									" and browser",
 									" ",
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", {
-										className: "font-mono",
-										children: "localStorage"
-									}),
-									". Optional live Google Sheets v4 API synchronization (Spreadsheet ID:",
+									"for full Read & Write connectivity to Spreadsheet ID",
 									" ",
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", {
 										className: "font-mono",
 										children: spreadsheetId
 									}),
-									") is cleanly separated as an opt-in OAuth 2.0 connection with zero private API keys in client-side code."
+									" without Firebase Auth popups, plus a sanitized synthetic",
+									" ",
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", {
+										className: "font-mono",
+										children: "./data.json"
+									}),
+									" for explicit Dev Sandbox testing. Zero credentials or API secrets are stored in client-side code."
 								]
 							})]
 						})
@@ -36026,7 +27190,7 @@ var HostingPackagesPanel = ({ spreadsheetId, sheetData }) => {
 	});
 };
 // src/components/MaintenanceTabView.tsx
-var MaintenanceTabView = ({ projectTypes, projects, sites, subProjects, contractors, contractsTCP, contractPaymentsCount, userAccounts, activeUser, adminPermission, initialSubSection = "accounts_dashboard", spreadsheetId, sheetData, spreadsheetTitle, spreadsheetUrl, existingSheets, missingSheets, lastSyncedAt, userEmail, isLoadingSheet, onForceSync, onLogout, onInitializeSchema, onAddProjectType, onUpdateProjectType, onSelectActiveUser, onCreateUserAccount, onUpdateUserAccount, onOpenProfileModal, requestConfirmation }) => {
+var MaintenanceTabView = ({ projectTypes, projects, sites, subProjects, contractors, contractsTCP, contractPaymentsCount, userAccounts, activeUser, adminPermission, initialSubSection = "accounts_dashboard", spreadsheetId, sheetData, spreadsheetTitle, spreadsheetUrl, existingSheets, missingSheets, lastSyncedAt, connectionMode, appsScriptUrl, isLoadingSheet, onForceSync, onOpenConnectionModal, onInitializeSchema, onAddProjectType, onUpdateProjectType, onDeleteProjectType, onSelectActiveUser, onCreateUserAccount, onUpdateUserAccount, onDeleteUserAccount, onOpenProfileModal, requestConfirmation }) => {
 	const [activeAdminSection, setActiveAdminSection] = (0, import_react.useState)(initialSubSection);
 	import_react.useEffect(() => {
 		setActiveAdminSection(initialSubSection);
@@ -36136,8 +27300,18 @@ var MaintenanceTabView = ({ projectTypes, projects, sites, subProjects, contract
 			createdAt: pt.createdAt
 		});
 	};
+	const editDuplicateTypeName = (0, import_react.useMemo)(() => {
+		if (!editForm) return null;
+		const cleanName = editForm.typeName.trim().toLowerCase();
+		if (!cleanName) return null;
+		return projectTypes.find((t) => t.rowNumber !== editingRow && t.typeName.trim().toLowerCase() === cleanName) || null;
+	}, [
+		projectTypes,
+		editForm,
+		editingRow
+	]);
 	const handleSaveEdit = (rowNumber) => {
-		if (!adminPermission.edit || !editForm || !editForm.typeName.trim()) return;
+		if (!adminPermission.edit || !editForm || !editForm.typeName.trim() || editDuplicateTypeName) return;
 		requestConfirmation({
 			title: `Update Project Type Row #${rowNumber}`,
 			description: `This will update row ${rowNumber} in the "${SHEET_NAMES.PROJECT_TYPES}" maintenance sheet.`,
@@ -36162,9 +27336,44 @@ var MaintenanceTabView = ({ projectTypes, projects, sites, subProjects, contract
 			],
 			confirmLabel: "Confirm & Update Option",
 			onConfirm: async () => {
-				await onUpdateProjectType(rowNumber, editForm);
+				await onUpdateProjectType(rowNumber, {
+					...editForm,
+					typeName: editForm.typeName.trim(),
+					description: editForm.description.trim()
+				});
 				setEditingRow(null);
 				setEditForm(null);
+			}
+		});
+	};
+	const handleDeleteProjectType = (pt) => {
+		if (!adminPermission.edit) return;
+		requestConfirmation({
+			title: `Delete Project Type — ${pt.typeCode}`,
+			description: `This will permanently delete "${pt.typeCode} (${pt.typeName})" from the "${SHEET_NAMES.PROJECT_TYPES}" sheet. Types referenced by existing Main Projects cannot be deleted (disable them instead).`,
+			sheetName: `${SHEET_NAMES.PROJECT_TYPES}!A${pt.rowNumber}:E${pt.rowNumber}`,
+			isDestructive: true,
+			details: [
+				{
+					label: "Type Code",
+					value: pt.typeCode
+				},
+				{
+					label: "Dropdown Label",
+					value: pt.typeName
+				},
+				{
+					label: "Projects Using",
+					value: String(usageByType[pt.typeCode] || 0)
+				}
+			],
+			confirmLabel: "Confirm & Delete Project Type",
+			onConfirm: async () => {
+				await onDeleteProjectType(pt);
+				if (editingRow === pt.rowNumber) {
+					setEditingRow(null);
+					setEditForm(null);
+				}
 			}
 		});
 	};
@@ -36292,6 +27501,7 @@ var MaintenanceTabView = ({ projectTypes, projects, sites, subProjects, contract
 				onSelectActiveUser,
 				onCreateUserAccount,
 				onUpdateUserAccount,
+				onDeleteUserAccount,
 				requestConfirmation
 			}) : activeAdminSection === "hosting_packages" ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(HostingPackagesPanel, {
 				spreadsheetId,
@@ -36312,10 +27522,10 @@ var MaintenanceTabView = ({ projectTypes, projects, sites, subProjects, contract
 									className: "flex items-center gap-2.5",
 									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Server, { className: "h-4 w-4 text-slate-800" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", {
 										className: "text-sm font-bold text-slate-900",
-										children: "Panel 1 · Backend Connection & Session"
+										children: "Panel 1 · Google Sheets Connection & Apps Script Bridge"
 									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 										className: "text-xs text-slate-500",
-										children: "Live Google Sheets v4 API data source & user credentials"
+										children: "Persistent spreadsheet link & Apps Script Web App Read/Write bridge"
 									})] })]
 								}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("a", {
 									href: spreadsheetUrl,
@@ -36327,6 +27537,16 @@ var MaintenanceTabView = ({ projectTypes, projects, sites, subProjects, contract
 							}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 								className: "space-y-2.5 text-xs",
 								children: [
+									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+										className: "flex items-baseline justify-between gap-4 py-1 border-b border-slate-100",
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+											className: "text-slate-500",
+											children: "Connection Mode"
+										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+											className: "font-semibold text-slate-900 text-right",
+											children: connectionMode === "apps_script" ? "Apps Script Bridge (Read & Write)" : connectionMode === "public_gviz" ? "Public Sheet CSV (Read-Only)" : "Dev Sandbox (Browser Local Only)"
+										})]
+									}),
 									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 										className: "flex items-baseline justify-between gap-4 py-1 border-b border-slate-100",
 										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
@@ -36351,17 +27571,17 @@ var MaintenanceTabView = ({ projectTypes, projects, sites, subProjects, contract
 										className: "flex items-baseline justify-between gap-4 py-1 border-b border-slate-100",
 										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
 											className: "text-slate-500",
-											children: "Authenticated Account"
+											children: "Apps Script Endpoint"
 										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-											className: "font-medium text-slate-800 text-right",
-											children: userEmail || "Connected via Google OAuth"
+											className: "font-mono text-[11px] text-slate-700 text-right truncate max-w-[240px]",
+											children: appsScriptUrl || "Not configured"
 										})]
 									}),
 									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 										className: "flex items-baseline justify-between gap-4 py-1",
 										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
 											className: "text-slate-500",
-											children: "Last Backend Sync"
+											children: "Last Sync"
 										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
 											className: "font-mono text-slate-700 tabular-nums text-right",
 											children: lastSyncedAt ? new Date(lastSyncedAt).toLocaleTimeString() : "—"
@@ -36376,12 +27596,12 @@ var MaintenanceTabView = ({ projectTypes, projects, sites, subProjects, contract
 								onClick: onForceSync,
 								disabled: isLoadingSheet,
 								className: "inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3.5 py-2 text-xs font-medium text-slate-800 hover:bg-slate-50 transition-colors disabled:opacity-50",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(RefreshCw, { className: `h-3.5 w-3.5 ${isLoadingSheet ? "animate-spin" : ""}` }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: isLoadingSheet ? "Syncing Data..." : "Force Backend Refresh" })]
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(RefreshCw, { className: `h-3.5 w-3.5 ${isLoadingSheet ? "animate-spin" : ""}` }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: isLoadingSheet ? "Syncing Data..." : "Sync Sheet Now" })]
 							}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
 								type: "button",
-								onClick: onLogout,
-								className: "inline-flex items-center gap-1.5 rounded-md border border-red-200 bg-red-50/50 px-3.5 py-2 text-xs font-medium text-red-700 hover:bg-red-100/60 transition-colors",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(LogOut, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Disconnect / Sign Out" })]
+								onClick: onOpenConnectionModal,
+								className: "inline-flex items-center gap-1.5 rounded-md bg-slate-900 px-3.5 py-2 text-xs font-semibold text-white hover:bg-slate-800 transition-colors",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Link2, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Configure Sheet & Apps Script" })]
 							})]
 						})]
 					}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
@@ -36699,14 +27919,24 @@ var MaintenanceTabView = ({ projectTypes, projects, sites, subProjects, contract
 												}),
 												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
 													className: "py-3 px-4 font-medium text-slate-900",
-													children: isEditing ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-														type: "text",
-														value: editForm.typeName,
-														onChange: (e) => setEditForm({
-															...editForm,
-															typeName: e.target.value
-														}),
-														className: "w-full rounded border border-slate-300 px-2 py-1 text-xs"
+													children: isEditing ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+														className: "space-y-1",
+														children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+															type: "text",
+															value: editForm.typeName,
+															onChange: (e) => setEditForm({
+																...editForm,
+																typeName: e.target.value
+															}),
+															className: `w-full rounded border px-2 py-1 text-xs ${editDuplicateTypeName ? "border-red-400 bg-red-50/50 text-red-900" : "border-slate-300"}`
+														}), editDuplicateTypeName && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
+															className: "text-[11px] text-red-600",
+															children: [
+																"Duplicate label (",
+																editDuplicateTypeName.typeCode,
+																")"
+															]
+														})]
 													}) : pt.typeName
 												}),
 												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
@@ -36747,7 +27977,8 @@ var MaintenanceTabView = ({ projectTypes, projects, sites, subProjects, contract
 														children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
 															type: "button",
 															onClick: () => handleSaveEdit(pt.rowNumber),
-															className: "rounded bg-slate-900 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-slate-800 whitespace-nowrap",
+															disabled: !editForm.typeName.trim() || Boolean(editDuplicateTypeName),
+															className: "rounded bg-slate-900 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-slate-800 disabled:opacity-40 whitespace-nowrap",
 															children: "Save"
 														}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
 															type: "button",
@@ -36758,11 +27989,21 @@ var MaintenanceTabView = ({ projectTypes, projects, sites, subProjects, contract
 															className: "rounded border border-slate-300 p-1 text-slate-500 hover:bg-slate-100",
 															children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(X, { className: "h-3.5 w-3.5" })
 														})]
-													}) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-														type: "button",
-														onClick: () => startEditing(pt),
-														className: "inline-flex items-center gap-1 rounded border border-slate-200 px-2 py-1 text-[11px] font-medium text-slate-600 hover:border-slate-300 hover:bg-slate-100 whitespace-nowrap",
-														children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(PenLine, { className: "h-3 w-3" }), "Edit"]
+													}) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+														className: "flex items-center justify-end gap-1.5",
+														children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+															type: "button",
+															onClick: () => startEditing(pt),
+															className: "inline-flex items-center gap-1 rounded border border-slate-200 px-2 py-1 text-[11px] font-medium text-slate-600 hover:border-slate-300 hover:bg-slate-100 whitespace-nowrap",
+															children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(PenLine, { className: "h-3 w-3" }), "Edit"]
+														}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+															type: "button",
+															onClick: () => handleDeleteProjectType(pt),
+															disabled: count > 0,
+															title: count > 0 ? `Cannot delete: ${count} project(s) use this type; disable it instead` : `Delete project type ${pt.typeCode}`,
+															className: "inline-flex items-center gap-1 rounded border border-red-200 bg-red-50/60 px-2 py-1 text-[11px] font-medium text-red-700 hover:bg-red-100 disabled:opacity-35 disabled:cursor-not-allowed whitespace-nowrap",
+															children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Trash2, { className: "h-3 w-3" }), "Delete"]
+														})]
 													})
 												})
 											]
@@ -36782,51 +28023,41 @@ var MaintenanceTabView = ({ projectTypes, projects, sites, subProjects, contract
 * @license
 * SPDX-License-Identifier: Apache-2.0
 */
-var PORTABLE_STORAGE_KEY = "sitetrack_portable_data_v1";
-var SHEET_ID_STORAGE_KEY = "sitetrack_linked_sheet_id_v1";
-var SHEET_MODE_STORAGE_KEY = "sitetrack_sheet_sync_mode_v1";
-function extractSpreadsheetId(input) {
-	const trimmed = input.trim();
-	if (!trimmed) return DEFAULT_SPREADSHEET_ID;
-	const match = trimmed.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
-	if (match && match[1]) return match[1];
-	return trimmed;
+var SANDBOX_STORAGE_KEY = "sitetrack_dev_sandbox_data_v2";
+function createEmptyInspection(spreadsheetId) {
+	return {
+		spreadsheetId,
+		title: "SiteTrack Pro — Awaiting Google Sheet Sync",
+		spreadsheetUrl: `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`,
+		existingSheets: [],
+		missingSheets: Object.values(SHEET_NAMES),
+		isSchemaReady: false,
+		lastSyncedAt: "",
+		sites: [],
+		projectTypes: [],
+		projects: [],
+		subProjects: [],
+		contractors: [],
+		contractsTCP: [],
+		contractPayments: [],
+		userAccounts: []
+	};
+}
+function loadSavedSandboxDataset() {
+	try {
+		const cached = window.localStorage.getItem(SANDBOX_STORAGE_KEY);
+		if (cached) {
+			const parsed = JSON.parse(cached);
+			if (parsed && Array.isArray(parsed.projects)) return parsed;
+		}
+		const winData = window.__SITETRACK_INITIAL_DATA__;
+		if (winData && Array.isArray(winData.projects)) return winData;
+	} catch {}
+	return DEFAULT_PORTABLE_DATASET;
 }
 function App() {
-	const [spreadsheetId, setSpreadsheetId] = (0, import_react.useState)(() => {
-		try {
-			const savedId = window.localStorage.getItem(SHEET_ID_STORAGE_KEY);
-			if (savedId && savedId.trim()) return extractSpreadsheetId(savedId);
-			const winData = window.__SITETRACK_INITIAL_DATA__;
-			if (winData?.spreadsheetId && winData.spreadsheetId.trim()) return extractSpreadsheetId(winData.spreadsheetId);
-		} catch {}
-		return DEFAULT_SPREADSHEET_ID;
-	});
-	const [sheetSyncMode, setSheetSyncMode] = (0, import_react.useState)(() => {
-		if (hasPersistedAccessToken()) return "oauth";
-		try {
-			const savedMode = window.localStorage.getItem(SHEET_MODE_STORAGE_KEY);
-			if (savedMode === "public-gviz" || savedMode === "oauth") return savedMode;
-		} catch {}
-		return "local";
-	});
-	const [isLiveGoogleSheetConnected, setIsLiveGoogleSheetConnected] = (0, import_react.useState)(() => hasPersistedAccessToken());
-	const [user, setUser] = (0, import_react.useState)(null);
-	const [persistedUserEmail, setPersistedUserEmail] = (0, import_react.useState)(() => getSavedAuthMeta()?.userEmail ?? null);
-	const [isLoggingIn, setIsLoggingIn] = (0, import_react.useState)(false);
-	const persistSheetLinkSettings = (0, import_react.useCallback)((nextSheetId, nextMode) => {
-		const cleanId = extractSpreadsheetId(nextSheetId);
-		setSpreadsheetId(cleanId);
-		try {
-			window.localStorage.setItem(SHEET_ID_STORAGE_KEY, cleanId);
-		} catch {}
-		if (nextMode) {
-			setSheetSyncMode(nextMode);
-			try {
-				window.localStorage.setItem(SHEET_MODE_STORAGE_KEY, nextMode);
-			} catch {}
-		}
-	}, []);
+	const [connectionConfig, setConnectionConfig] = (0, import_react.useState)(() => loadSheetConnectionConfig());
+	const [activeMode, setActiveMode] = (0, import_react.useState)(() => connectionConfig.preferredMode);
 	const [activeTab, setActiveTab] = (0, import_react.useState)("dashboard");
 	const [adminInitialSection, setAdminInitialSection] = (0, import_react.useState)("accounts_dashboard");
 	const [preselectedSubProjectId, setPreselectedSubProjectId] = (0, import_react.useState)(null);
@@ -36847,297 +28078,150 @@ function App() {
 			window.localStorage.setItem("sitetrack_theme_mode", themeMode);
 		} catch {}
 	}, [themeMode]);
-	const [sheetData, setSheetData] = (0, import_react.useState)(() => {
-		try {
-			const cached = window.localStorage.getItem(PORTABLE_STORAGE_KEY);
-			if (cached) {
-				const parsed = JSON.parse(cached);
-				if (parsed && Array.isArray(parsed.projects)) return parsed;
-			}
-			const winData = window.__SITETRACK_INITIAL_DATA__;
-			if (winData && Array.isArray(winData.projects)) return winData;
-		} catch {}
-		return DEFAULT_PORTABLE_DATASET;
-	});
+	const [sheetData, setSheetData] = (0, import_react.useState)(() => connectionConfig.preferredMode === "dev_sandbox" ? loadSavedSandboxDataset() : createEmptyInspection(connectionConfig.spreadsheetId));
 	const [isLoadingSheet, setIsLoadingSheet] = (0, import_react.useState)(false);
-	const [errorMessage, setErrorMessage] = (0, import_react.useState)(null);
+	const [connectionError, setConnectionError] = (0, import_react.useState)(null);
 	const [toastMessage, setToastMessage] = (0, import_react.useState)(null);
+	const [isConnectionModalOpen, setIsConnectionModalOpen] = (0, import_react.useState)(false);
 	const [confirmConfig, setConfirmConfig] = (0, import_react.useState)(null);
+	const [confirmError, setConfirmError] = (0, import_react.useState)(null);
 	const [isExecutingMutation, setIsExecutingMutation] = (0, import_react.useState)(false);
-	const showToast = (msg) => {
+	const spreadsheetId = connectionConfig.spreadsheetId;
+	const appsScriptUrl = connectionConfig.appsScriptUrl;
+	const showToast = (0, import_react.useCallback)((msg) => {
 		setToastMessage(msg);
 		window.setTimeout(() => {
 			setToastMessage((prev) => prev === msg ? null : prev);
-		}, 4500);
-	};
-	const persistLocalSheetData = (0, import_react.useCallback)((updater) => {
+		}, 5e3);
+	}, []);
+	const updateSandboxData = (0, import_react.useCallback)((updater) => {
 		setSheetData((prev) => {
 			const next = {
 				...updater(prev),
 				lastSyncedAt: (/* @__PURE__ */ new Date()).toISOString()
 			};
 			try {
-				window.localStorage.setItem(PORTABLE_STORAGE_KEY, JSON.stringify(next));
+				window.localStorage.setItem(SANDBOX_STORAGE_KEY, JSON.stringify(next));
 			} catch {}
 			return next;
 		});
 	}, []);
-	(0, import_react.useEffect)(() => {
-		let active = true;
-		let hasLocalCustomData = false;
+	const syncFromConnection = (0, import_react.useCallback)(async (configToUse, options = {}) => {
+		const { silent = false, notifySuccess = false } = options;
+		if (!silent) setIsLoadingSheet(true);
+		setConnectionError(null);
 		try {
-			hasLocalCustomData = Boolean(window.localStorage.getItem(PORTABLE_STORAGE_KEY));
-		} catch {
-			hasLocalCustomData = false;
-		}
-		const loadLocalDataJson = async () => {
-			for (const path of ["./data.json", "./data/data.json"]) try {
-				const res = await fetch(path, { cache: "no-store" });
-				if (res.ok) {
-					const json = await res.json();
-					if (active && json && Array.isArray(json.projects) && !hasLocalCustomData) {
-						setSheetData(json);
-						return;
+			if (configToUse.preferredMode === "dev_sandbox") {
+				let sandboxData = loadSavedSandboxDataset();
+				if (!Boolean(window.localStorage.getItem(SANDBOX_STORAGE_KEY))) try {
+					const res = await fetch("./data.json", { cache: "no-store" });
+					if (res.ok) {
+						const json = await res.json();
+						if (json && Array.isArray(json.projects)) sandboxData = json;
 					}
-				}
-			} catch {}
-		};
-		loadLocalDataJson();
-		return () => {
-			active = false;
-		};
-	}, []);
-	const handleResetToIncludedDataJson = async () => {
-		try {
-			window.localStorage.removeItem(PORTABLE_STORAGE_KEY);
-		} catch {}
-		for (const path of ["./data.json", "./data/data.json"]) try {
-			const res = await fetch(path, { cache: "no-store" });
-			if (res.ok) {
-				const json = await res.json();
-				if (json && Array.isArray(json.projects)) {
-					setSheetData(json);
-					showToast(`Reloaded self-contained dataset from ${path}.`);
-					return;
-				}
+				} catch {}
+				setSheetData({
+					...sandboxData,
+					spreadsheetId: configToUse.spreadsheetId
+				});
+				setActiveMode("dev_sandbox");
+				if (notifySuccess) showToast("Loaded Dev Sandbox dataset (Browser local only — not connected to Google Sheets).");
+				return true;
 			}
-		} catch {}
-		setSheetData(DEFAULT_PORTABLE_DATASET);
-		showToast("Reloaded default self-contained dataset.");
+			if (configToUse.preferredMode === "apps_script" && isValidAppsScriptUrl(configToUse.appsScriptUrl)) {
+				const result = await inspectAndLoadViaAppsScript(configToUse.appsScriptUrl, configToUse.spreadsheetId);
+				setSheetData(result);
+				setActiveMode("apps_script");
+				if (notifySuccess) showToast(`Synced ${result.existingSheets.length}/8 worksheets from Google Sheets via Apps Script Bridge (Read & Write).`);
+				return true;
+			}
+			const result = await inspectAndLoadSpreadsheetPublicGviz(configToUse.spreadsheetId);
+			setSheetData(result);
+			setActiveMode("public_gviz");
+			if (notifySuccess) showToast(`Synced ${result.existingSheets.length}/8 worksheets from Google Sheet (Read-Only CSV feed).`);
+			return true;
+		} catch (err) {
+			const message = err instanceof Error ? err.message : "Unable to sync with Google Sheets.";
+			setConnectionError(message);
+			setActiveMode(configToUse.preferredMode);
+			return false;
+		} finally {
+			if (!silent) setIsLoadingSheet(false);
+		}
+	}, [showToast]);
+	(0, import_react.useEffect)(() => {
+		syncFromConnection(connectionConfig, { silent: false });
+	}, []);
+	(0, import_react.useEffect)(() => {
+		if (activeMode === "dev_sandbox" || confirmConfig || isProfileModalOpen || isConnectionModalOpen || Boolean(connectionError)) return;
+		const timer = window.setInterval(() => {
+			syncFromConnection(connectionConfig, { silent: true });
+		}, 3e4);
+		return () => window.clearInterval(timer);
+	}, [
+		activeMode,
+		connectionConfig,
+		confirmConfig,
+		isProfileModalOpen,
+		isConnectionModalOpen,
+		connectionError,
+		syncFromConnection
+	]);
+	const handleApplyConnection = async (nextConfig) => {
+		const saved = saveSheetConnectionConfig(nextConfig);
+		setConnectionConfig(saved);
+		if (await syncFromConnection(saved, {
+			silent: false,
+			notifySuccess: true
+		})) setIsConnectionModalOpen(false);
+	};
+	const handleQuickSwitchToSandbox = async () => {
+		const saved = saveSheetConnectionConfig({
+			...connectionConfig,
+			preferredMode: "dev_sandbox"
+		});
+		setConnectionConfig(saved);
+		await syncFromConnection(saved, {
+			silent: false,
+			notifySuccess: true
+		});
 	};
 	const effectiveUserAccounts = (0, import_react.useMemo)(() => {
 		if (sheetData && sheetData.userAccounts.length > 0) return sheetData.userAccounts;
 		return SAMPLE_USER_ACCOUNTS.map((u) => ({
 			...u,
-			rowNumber: 0,
-			createdAt: "Default Profile",
-			updatedAt: "Default Profile"
+			rowNumber: 0
 		}));
 	}, [sheetData]);
 	const activeUser = (0, import_react.useMemo)(() => {
 		return effectiveUserAccounts.find((u) => u.userId === activeUserId) || effectiveUserAccounts[0];
 	}, [effectiveUserAccounts, activeUserId]);
-	const [isSheetConnectModalOpen, setIsSheetConnectModalOpen] = (0, import_react.useState)(false);
-	const [unauthorizedHostname, setUnauthorizedHostname] = (0, import_react.useState)(typeof window !== "undefined" ? window.location.hostname : "");
-	const [sheetLinkInput, setSheetLinkInput] = (0, import_react.useState)(spreadsheetId);
-	const [manualOAuthTokenInput, setManualOAuthTokenInput] = (0, import_react.useState)("");
-	const [isSyncingPublicSheet, setIsSyncingPublicSheet] = (0, import_react.useState)(false);
-	const handleSyncPublicSharedSheet = (0, import_react.useCallback)(async (silentIfUnavailable = false, overrideSheetId) => {
-		const targetId = extractSpreadsheetId(overrideSheetId || spreadsheetId);
-		setIsSyncingPublicSheet(true);
-		if (!silentIfUnavailable) setErrorMessage(null);
-		try {
-			const result = await inspectAndLoadSpreadsheetPublicGviz(targetId);
-			if (result) {
-				setSheetData(result);
-				persistSheetLinkSettings(targetId, "public-gviz");
-				try {
-					window.localStorage.setItem(PORTABLE_STORAGE_KEY, JSON.stringify(result));
-				} catch {}
-				if (!silentIfUnavailable) showToast("Synced all 8 tabs directly from Google Sheet (Link remembered across refreshes).");
-				return true;
-			}
-			if (!silentIfUnavailable) setErrorMessage("Direct Link-Shared Sync requires the Google Sheet to be shared as \"Anyone with the link can view\", or paste a Google Sheets OAuth Access Token below for private Read & Write access.");
-			return false;
-		} catch {
-			if (!silentIfUnavailable) setErrorMessage("Could not reach Google Sheet directly. Paste a Google Sheets OAuth Access Token or authorize this domain in Firebase Console.");
-			return false;
-		} finally {
-			setIsSyncingPublicSheet(false);
-		}
-	}, [spreadsheetId, persistSheetLinkSettings]);
-	const loadLiveGoogleSheetData = (0, import_react.useCallback)(async (silent = false, overrideSheetId) => {
-		const targetId = extractSpreadsheetId(overrideSheetId || spreadsheetId);
-		if (!silent) setIsLoadingSheet(true);
-		setErrorMessage(null);
-		try {
-			const result = await inspectAndLoadSpreadsheet(targetId);
-			setSheetData(result);
-			setIsLiveGoogleSheetConnected(true);
-			persistSheetLinkSettings(targetId, "oauth");
-			try {
-				window.localStorage.setItem(PORTABLE_STORAGE_KEY, JSON.stringify(result));
-			} catch {}
-		} catch (err) {
-			if (err instanceof AuthRequiredError) {
-				setIsLiveGoogleSheetConnected(false);
-				if (!await handleSyncPublicSharedSheet(true, targetId) && !silent && err.message) setErrorMessage(err.message);
-			} else {
-				const message = err instanceof Error ? err.message : "Failed to load live Google Sheet data. Operating in self-contained local data mode.";
-				if (!silent) setErrorMessage(message);
-			}
-		} finally {
-			if (!silent) setIsLoadingSheet(false);
-		}
-	}, [
-		spreadsheetId,
-		persistSheetLinkSettings,
-		handleSyncPublicSharedSheet
-	]);
-	(0, import_react.useEffect)(() => {
-		const unsubscribe = initAuth((authedUser) => {
-			if (authedUser) {
-				setUser(authedUser);
-				if (authedUser.email) setPersistedUserEmail(authedUser.email);
-			}
-			loadLiveGoogleSheetData(true);
-		}, () => {
-			setIsLiveGoogleSheetConnected(false);
-			if (sheetSyncMode === "public-gviz") handleSyncPublicSharedSheet(true);
-		});
-		return () => unsubscribe();
-	}, [
-		loadLiveGoogleSheetData,
-		handleSyncPublicSharedSheet,
-		sheetSyncMode
-	]);
-	(0, import_react.useEffect)(() => {
-		if (!(isLiveGoogleSheetConnected || sheetSyncMode === "public-gviz") || !sheetData || confirmConfig || isProfileModalOpen || isSheetConnectModalOpen) return;
-		const timer = window.setInterval(() => {
-			if (isLiveGoogleSheetConnected) loadLiveGoogleSheetData(true);
-			else if (sheetSyncMode === "public-gviz") handleSyncPublicSharedSheet(true);
-		}, 25e3);
-		return () => window.clearInterval(timer);
-	}, [
-		isLiveGoogleSheetConnected,
-		sheetSyncMode,
-		sheetData,
-		confirmConfig,
-		isProfileModalOpen,
-		isSheetConnectModalOpen,
-		loadLiveGoogleSheetData,
-		handleSyncPublicSharedSheet
-	]);
-	const handleConnectLiveGoogleSheet = async (overrideSheetId) => {
-		const targetId = extractSpreadsheetId(overrideSheetId || spreadsheetId);
-		persistSheetLinkSettings(targetId);
-		setIsLoggingIn(true);
-		setErrorMessage(null);
-		try {
-			const result = await googleSignIn();
-			if (result) {
-				setUser(result.user);
-				setPersistedUserEmail(result.user.email || null);
-				await loadLiveGoogleSheetData(false, targetId);
-				showToast("Connected to live Google Sheets v4 API (Link remembered across refreshes).");
-			}
-		} catch (err) {
-			if (err instanceof UnauthorizedDomainError) {
-				setUnauthorizedHostname(err.hostname || window.location.hostname || "github.io");
-				if (await handleSyncPublicSharedSheet(true, targetId)) showToast("Synced directly from linked Google Sheet! Open Sheet Link settings to paste an OAuth token for write access.");
-				else {
-					setSheetLinkInput(targetId);
-					setIsSheetConnectModalOpen(true);
-				}
-			} else {
-				const msg = err instanceof Error ? err.message : "Google Sign-In was cancelled. Continuing in Self-Contained Local Data mode.";
-				setErrorMessage(msg);
-			}
-		} finally {
-			setIsLoggingIn(false);
-		}
-	};
-	const handleSyncLiveSheetTrigger = async () => {
-		if (isLiveGoogleSheetConnected) {
-			await loadLiveGoogleSheetData(false);
-			showToast("Synced latest records from live Google Sheets v4 API.");
-			return;
-		}
-		if (sheetSyncMode === "public-gviz") {
-			if (!await handleSyncPublicSharedSheet(false)) {
-				setSheetLinkInput(spreadsheetId);
-				setIsSheetConnectModalOpen(true);
-			}
-			return;
-		}
-		await handleConnectLiveGoogleSheet();
-	};
-	const handleSaveSheetLinkAndSync = async () => {
-		const cleanId = extractSpreadsheetId(sheetLinkInput);
-		persistSheetLinkSettings(cleanId);
-		if (isLiveGoogleSheetConnected) {
-			setIsSheetConnectModalOpen(false);
-			await loadLiveGoogleSheetData(false, cleanId);
-			showToast(`Saved Google Sheet link (${cleanId}) and synced live data.`);
-		} else if (await handleSyncPublicSharedSheet(false, cleanId)) setIsSheetConnectModalOpen(false);
-	};
-	const handleConnectWithPastedToken = async () => {
-		const clean = manualOAuthTokenInput.trim();
-		if (!clean) {
-			setErrorMessage("Please paste a valid Google OAuth 2.0 Access Token.");
-			return;
-		}
-		const cleanId = extractSpreadsheetId(sheetLinkInput || spreadsheetId);
-		persistSheetLinkSettings(cleanId, "oauth");
-		setManualAccessToken(clean);
-		setIsSheetConnectModalOpen(false);
-		setManualOAuthTokenInput("");
-		await loadLiveGoogleSheetData(false, cleanId);
-		showToast("Connected to live Google Sheets v4 API using OAuth Access Token (Saved across refreshes).");
-	};
-	const handleCopyActiveAccessToken = async () => {
-		const token = await getAccessToken();
-		if (!token) {
-			showToast("No active OAuth token found. Connect Google Sheet first.");
-			return;
-		}
-		try {
-			await navigator.clipboard.writeText(token);
-			showToast("Copied Google Sheets OAuth Access Token! Paste it in your GitHub Pages / Netlify app under \"Sheet Link\".");
-		} catch {
-			showToast("Could not copy token to clipboard automatically.");
-		}
-	};
-	const handleLogoutLiveSheet = async () => {
-		await logout();
-		setUser(null);
-		setPersistedUserEmail(null);
-		setIsLiveGoogleSheetConnected(false);
-		persistSheetLinkSettings(spreadsheetId, "local");
-		showToast("Disconnected from live Google Sheet. Running in Self-Contained Local Data Mode (./data.json).");
+	const getAppsScriptTargetOrThrow = () => {
+		if (activeMode === "dev_sandbox") return null;
+		if (activeMode === "apps_script" && isValidAppsScriptUrl(connectionConfig.appsScriptUrl)) return {
+			appsScriptUrl: connectionConfig.appsScriptUrl,
+			spreadsheetId: connectionConfig.spreadsheetId
+		};
+		throw new Error("Cannot save changes in Read-Only Sheet CSV mode. Click the connection badge in the header to deploy and link the Apps Script Web App (Code.gs) for real Google Sheets Read & Write — or explicitly switch to Dev Sandbox Mode for local browser testing.");
 	};
 	const requestConfirmation = (config) => {
+		setConfirmError(null);
 		setConfirmConfig({
 			...config,
 			onConfirm: async () => {
 				setIsExecutingMutation(true);
-				setErrorMessage(null);
+				setConfirmError(null);
 				try {
 					await config.onConfirm();
 					setConfirmConfig(null);
-					if (isLiveGoogleSheetConnected) {
-						await loadLiveGoogleSheetData(true);
-						showToast("Successfully synced changes to live Google Sheets.");
-					} else showToast("Saved changes to local portable dataset (./data.json & localStorage).");
+					setConfirmError(null);
+					if (activeMode === "apps_script") {
+						await syncFromConnection(connectionConfig, { silent: true });
+						showToast("Changes written to Google Sheets and re-synced successfully.");
+					} else showToast("Saved in Dev Sandbox (Browser Local Only — not written to Google Sheets).");
 				} catch (err) {
-					if (err instanceof AuthRequiredError) {
-						setConfirmConfig(null);
-						setIsLiveGoogleSheetConnected(false);
-					} else {
-						const msg = err instanceof Error ? err.message : "Failed to save changes.";
-						setErrorMessage(msg);
-						setConfirmConfig(null);
-					}
+					const msg = err instanceof Error ? err.message : "Failed to save changes. Please verify your Google Sheet connection.";
+					setConfirmError(msg);
 				} finally {
 					setIsExecutingMutation(false);
 				}
@@ -37145,35 +28229,41 @@ function App() {
 		});
 	};
 	const handlePromptSchemaSetup = (seedStarterData) => {
-		if (!sheetData) return;
 		const missing = sheetData.missingSheets;
 		requestConfirmation({
-			title: seedStarterData ? "Provision Required Sheets & Seed Starter Options" : "Provision Required Sheets & Column Headers",
-			description: `This backend action will configure your Google Sheet (${spreadsheetId}) by creating any missing required tabs (${missing.length > 0 ? missing.join(", ") : "All 8 tabs present"}), writing standard table headers (including Contract Payment Terms, ContractPayments ledger, and UserAccounts permissions matrix), ${seedStarterData ? "and seeding starter Sites, Project Types, Contractors, and User Accounts if those tables are empty." : "with clean empty tables."}`,
-			sheetName: `${SHEET_NAMES.SITES}, ${SHEET_NAMES.PROJECT_TYPES}, ${SHEET_NAMES.PROJECTS}, ${SHEET_NAMES.SUB_PROJECTS}, ${SHEET_NAMES.CONTRACTORS}, ${SHEET_NAMES.CONTRACTS_TCP}, ${SHEET_NAMES.CONTRACT_PAYMENTS}, ${SHEET_NAMES.USER_ACCOUNTS}`,
+			title: seedStarterData ? "Provision Missing Worksheets & Seed Starter Lookups" : "Provision Missing Worksheets & Column Headers",
+			description: activeMode === "dev_sandbox" ? "Reset Dev Sandbox data in your browser to the clean synthetic starter dataset." : `This will run initializeSchema via your Apps Script Web App on Spreadsheet ${spreadsheetId}: creating missing tabs (${missing.length > 0 ? missing.join(", ") : "All 8 tabs verified"}), writing standard headers only on empty tabs, ${seedStarterData ? "and seeding placeholder Sites, Project Types, Contractors, and User Accounts only if those sheets have zero data rows." : "without inserting starter rows."}`,
+			sheetName: Object.values(SHEET_NAMES).join(", "),
 			details: [
 				{
 					label: "Target Spreadsheet ID",
 					value: spreadsheetId
 				},
 				{
-					label: "Sheets to Provision / Verify (8 Tabs)",
-					value: "Sites, ProjectTypes, Projects, SubProjects, Contractors, ContractsTCP, ContractPayments, UserAccounts"
+					label: "Connection Mode",
+					value: activeMode === "apps_script" ? "Apps Script Web App (Read & Write)" : activeMode === "dev_sandbox" ? "Dev Sandbox (Browser Local Only)" : "Read-Only CSV (Requires Apps Script for Writes)"
 				},
 				{
-					label: "Starter Lookup & Account Data",
-					value: seedStarterData ? "4 Sites + 5 Project Types + 4 Contractors + 4 Role-Based User Accounts" : "Headers Only (No starter rows)"
+					label: "Starter Seed Data",
+					value: seedStarterData ? "Seed empty lookup tabs only (existing rows untouched)" : "Headers only"
 				}
 			],
 			confirmLabel: "Confirm & Run Provisioning",
 			onConfirm: async () => {
-				if (isLiveGoogleSheetConnected) await initializeSpreadsheetSchema(spreadsheetId, sheetData.missingSheets, seedStarterData, {
-					sites: sheetData.sites.length,
-					projectTypes: sheetData.projectTypes.length,
-					contractors: sheetData.contractors.length,
-					userAccounts: sheetData.userAccounts.length
-				});
-				else await handleResetToIncludedDataJson();
+				const target = getAppsScriptTargetOrThrow();
+				if (target) {
+					const updated = await initializeSchemaViaAppsScript(target.appsScriptUrl, target.spreadsheetId, seedStarterData);
+					setSheetData(updated);
+				} else {
+					try {
+						window.localStorage.removeItem(SANDBOX_STORAGE_KEY);
+					} catch {}
+					setSheetData({
+						...DEFAULT_PORTABLE_DATASET,
+						spreadsheetId,
+						lastSyncedAt: (/* @__PURE__ */ new Date()).toISOString()
+					});
+				}
 			}
 		});
 	};
@@ -37190,6 +28280,24 @@ function App() {
 		setActiveTab("admin");
 	};
 	const isGoogleSitesEmbedMode = typeof document !== "undefined" && document.documentElement.getAttribute("data-embed-mode") === "google-sites";
+	const connectionBadge = (0, import_react.useMemo)(() => {
+		if (activeMode === "apps_script") return {
+			label: "Google Sheet (R/W)",
+			icon: Cloud,
+			className: "border-emerald-300 bg-emerald-50 text-emerald-900 hover:bg-emerald-100"
+		};
+		if (activeMode === "dev_sandbox") return {
+			label: "Dev Sandbox (Local)",
+			icon: FlaskConical,
+			className: "border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100"
+		};
+		return {
+			label: "Sheet CSV (Read-Only)",
+			icon: Database,
+			className: "border-blue-300 bg-blue-50 text-blue-900 hover:bg-blue-100"
+		};
+	}, [activeMode]);
+	const BadgeIcon = connectionBadge.icon;
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 		className: "min-h-screen flex flex-col bg-[#F8FAFC] text-slate-900",
 		children: [
@@ -37219,7 +28327,7 @@ function App() {
 							onSelectUser: (uid) => {
 								setActiveUserId(uid);
 								const selected = effectiveUserAccounts.find((u) => u.userId === uid);
-								if (selected) showToast(`Switched active user session to ${selected.fullName} (${selected.roleTitle}).`);
+								if (selected) showToast(`Switched active workspace profile to ${selected.fullName} (${selected.roleTitle}).`);
 							},
 							onOpenProfileModal: () => setIsProfileModalOpen(true),
 							onOpenAdminAccounts: handleOpenAdminAccounts,
@@ -37228,95 +28336,54 @@ function App() {
 						}),
 						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 							className: "flex flex-wrap items-center gap-2 shrink-0",
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-								type: "button",
-								onClick: handleOpenMultiPlatformExports,
-								className: "inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-800 hover:bg-slate-50 transition-colors whitespace-nowrap",
-								title: "Download Self-Contained ZIP Exports (GitHub Pages, Netlify, Google Sites)",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Download, { className: "h-3.5 w-3.5 text-slate-700" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Export ZIP Packages" })]
-							}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								className: "flex items-center gap-1.5",
-								children: [
-									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-										type: "button",
-										onClick: handleSyncLiveSheetTrigger,
-										disabled: isLoadingSheet || isLoggingIn || isSyncingPublicSheet,
-										className: "inline-flex items-center gap-1.5 rounded-md bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-800 transition-colors disabled:opacity-50 whitespace-nowrap shrink-0",
-										title: isLiveGoogleSheetConnected ? `Connected via OAuth v4 (Read & Write) · Sheet: ${spreadsheetId}` : sheetSyncMode === "public-gviz" ? `Connected via Direct Shared Sheet Sync · Sheet: ${spreadsheetId}` : `Sync with linked Google Sheet (${spreadsheetId})`,
-										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(RefreshCw, { className: `h-3.5 w-3.5 ${isLoadingSheet || isLoggingIn || isSyncingPublicSheet ? "animate-spin" : ""}` }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: isLoadingSheet || isLoggingIn || isSyncingPublicSheet ? "Syncing..." : "Sync Live Sheet" })]
+							children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+									type: "button",
+									onClick: handleOpenMultiPlatformExports,
+									className: "inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-800 hover:bg-slate-50 transition-colors whitespace-nowrap",
+									title: "Download Self-Contained ZIP Exports (GitHub Pages, Netlify, Google Sites)",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Download, { className: "h-3.5 w-3.5 text-slate-700" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Export ZIP" })]
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+									type: "button",
+									onClick: () => setIsConnectionModalOpen(true),
+									className: `inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-semibold transition-colors whitespace-nowrap ${connectionBadge.className}`,
+									title: `Configure Google Sheet ID (${spreadsheetId}), Apps Script Bridge (Code.gs), or Dev Sandbox`,
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(BadgeIcon, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: connectionBadge.label })]
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+									type: "button",
+									onClick: () => void syncFromConnection(connectionConfig, {
+										silent: false,
+										notifySuccess: true
 									}),
-									isLiveGoogleSheetConnected && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-										type: "button",
-										onClick: handleCopyActiveAccessToken,
-										className: "inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors whitespace-nowrap",
-										title: "Copy active Google Sheets OAuth Token to connect GitHub Pages / Netlify immediately",
-										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(KeyRound, { className: "h-3.5 w-3.5 text-slate-600" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-											className: "hidden sm:inline",
-											children: "Copy Sheet Token"
-										})]
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-										type: "button",
-										onClick: () => {
-											setUnauthorizedHostname(window.location.hostname || "github.io");
-											setSheetLinkInput(spreadsheetId);
-											setIsSheetConnectModalOpen(true);
-										},
-										className: "inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors whitespace-nowrap",
-										title: "Manage Linked Google Sheet URL/ID, Direct Shared Sync, or OAuth Token (Persists Across Refreshes)",
-										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Link2, { className: "h-3.5 w-3.5 text-slate-600" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-											className: "hidden sm:inline",
-											children: "Sheet Link"
-										})]
-									})
-								]
-							})]
+									disabled: isLoadingSheet,
+									className: "inline-flex items-center gap-1.5 rounded-md bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-800 transition-colors disabled:opacity-50 whitespace-nowrap shrink-0",
+									title: `Reload data from active source (Sheet ID: ${spreadsheetId})`,
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(RefreshCw, { className: `h-3.5 w-3.5 ${isLoadingSheet ? "animate-spin" : ""}` }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: isLoadingSheet ? "Syncing..." : "Sync Sheet" })]
+								})
+							]
 						})
 					]
 				}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 					className: `bg-slate-100/80 ${isGoogleSitesEmbedMode ? "px-4 py-1.5" : "px-6 py-2"}`,
 					children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 						className: "mx-auto flex max-w-[1360px] items-center justify-between gap-4",
-						children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("nav", {
+						children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("nav", {
 							className: "flex items-center gap-6 text-sm font-medium text-slate-600 overflow-x-auto",
 							children: [
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-									type: "button",
-									onClick: () => setActiveTab("dashboard"),
-									className: `py-1 transition-colors whitespace-nowrap shrink-0 ${activeTab === "dashboard" ? "text-slate-900 font-semibold underline underline-offset-8 decoration-2" : "hover:text-slate-900"}`,
-									children: "Dashboard"
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-									type: "button",
-									onClick: () => setActiveTab("projects"),
-									className: `py-1 transition-colors whitespace-nowrap shrink-0 ${activeTab === "projects" ? "text-slate-900 font-semibold underline underline-offset-8 decoration-2" : "hover:text-slate-900"}`,
-									children: "Projects & Sub-Projects"
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-									type: "button",
-									onClick: () => setActiveTab("contracts"),
-									className: `py-1 transition-colors whitespace-nowrap shrink-0 ${activeTab === "contracts" ? "text-slate-900 font-semibold underline underline-offset-8 decoration-2" : "hover:text-slate-900"}`,
-									children: "Contracts & Payments"
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-									type: "button",
-									onClick: () => setActiveTab("contractors"),
-									className: `py-1 transition-colors whitespace-nowrap shrink-0 ${activeTab === "contractors" ? "text-slate-900 font-semibold underline underline-offset-8 decoration-2" : "hover:text-slate-900"}`,
-									children: "Contractors"
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-									type: "button",
-									onClick: () => setActiveTab("sites"),
-									className: `py-1 transition-colors whitespace-nowrap shrink-0 ${activeTab === "sites" ? "text-slate-900 font-semibold underline underline-offset-8 decoration-2" : "hover:text-slate-900"}`,
-									children: "Sites"
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-									type: "button",
-									onClick: () => setActiveTab("admin"),
-									className: `py-1 transition-colors whitespace-nowrap shrink-0 ${activeTab === "admin" ? "text-slate-900 font-semibold underline underline-offset-8 decoration-2" : "hover:text-slate-900"}`,
-									children: "Admin & Accounts"
-								})
-							]
+								["dashboard", "Dashboard"],
+								["projects", "Projects & Sub-Projects"],
+								["contracts", "Contracts & Payments"],
+								["contractors", "Contractors"],
+								["sites", "Sites"],
+								["admin", "Admin & Accounts"]
+							].map(([tabKey, tabLabel]) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+								type: "button",
+								onClick: () => setActiveTab(tabKey),
+								className: `py-1 transition-colors whitespace-nowrap shrink-0 ${activeTab === tabKey ? "text-slate-900 font-semibold underline underline-offset-8 decoration-2" : "hover:text-slate-900"}`,
+								children: tabLabel
+							}, tabKey))
 						})
 					})
 				})]
@@ -37324,6 +28391,51 @@ function App() {
 			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("main", {
 				className: `flex-1 mx-auto w-full max-w-[1360px] ${isGoogleSitesEmbedMode ? "px-4 py-4" : "px-6 py-8"}`,
 				children: [
+					activeMode === "dev_sandbox" && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "no-print mb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-2.5 text-xs text-amber-950",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "flex items-center gap-2",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(FlaskConical, { className: "h-4 w-4 text-amber-700 shrink-0" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Dev Sandbox Mode (Browser Local Only):" }),
+								" Viewing synthetic placeholder data in browser storage. Changes here are",
+								" ",
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "not" }),
+								" written to Google Sheets."
+							] })]
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+							type: "button",
+							onClick: () => setIsConnectionModalOpen(true),
+							className: "inline-flex items-center gap-1.5 rounded bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800 whitespace-nowrap shrink-0",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Link2, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Connect Google Sheet" })]
+						})]
+					}),
+					activeMode === "public_gviz" && !connectionError && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "no-print mb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-lg border border-blue-200 bg-blue-50/80 px-4 py-2.5 text-xs text-blue-950",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "flex items-center gap-2",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Database, { className: "h-4 w-4 text-blue-700 shrink-0" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Google Sheet Read-Only Mode (CSV Feed):" }),
+								" Reading live records from Sheet",
+								" ",
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", {
+									className: "font-mono font-semibold",
+									children: spreadsheetId
+								}),
+								". Deploy the included ",
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", {
+									className: "font-mono",
+									children: "Code.gs"
+								}),
+								" ",
+								"Apps Script Web App to enable Create, Update, and Delete writes."
+							] })]
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+							type: "button",
+							onClick: () => setIsConnectionModalOpen(true),
+							className: "inline-flex items-center gap-1.5 rounded border border-blue-300 bg-white px-3 py-1.5 text-xs font-semibold text-blue-900 hover:bg-blue-100 whitespace-nowrap shrink-0",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Link2, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Enable Write Access (Apps Script)" })]
+						})]
+					}),
 					toastMessage && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 						className: "no-print mb-6 flex items-center justify-between rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs text-emerald-900",
 						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
@@ -37339,47 +28451,64 @@ function App() {
 							children: "Dismiss"
 						})]
 					}),
-					errorMessage && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "no-print mb-6 flex items-start justify-between gap-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-900",
+					connectionError && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "no-print mb-6 flex flex-col sm:flex-row sm:items-start justify-between gap-4 rounded-md border border-red-200 bg-red-50 px-4 py-3.5 text-xs text-red-900",
 						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 							className: "flex items-start gap-2.5",
 							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CircleAlert, { className: "h-4 w-4 text-red-600 shrink-0 mt-0.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 								className: "font-semibold",
-								children: "Data Source Notice"
+								children: "Google Sheet Connection Notice"
 							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-								className: "mt-0.5 text-red-800",
-								children: errorMessage
+								className: "mt-0.5 text-red-800 leading-relaxed",
+								children: connectionError
 							})] })]
-						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-							type: "button",
-							onClick: () => setErrorMessage(null),
-							className: "text-red-700 hover:underline shrink-0",
-							children: "Dismiss"
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "flex flex-wrap items-center gap-2 shrink-0",
+							children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+									type: "button",
+									onClick: () => setIsConnectionModalOpen(true),
+									className: "inline-flex items-center gap-1 rounded bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800 whitespace-nowrap",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Link2, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Configure Apps Script Bridge" })]
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+									type: "button",
+									onClick: () => void handleQuickSwitchToSandbox(),
+									className: "inline-flex items-center gap-1 rounded border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100 whitespace-nowrap",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(FlaskConical, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Use Dev Sandbox" })]
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+									type: "button",
+									onClick: () => setConnectionError(null),
+									className: "text-red-700 hover:underline px-1",
+									children: "Dismiss"
+								})
+							]
 						})]
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 						className: "space-y-6",
 						children: [
-							isLiveGoogleSheetConnected && sheetData && sheetData.missingSheets.length > 0 && activeTab !== "admin" && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							activeMode === "apps_script" && !connectionError && sheetData.missingSheets.length > 0 && activeTab !== "admin" && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 								className: "no-print flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50/80 px-4 py-3 text-xs text-amber-900",
 								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 									className: "flex items-center gap-2",
 									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Wrench, { className: "h-4 w-4 text-amber-700 shrink-0" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { children: [
-										"Missing sheet tabs detected in Google Spreadsheet:",
+										"Missing worksheet tabs detected in Google Spreadsheet:",
 										" ",
 										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", {
 											className: "font-mono",
 											children: sheetData.missingSheets.join(", ")
 										}),
-										". Provision them to persist records directly to Google Sheets."
+										". Run schema provisioning to create them with standard column headers."
 									] })]
 								}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 									className: "flex items-center gap-2 shrink-0",
 									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
 										type: "button",
-										onClick: () => handlePromptSchemaSetup(true),
+										onClick: () => handlePromptSchemaSetup(false),
 										className: "rounded bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-800 whitespace-nowrap",
-										children: "Provision Now"
+										children: "Provision Headers"
 									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
 										type: "button",
 										onClick: () => {
@@ -37387,7 +28516,7 @@ function App() {
 											setActiveTab("admin");
 										},
 										className: "rounded border border-amber-300 bg-white px-3 py-1.5 text-xs font-medium text-amber-900 hover:bg-amber-50 whitespace-nowrap",
-										children: "Go to Admin & Accounts"
+										children: "Open Schema Manager"
 									})]
 								})]
 							}),
@@ -37415,37 +28544,25 @@ function App() {
 								onOpenProfileModal: () => setIsProfileModalOpen(true),
 								onOpenAdminAccounts: handleOpenAdminAccounts,
 								onCreateProject: async (mainProj, subs) => {
-									if (isLiveGoogleSheetConnected) await createProjectWithSubProjects(spreadsheetId, mainProj, subs);
+									const target = getAppsScriptTargetOrThrow();
+									const fullSubs = subs.map((s) => ({
+										...s,
+										projectId: mainProj.projectId,
+										mainProjectCode: mainProj.mainProjectCode
+									}));
+									if (target) await appendProjectWithSubProjects(target, mainProj, fullSubs);
 									else {
 										const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-										const projectId = `PRJ-${Date.now().toString().slice(-4)}`;
-										persistLocalSheetData((prev) => {
+										updateSandboxData((prev) => {
 											const newProjectRow = {
 												rowNumber: prev.projects.length + 2,
-												projectId,
-												mainProjectCode: mainProj.mainProjectCode,
-												siteCode: mainProj.siteCode,
-												siteName: mainProj.siteName,
-												developer: mainProj.developer,
-												typeCode: mainProj.typeCode,
-												typeName: mainProj.typeName,
-												unitIdentifier: mainProj.unitIdentifier,
-												projectName: mainProj.projectName,
-												status: mainProj.status,
+												...mainProj,
 												createdAt: now,
 												updatedAt: now
 											};
-											const newSubRows = subs.map((s, idx) => ({
+											const newSubRows = fullSubs.map((s, idx) => ({
 												rowNumber: prev.subProjects.length + 2 + idx,
-												subProjectId: `SUB-${Date.now().toString().slice(-4)}-${idx + 1}`,
-												projectId,
-												mainProjectCode: mainProj.mainProjectCode,
-												subProjectCode: s.subProjectCode,
-												subProjectName: s.subProjectName,
-												status: s.status,
-												progress: s.progress,
-												targetDate: s.targetDate,
-												remarks: s.remarks,
+												...s,
 												updatedAt: now
 											}));
 											return {
@@ -37457,54 +28574,91 @@ function App() {
 									}
 								},
 								onAddSubProjectToExisting: async (subProj) => {
-									if (isLiveGoogleSheetConnected) await appendSubProjectToProject(spreadsheetId, subProj);
+									const target = getAppsScriptTargetOrThrow();
+									if (target) await appendSubProjectRow(target, subProj);
 									else {
 										const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-										persistLocalSheetData((prev) => ({
+										updateSandboxData((prev) => ({
 											...prev,
 											subProjects: [...prev.subProjects, {
 												rowNumber: prev.subProjects.length + 2,
-												subProjectId: `SUB-${Date.now().toString().slice(-4)}`,
-												projectId: subProj.projectId,
-												mainProjectCode: subProj.mainProjectCode,
-												subProjectCode: subProj.subProjectCode,
-												subProjectName: subProj.subProjectName,
-												status: subProj.status,
-												progress: subProj.progress,
-												targetDate: subProj.targetDate,
-												remarks: subProj.remarks,
+												...subProj,
 												updatedAt: now
 											}]
 										}));
 									}
 								},
-								onUpdateMainProjectStatus: async (proj, newStatus) => {
-									if (isLiveGoogleSheetConnected) await updateMainProjectStatus(spreadsheetId, proj, newStatus);
+								onUpdateMainProjectStatus: async (proj, newStatus, newProjectName) => {
+									const target = getAppsScriptTargetOrThrow();
+									if (target) await updateMainProjectRow(target, proj, newStatus, newProjectName);
 									else {
 										const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-										persistLocalSheetData((prev) => ({
+										updateSandboxData((prev) => ({
 											...prev,
 											projects: prev.projects.map((p) => p.projectId === proj.projectId ? {
 												...p,
 												status: newStatus,
+												projectName: newProjectName !== void 0 ? newProjectName : p.projectName,
 												updatedAt: now
 											} : p)
 										}));
 									}
 								},
+								onDeleteMainProject: async (proj) => {
+									const check = checkDeleteReferentialIntegrity({
+										entity: "project",
+										id: proj.projectId,
+										projects: sheetData.projects,
+										subProjects: sheetData.subProjects,
+										contractsTCP: sheetData.contractsTCP,
+										contractPayments: sheetData.contractPayments
+									});
+									if (!check.allowed) throw new Error(check.reason || "Cannot delete project.");
+									const target = getAppsScriptTargetOrThrow();
+									if (target) await deleteMainProjectRow(target, proj.projectId, proj.rowNumber);
+									else updateSandboxData((prev) => ({
+										...prev,
+										projects: prev.projects.filter((p) => p.projectId !== proj.projectId)
+									}));
+								},
 								onUpdateSubProject: async (subProj, updates) => {
-									if (isLiveGoogleSheetConnected) await updateSubProjectRecord(spreadsheetId, subProj, updates);
+									const target = getAppsScriptTargetOrThrow();
+									const merged = {
+										...subProj,
+										subProjectName: updates.subProjectName !== void 0 ? updates.subProjectName : subProj.subProjectName,
+										status: updates.status,
+										progress: updates.progress,
+										targetDate: updates.targetDate,
+										remarks: updates.remarks
+									};
+									if (target) await updateSubProjectRow(target, merged);
 									else {
 										const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-										persistLocalSheetData((prev) => ({
+										updateSandboxData((prev) => ({
 											...prev,
 											subProjects: prev.subProjects.map((s) => s.subProjectId === subProj.subProjectId ? {
-												...s,
-												...updates,
+												...merged,
 												updatedAt: now
 											} : s)
 										}));
 									}
+								},
+								onDeleteSubProject: async (subProj) => {
+									const check = checkDeleteReferentialIntegrity({
+										entity: "subProject",
+										id: subProj.subProjectId,
+										projects: sheetData.projects,
+										subProjects: sheetData.subProjects,
+										contractsTCP: sheetData.contractsTCP,
+										contractPayments: sheetData.contractPayments
+									});
+									if (!check.allowed) throw new Error(check.reason || "Cannot delete sub-project.");
+									const target = getAppsScriptTargetOrThrow();
+									if (target) await deleteSubProjectRow(target, subProj.subProjectId, subProj.rowNumber);
+									else updateSandboxData((prev) => ({
+										...prev,
+										subProjects: prev.subProjects.filter((s) => s.subProjectId !== subProj.subProjectId)
+									}));
 								},
 								onNavigateTab: (tab) => setActiveTab(tab),
 								onOpenAwardTCPForSubProject: handleOpenAwardTCPForSubProject,
@@ -37524,10 +28678,11 @@ function App() {
 								preselectedSubProjectId,
 								onClearPreselectedSubProject: () => setPreselectedSubProjectId(null),
 								onAwardContractTCP: async (contract) => {
-									if (isLiveGoogleSheetConnected) await appendContractTCPRow(spreadsheetId, contract);
+									const target = getAppsScriptTargetOrThrow();
+									if (target) await appendContractTCPRow(target, contract);
 									else {
 										const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-										persistLocalSheetData((prev) => ({
+										updateSandboxData((prev) => ({
 											...prev,
 											contractsTCP: [...prev.contractsTCP, {
 												...contract,
@@ -37538,10 +28693,11 @@ function App() {
 									}
 								},
 								onUpdateContractTCP: async (rowNumber, contract) => {
-									if (isLiveGoogleSheetConnected) await updateContractTCPRow(spreadsheetId, rowNumber, contract);
+									const target = getAppsScriptTargetOrThrow();
+									if (target) await updateContractTCPRow(target, rowNumber, contract);
 									else {
 										const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-										persistLocalSheetData((prev) => ({
+										updateSandboxData((prev) => ({
 											...prev,
 											contractsTCP: prev.contractsTCP.map((c) => c.contractId === contract.contractId || c.rowNumber === rowNumber ? {
 												...contract,
@@ -37551,11 +28707,29 @@ function App() {
 										}));
 									}
 								},
+								onDeleteContractTCP: async (contract) => {
+									const check = checkDeleteReferentialIntegrity({
+										entity: "contract",
+										id: contract.contractId,
+										projects: sheetData.projects,
+										subProjects: sheetData.subProjects,
+										contractsTCP: sheetData.contractsTCP,
+										contractPayments: sheetData.contractPayments
+									});
+									if (!check.allowed) throw new Error(check.reason || "Cannot delete contract.");
+									const target = getAppsScriptTargetOrThrow();
+									if (target) await deleteContractTCPRow(target, contract.contractId, contract.rowNumber);
+									else updateSandboxData((prev) => ({
+										...prev,
+										contractsTCP: prev.contractsTCP.filter((c) => c.contractId !== contract.contractId)
+									}));
+								},
 								onCreateContractPayment: async (payment) => {
-									if (isLiveGoogleSheetConnected) await appendContractPaymentRow(spreadsheetId, payment);
+									const target = getAppsScriptTargetOrThrow();
+									if (target) await appendContractPaymentRow(target, payment);
 									else {
 										const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-										persistLocalSheetData((prev) => ({
+										updateSandboxData((prev) => ({
 											...prev,
 											contractPayments: [...prev.contractPayments, {
 												...payment,
@@ -37566,10 +28740,11 @@ function App() {
 									}
 								},
 								onUpdateContractPayment: async (rowNumber, payment) => {
-									if (isLiveGoogleSheetConnected) await updateContractPaymentRow(spreadsheetId, rowNumber, payment);
+									const target = getAppsScriptTargetOrThrow();
+									if (target) await updateContractPaymentRow(target, rowNumber, payment);
 									else {
 										const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-										persistLocalSheetData((prev) => ({
+										updateSandboxData((prev) => ({
 											...prev,
 											contractPayments: prev.contractPayments.map((p) => p.paymentId === payment.paymentId || p.rowNumber === rowNumber ? {
 												...payment,
@@ -37578,6 +28753,14 @@ function App() {
 											} : p)
 										}));
 									}
+								},
+								onDeleteContractPayment: async (payment) => {
+									const target = getAppsScriptTargetOrThrow();
+									if (target) await deleteContractPaymentRow(target, payment.paymentId, payment.rowNumber);
+									else updateSandboxData((prev) => ({
+										...prev,
+										contractPayments: prev.contractPayments.filter((p) => p.paymentId !== payment.paymentId)
+									}));
 								},
 								onNavigateTab: (tab) => setActiveTab(tab),
 								requestConfirmation
@@ -37591,10 +28774,11 @@ function App() {
 								onOpenProfileModal: () => setIsProfileModalOpen(true),
 								onOpenAdminAccounts: handleOpenAdminAccounts,
 								onAddContractor: async (contractor) => {
-									if (isLiveGoogleSheetConnected) await appendContractorRow(spreadsheetId, contractor);
+									const target = getAppsScriptTargetOrThrow();
+									if (target) await appendContractorRow(target, contractor);
 									else {
 										const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-										persistLocalSheetData((prev) => ({
+										updateSandboxData((prev) => ({
 											...prev,
 											contractors: [...prev.contractors, {
 												...contractor,
@@ -37605,13 +28789,31 @@ function App() {
 									}
 								},
 								onUpdateContractor: async (rowNumber, contractor) => {
-									if (isLiveGoogleSheetConnected) await updateContractorRow(spreadsheetId, rowNumber, contractor);
-									else persistLocalSheetData((prev) => ({
+									const target = getAppsScriptTargetOrThrow();
+									if (target) await updateContractorRow(target, rowNumber, contractor);
+									else updateSandboxData((prev) => ({
 										...prev,
 										contractors: prev.contractors.map((c) => c.contractorCode === contractor.contractorCode || c.rowNumber === rowNumber ? {
 											...contractor,
 											rowNumber
 										} : c)
+									}));
+								},
+								onDeleteContractor: async (contractor) => {
+									const check = checkDeleteReferentialIntegrity({
+										entity: "contractor",
+										id: contractor.contractorCode,
+										projects: sheetData.projects,
+										subProjects: sheetData.subProjects,
+										contractsTCP: sheetData.contractsTCP,
+										contractPayments: sheetData.contractPayments
+									});
+									if (!check.allowed) throw new Error(check.reason || "Cannot delete contractor.");
+									const target = getAppsScriptTargetOrThrow();
+									if (target) await deleteContractorRow(target, contractor.contractorCode, contractor.rowNumber);
+									else updateSandboxData((prev) => ({
+										...prev,
+										contractors: prev.contractors.filter((c) => c.contractorCode !== contractor.contractorCode)
 									}));
 								},
 								requestConfirmation
@@ -37625,10 +28827,11 @@ function App() {
 								onOpenProfileModal: () => setIsProfileModalOpen(true),
 								onOpenAdminAccounts: handleOpenAdminAccounts,
 								onAddSite: async (site) => {
-									if (isLiveGoogleSheetConnected) await appendSiteRow(spreadsheetId, site);
+									const target = getAppsScriptTargetOrThrow();
+									if (target) await appendSiteRow(target, site);
 									else {
 										const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-										persistLocalSheetData((prev) => ({
+										updateSandboxData((prev) => ({
 											...prev,
 											sites: [...prev.sites, {
 												...site,
@@ -37639,13 +28842,31 @@ function App() {
 									}
 								},
 								onUpdateSite: async (rowNumber, site) => {
-									if (isLiveGoogleSheetConnected) await updateSiteRow(spreadsheetId, rowNumber, site);
-									else persistLocalSheetData((prev) => ({
+									const target = getAppsScriptTargetOrThrow();
+									if (target) await updateSiteRow(target, rowNumber, site);
+									else updateSandboxData((prev) => ({
 										...prev,
 										sites: prev.sites.map((s) => s.siteCode === site.siteCode || s.rowNumber === rowNumber ? {
 											...site,
 											rowNumber
 										} : s)
+									}));
+								},
+								onDeleteSite: async (site) => {
+									const check = checkDeleteReferentialIntegrity({
+										entity: "site",
+										id: site.siteCode,
+										projects: sheetData.projects,
+										subProjects: sheetData.subProjects,
+										contractsTCP: sheetData.contractsTCP,
+										contractPayments: sheetData.contractPayments
+									});
+									if (!check.allowed) throw new Error(check.reason || "Cannot delete site.");
+									const target = getAppsScriptTargetOrThrow();
+									if (target) await deleteSiteRow(target, site.siteCode, site.rowNumber);
+									else updateSandboxData((prev) => ({
+										...prev,
+										sites: prev.sites.filter((s) => s.siteCode !== site.siteCode)
 									}));
 								},
 								requestConfirmation
@@ -37669,18 +28890,23 @@ function App() {
 								existingSheets: sheetData.existingSheets,
 								missingSheets: sheetData.missingSheets,
 								lastSyncedAt: sheetData.lastSyncedAt,
-								userEmail: isLiveGoogleSheetConnected ? user?.email || persistedUserEmail || "Connected via OAuth Token" : sheetSyncMode === "public-gviz" ? "Direct Shared Google Sheet Sync (Auto-Remembered)" : "Self-Contained Local Mode (./data.json)",
-								isLoadingSheet: isLoadingSheet || isSyncingPublicSheet,
+								connectionMode: activeMode,
+								appsScriptUrl,
+								isLoadingSheet,
 								onForceSync: () => {
-									handleSyncLiveSheetTrigger();
+									syncFromConnection(connectionConfig, {
+										silent: false,
+										notifySuccess: true
+									});
 								},
-								onLogout: handleLogoutLiveSheet,
+								onOpenConnectionModal: () => setIsConnectionModalOpen(true),
 								onInitializeSchema: handlePromptSchemaSetup,
 								onAddProjectType: async (pt) => {
-									if (isLiveGoogleSheetConnected) await appendProjectTypeRow(spreadsheetId, pt);
+									const target = getAppsScriptTargetOrThrow();
+									if (target) await appendProjectTypeRow(target, pt);
 									else {
 										const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-										persistLocalSheetData((prev) => ({
+										updateSandboxData((prev) => ({
 											...prev,
 											projectTypes: [...prev.projectTypes, {
 												...pt,
@@ -37691,8 +28917,9 @@ function App() {
 									}
 								},
 								onUpdateProjectType: async (rowNumber, pt) => {
-									if (isLiveGoogleSheetConnected) await updateProjectTypeRow(spreadsheetId, rowNumber, pt);
-									else persistLocalSheetData((prev) => ({
+									const target = getAppsScriptTargetOrThrow();
+									if (target) await updateProjectTypeRow(target, rowNumber, pt);
+									else updateSandboxData((prev) => ({
 										...prev,
 										projectTypes: prev.projectTypes.map((t) => t.typeCode === pt.typeCode || t.rowNumber === rowNumber ? {
 											...pt,
@@ -37700,16 +28927,34 @@ function App() {
 										} : t)
 									}));
 								},
+								onDeleteProjectType: async (pt) => {
+									const check = checkDeleteReferentialIntegrity({
+										entity: "projectType",
+										id: pt.typeCode,
+										projects: sheetData.projects,
+										subProjects: sheetData.subProjects,
+										contractsTCP: sheetData.contractsTCP,
+										contractPayments: sheetData.contractPayments
+									});
+									if (!check.allowed) throw new Error(check.reason || "Cannot delete project type.");
+									const target = getAppsScriptTargetOrThrow();
+									if (target) await deleteProjectTypeRow(target, pt.typeCode, pt.rowNumber);
+									else updateSandboxData((prev) => ({
+										...prev,
+										projectTypes: prev.projectTypes.filter((t) => t.typeCode !== pt.typeCode)
+									}));
+								},
 								onSelectActiveUser: (uid) => {
 									setActiveUserId(uid);
 									const selected = effectiveUserAccounts.find((u) => u.userId === uid);
-									if (selected) showToast(`Switched active user session to ${selected.fullName} (${selected.roleTitle}).`);
+									if (selected) showToast(`Switched active workspace profile to ${selected.fullName} (${selected.roleTitle}).`);
 								},
 								onCreateUserAccount: async (account) => {
-									if (isLiveGoogleSheetConnected) await appendUserAccountRow(spreadsheetId, account);
+									const target = getAppsScriptTargetOrThrow();
+									if (target) await appendUserAccountRow(target, account);
 									else {
 										const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-										persistLocalSheetData((prev) => ({
+										updateSandboxData((prev) => ({
 											...prev,
 											userAccounts: [...prev.userAccounts, {
 												...account,
@@ -37720,10 +28965,11 @@ function App() {
 									}
 								},
 								onUpdateUserAccount: async (rowNumber, account) => {
-									if (isLiveGoogleSheetConnected) await updateUserAccountRow(spreadsheetId, rowNumber, account);
+									const target = getAppsScriptTargetOrThrow();
+									if (target) await updateUserAccountRow(target, rowNumber, account);
 									else {
 										const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-										persistLocalSheetData((prev) => ({
+										updateSandboxData((prev) => ({
 											...prev,
 											userAccounts: prev.userAccounts.map((u) => u.userId === account.userId || u.rowNumber === rowNumber ? {
 												...account,
@@ -37732,6 +28978,28 @@ function App() {
 											} : u)
 										}));
 									}
+								},
+								onDeleteUserAccount: async (account) => {
+									const activeAdminCount = effectiveUserAccounts.filter((u) => u.status === "ACTIVE" && u.permissions.admin.edit).length;
+									const isTargetActiveAdmin = account.status === "ACTIVE" && account.permissions.admin.edit;
+									const check = checkDeleteReferentialIntegrity({
+										entity: "user",
+										id: account.userId,
+										projects: sheetData.projects,
+										subProjects: sheetData.subProjects,
+										contractsTCP: sheetData.contractsTCP,
+										contractPayments: sheetData.contractPayments,
+										activeUserId: activeUser.userId,
+										activeAdminCount,
+										isTargetActiveAdmin
+									});
+									if (!check.allowed) throw new Error(check.reason || "Cannot delete user account.");
+									const target = getAppsScriptTargetOrThrow();
+									if (target) await deleteUserAccountRow(target, account.userId, account.rowNumber);
+									else updateSandboxData((prev) => ({
+										...prev,
+										userAccounts: prev.userAccounts.filter((u) => u.userId !== account.userId)
+									}));
 								},
 								onOpenProfileModal: () => setIsProfileModalOpen(true),
 								requestConfirmation
@@ -37747,12 +29015,13 @@ function App() {
 				onClose: () => setIsProfileModalOpen(false),
 				onSelectUser: (uid) => setActiveUserId(uid),
 				onSaveProfile: async (updatedUser, existingRowNumber) => {
-					if (isLiveGoogleSheetConnected) {
-						if (existingRowNumber > 0) await updateUserAccountRow(spreadsheetId, existingRowNumber, updatedUser);
-						else await appendUserAccountRow(spreadsheetId, updatedUser);
+					const target = getAppsScriptTargetOrThrow();
+					if (target) {
+						if (existingRowNumber > 0) await updateUserAccountRow(target, existingRowNumber, updatedUser);
+						else await appendUserAccountRow(target, updatedUser);
 					} else {
 						const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-						persistLocalSheetData((prev) => ({
+						updateSandboxData((prev) => ({
 							...prev,
 							userAccounts: prev.userAccounts.map((u) => u.userId === updatedUser.userId ? {
 								...updatedUser,
@@ -37767,279 +29036,21 @@ function App() {
 			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(ConfirmActionModal, {
 				config: confirmConfig,
 				isSubmitting: isExecutingMutation,
+				errorMessage: confirmError,
 				onClose: () => {
-					if (!isExecutingMutation) setConfirmConfig(null);
+					if (!isExecutingMutation) {
+						setConfirmConfig(null);
+						setConfirmError(null);
+					}
 				}
 			}),
-			isSheetConnectModalOpen && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-				className: "no-print fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-xs",
-				children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-					className: "w-full max-w-xl rounded-lg border border-slate-200 bg-white shadow-2xl overflow-hidden text-xs",
-					children: [
-						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-							className: "flex items-center justify-between border-b border-slate-200 bg-slate-50 px-5 py-3.5",
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								className: "flex items-center gap-2",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Link2, { className: "h-4 w-4 text-slate-900" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", {
-									className: "text-sm font-bold text-slate-900",
-									children: "Google Sheet Link & Live Sync Settings"
-								}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
-									className: "text-[11px] text-slate-500",
-									children: [
-										"Mode:",
-										" ",
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-											className: "font-mono font-semibold text-slate-800",
-											children: isLiveGoogleSheetConnected ? "OAuth v4 (Read & Write · Saved)" : sheetSyncMode === "public-gviz" ? "Direct Shared Sheet Sync (Saved)" : "Local Dataset (./data.json)"
-										}),
-										" ",
-										"· Host:",
-										" ",
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-											className: "font-mono",
-											children: unauthorizedHostname || window.location.hostname
-										})
-									]
-								})] })]
-							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-								type: "button",
-								onClick: () => setIsSheetConnectModalOpen(false),
-								className: "rounded p-1 text-slate-500 hover:bg-slate-200/60 hover:text-slate-800",
-								children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(X, { className: "h-4 w-4" })
-							})]
-						}),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-							className: "p-5 space-y-4 max-h-[80vh] overflow-y-auto",
-							children: [
-								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-									className: "rounded-lg border border-slate-300 bg-slate-50 p-3.5 space-y-2.5",
-									children: [
-										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-											className: "flex items-center justify-between gap-2",
-											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-												className: "font-bold text-slate-900",
-												children: "Linked Google Sheet URL or ID (Remembered Across Refreshes)"
-											}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-												type: "button",
-												onClick: () => setSheetLinkInput("1HNmAdZe7POIzIm9mCUPxQJL7p9BoBZEO1hXq6PZNs5M"),
-												className: "text-[11px] font-semibold text-slate-600 hover:text-slate-900 underline",
-												children: "Reset Default ID"
-											})]
-										}),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-											className: "flex flex-col sm:flex-row gap-2",
-											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-												type: "text",
-												value: sheetLinkInput,
-												onChange: (e) => setSheetLinkInput(e.target.value),
-												placeholder: "Paste full Google Sheets URL or Spreadsheet ID...",
-												className: "flex-1 rounded border border-slate-300 bg-white px-3 py-1.5 font-mono text-xs text-slate-900 focus:border-slate-500 focus:outline-none"
-											}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-												type: "button",
-												onClick: handleSaveSheetLinkAndSync,
-												disabled: isLoadingSheet || isSyncingPublicSheet,
-												className: "inline-flex items-center justify-center gap-1.5 rounded bg-slate-900 px-3.5 py-1.5 font-semibold text-white hover:bg-slate-800 disabled:opacity-50 shrink-0",
-												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(RefreshCw, { className: `h-3.5 w-3.5 ${isLoadingSheet || isSyncingPublicSheet ? "animate-spin" : ""}` }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Save Link & Sync" })]
-											})]
-										}),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-											className: "flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500",
-											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { children: [
-												"Active Sheet ID:",
-												" ",
-												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", {
-													className: "font-mono font-semibold text-slate-800",
-													children: spreadsheetId
-												})
-											] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-												className: "flex items-center gap-2",
-												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-													type: "button",
-													onClick: () => handleConnectLiveGoogleSheet(sheetLinkInput),
-													disabled: isLoggingIn,
-													className: "inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2.5 py-1 font-semibold text-slate-800 hover:bg-slate-100",
-													children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Cloud, { className: "h-3 w-3" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Sign in with Google (OAuth)" })]
-												}), (isLiveGoogleSheetConnected || sheetSyncMode === "public-gviz") && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-													type: "button",
-													onClick: handleLogoutLiveSheet,
-													className: "rounded border border-red-200 bg-white px-2.5 py-1 font-semibold text-red-700 hover:bg-red-50",
-													children: "Disconnect"
-												})]
-											})]
-										})
-									]
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-									className: "rounded-lg border border-emerald-200 bg-emerald-50/60 p-3.5 space-y-2",
-									children: [
-										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-											className: "flex items-center justify-between gap-2",
-											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-												className: "font-bold text-emerald-950",
-												children: "Option 1 — Direct Shared Sheet Sync (Works on GitHub Pages, Netlify & Preview)"
-											}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-												className: "rounded bg-emerald-100 px-2 py-0.5 font-mono text-[10px] font-semibold text-emerald-900",
-												children: "No Popup Auth Needed"
-											})]
-										}),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
-											className: "text-slate-700 leading-relaxed",
-											children: [
-												"If your Google Sheet is shared as",
-												" ",
-												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "“Anyone with the link can view”" }),
-												", click below to pull all 8 tabs directly from Google Sheets. Your browser remembers this link automatically on every refresh."
-											]
-										}),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-											className: "flex flex-wrap items-center gap-2 pt-1",
-											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-												type: "button",
-												disabled: isSyncingPublicSheet,
-												onClick: async () => {
-													if (await handleSyncPublicSharedSheet(false, sheetLinkInput)) setIsSheetConnectModalOpen(false);
-												},
-												className: "inline-flex items-center gap-1.5 rounded bg-slate-900 px-3 py-1.5 font-semibold text-white hover:bg-slate-800 disabled:opacity-50",
-												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(RefreshCw, { className: `h-3.5 w-3.5 ${isSyncingPublicSheet ? "animate-spin" : ""}` }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: isSyncingPublicSheet ? "Syncing 8 Sheet Tabs..." : "Sync Shared Google Sheet Now" })]
-											}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("a", {
-												href: `https://docs.google.com/spreadsheets/d/${extractSpreadsheetId(sheetLinkInput || spreadsheetId)}/edit`,
-												target: "_blank",
-												rel: "noreferrer",
-												className: "inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2.5 py-1.5 font-medium text-slate-700 hover:bg-slate-50",
-												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Open Google Sheet" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ExternalLink, { className: "h-3 w-3" })]
-											})]
-										})
-									]
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-									className: "rounded-lg border border-slate-200 bg-slate-50 p-3.5 space-y-2.5",
-									children: [
-										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-											className: "flex items-center justify-between gap-2",
-											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-												className: "font-bold text-slate-900",
-												children: "Option 2 — Full Read & Write via Google Sheets OAuth Token"
-											}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-												className: "rounded bg-slate-200 px-2 py-0.5 font-mono text-[10px] font-semibold text-slate-800",
-												children: "Full Read & Write v4 API"
-											})]
-										}),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
-											className: "text-slate-600 leading-relaxed",
-											children: [
-												"To enable full two-way Google Sheets v4 API Read & Write on GitHub Pages or Netlify, click",
-												" ",
-												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Copy Sheet Token" }),
-												" in the header of an OAuth-connected window and paste it below (saved across refreshes):"
-											]
-										}),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-											className: "flex flex-col sm:flex-row gap-2",
-											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-												type: "password",
-												value: manualOAuthTokenInput,
-												onChange: (e) => setManualOAuthTokenInput(e.target.value),
-												placeholder: "Paste Google OAuth 2.0 Access Token (ya29.a0...)",
-												className: "flex-1 rounded border border-slate-300 bg-white px-3 py-1.5 font-mono text-xs text-slate-900 focus:border-slate-500 focus:outline-none"
-											}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-												type: "button",
-												onClick: handleConnectWithPastedToken,
-												className: "inline-flex items-center justify-center gap-1.5 rounded bg-slate-900 px-3.5 py-1.5 font-semibold text-white hover:bg-slate-800 shrink-0",
-												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(KeyRound, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Connect with Token" })]
-											})]
-										})
-									]
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-									className: "rounded-lg border border-slate-200 bg-white p-3.5 space-y-2",
-									children: [
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-											className: "font-bold text-slate-900",
-											children: "Option 3 — Enable Native Google Sign-In Popup on Your Custom Domain"
-										}),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
-											className: "text-slate-600 leading-relaxed",
-											children: [
-												"To allow native Google Sign-In popups directly on",
-												" ",
-												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", {
-													className: "font-mono font-semibold text-slate-900",
-													children: unauthorizedHostname || window.location.hostname
-												}),
-												", add your domain to Firebase Authorized Domains:"
-											]
-										}),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-											className: "flex flex-wrap items-center justify-between gap-2 rounded border border-slate-200 bg-slate-50 px-3 py-2 font-mono",
-											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-												className: "text-slate-500",
-												children: "Domain to Add: "
-											}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", {
-												className: "text-slate-900",
-												children: unauthorizedHostname || window.location.hostname
-											})] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-												type: "button",
-												onClick: async () => {
-													const host = unauthorizedHostname || window.location.hostname;
-													try {
-														await navigator.clipboard.writeText(host);
-														showToast(`Copied domain "${host}" to clipboard.`);
-													} catch {}
-												},
-												className: "inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2 py-1 text-[11px] font-sans font-semibold text-slate-700 hover:bg-slate-100",
-												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Copy, { className: "h-3 w-3" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Copy Domain" })]
-											})]
-										}),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("ol", {
-											className: "list-decimal list-inside space-y-1 text-slate-600 pt-1",
-											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("li", { children: [
-												"Open",
-												" ",
-												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("a", {
-													href: `https://console.firebase.google.com/project/${getFirebaseProjectId()}/authentication/settings`,
-													target: "_blank",
-													rel: "noreferrer",
-													className: "font-semibold text-slate-900 underline hover:text-slate-700",
-													children: "Firebase Console → Authentication → Settings → Authorized domains"
-												}),
-												" ",
-												"(Project:",
-												" ",
-												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", {
-													className: "font-mono",
-													children: getFirebaseProjectId()
-												}),
-												")."
-											] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("li", { children: [
-												"Click ",
-												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Add domain" }),
-												" and paste",
-												" ",
-												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", {
-													className: "font-mono font-semibold",
-													children: unauthorizedHostname || window.location.hostname
-												}),
-												"."
-											] })]
-										})
-									]
-								})
-							]
-						}),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-							className: "flex items-center justify-between border-t border-slate-200 bg-slate-50 px-5 py-3",
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-								className: "text-[11px] text-slate-500",
-								children: "Linked Sheet ID and local dataset (./data.json) are persisted in browser storage."
-							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-								type: "button",
-								onClick: () => setIsSheetConnectModalOpen(false),
-								className: "rounded border border-slate-300 bg-white px-3.5 py-1.5 font-semibold text-slate-700 hover:bg-slate-100",
-								children: "Close"
-							})]
-						})
-					]
-				})
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(SheetConnectionModal, {
+				isOpen: isConnectionModalOpen,
+				config: connectionConfig,
+				activeMode,
+				isSyncing: isLoadingSheet,
+				onClose: () => setIsConnectionModalOpen(false),
+				onApplyConnection: handleApplyConnection
 			})
 		]
 	});
