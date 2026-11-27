@@ -1,20 +1,19 @@
 /**
  * SiteTrack Pro — Self-Contained Local Typography Stack
- * Zero external CDN dependencies. Uses high-legibility system and tabular monospace font stacks
- * optimized for clear 0, 6, 8, and 9 numeric distinction on compact and low-resolution screens.
+ * Zero external CDN dependencies. Uses crisp geometric/humanist system stacks
+ * and tabular monospace numerals for clean financial ledger scanning.
  */
 
 :root {
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  --font-display: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  --font-mono: 'IBM Plex Mono', 'Consolas', 'SFMono-Regular', 'Liberation Mono', 'Menlo', monospace;
+  --font-display: 'Plus Jakarta Sans', 'Manrope', 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-sans: 'Plus Jakarta Sans', 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: 'IBM Plex Mono', 'Cascadia Mono', 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
 }
 
 html,
 body {
   font-family: var(--font-sans);
   font-variant-numeric: tabular-nums;
-  font-feature-settings: "tnum" 1, "cv01" 1, "cv02" 1, "cv03" 1, "cv04" 1, "cv09" 1, "zero" 0;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -25,5 +24,4 @@ pre,
 .tabular-nums {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
-  font-feature-settings: "tnum" 1, "zero" 0;
 }

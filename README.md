@@ -42,23 +42,24 @@ git remote add origin https://github.com/<your-username>/<your-repo>.git
 git push -u origin main
 ```
 
-## Connecting Your Live Google Sheet (No Firebase Popup Required)
+## Connecting Your Live Google Sheet (Google Apps Script Primary Bridge — v2.1.0)
 
 SiteTrack Pro preserves your existing 8-worksheet Google Sheet schema (`Sites`, `ProjectTypes`, `Projects`, `SubProjects`, `Contractors`, `ContractsTCP`, `ContractPayments`, `UserAccounts`) and default Spreadsheet ID `1HNmAdZe7POIzIm9mCUPxQJL7p9BoBZEO1hXq6PZNs5M`.
 
-### Mode 1 (Recommended): Full Read & Write via Google Apps Script (`google-apps-script/Code.gs`)
+### Mode 1 (Primary & Required for Normal Operation): Full Read & Write via Google Apps Script (`google-apps-script/Code.gs` v2.1.0)
 1. Open your Google Sheet: `https://docs.google.com/spreadsheets/d/1HNmAdZe7POIzIm9mCUPxQJL7p9BoBZEO1hXq6PZNs5M/edit`
 2. Click **Extensions → Apps Script**.
-3. Delete any default code and paste the complete contents of **`google-apps-script/Code.gs`** (also available via one-click Copy inside the app's **Google Sheet Setup** modal).
-4. Click **Save**, then click **Deploy → New deployment → Web app**:
+3. Replace all code in `Code.gs` with the complete contents of **`google-apps-script/Code.gs`** (also available via one-click Copy inside the app's **Google Sheet Connection** modal).
+   - **v2.1.0 Reliability Enhancements**: Adds strict Spreadsheet ID verification (`healthCheck` / `ping`), post-timeout commit verification (`verifyRecord`), and `SpreadsheetApp.flush()` inside `LockService` on every write.
+4. Click **Save**, then click **Deploy → New deployment** (or **Deploy → Manage deployments → Edit → New version** to keep the same `/exec` URL):
    - **Execute as**: `Me`
-   - **Who has access**: `Anyone` (for development testing; restrict with server-side auth in Phase 2).
+   - **Who has access**: `Anyone` (for pre-authentication development testing; restrict with server-side auth in Phase 2).
 5. Copy the deployed `https://script.google.com/macros/s/.../exec` URL.
-6. In SiteTrack Pro, click the connection badge in the header → select **Google Apps Script Web App (Full Read & Write)** → paste the `/exec` URL → click **Test Connection** → **Save & Sync**.
-7. Your browser remembers the Spreadsheet ID and Apps Script URL across every page refresh.
+6. In SiteTrack Pro, click the connection status control in the sidebar/header → select **Google Apps Script Web App (Primary — Full Read & Write)** → paste the `/exec` URL → click **Test & Verify** → **Save & Connect**.
+7. Your browser persists the Spreadsheet ID, Apps Script URL, and last verified connection metadata across refreshes and browser restarts. SiteTrack Pro will **never** silently downgrade a configured Apps Script bridge to Read-Only mode on a transient error.
 
-### Mode 2: Link-Shared Read-Only CSV Sync
-- If your Google Sheet is shared as *"Anyone with the link → Viewer"* and no Apps Script is deployed yet, SiteTrack Pro can read all 8 worksheets directly in **Read-Only** mode. Writes are explicitly blocked with a clear notice rather than faking a save.
+### Mode 2 (Manual Fallback Only): Link-Shared Read-Only CSV Sync
+- Only used if you explicitly select **Read-Only CSV Mode**. Requires the Google Sheet to be shared as *"Anyone with the link → Viewer"*. Writes are explicitly disabled rather than faking a save.
 
 ### Mode 3: Dev Sandbox (Browser Local Only)
 - Explicitly switch to **Dev Sandbox** to test CRUD operations against the included synthetic placeholder dataset (`./data.json`) stored only in your browser's `localStorage`.

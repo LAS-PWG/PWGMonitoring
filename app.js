@@ -11547,7 +11547,14 @@ var RECEIPT_DOCUMENT_TYPE_OPTIONS = [
 ];
 // src/lib/auth.ts
 var DEFAULT_SPREADSHEET_ID = "1HNmAdZe7POIzIm9mCUPxQJL7p9BoBZEO1hXq6PZNs5M";
-var STORAGE_KEY_CONNECTION_CONFIG = "sitetrack_pro_gsheet_connection_v2";
+var STORAGE_KEY_CONNECTION_CONFIG = "sitetrack_pro_gsheet_connection_v3";
+var LEGACY_STORAGE_KEYS = [
+	"sitetrack_pro_gsheet_connection_v2",
+	"sitetrack_pro_gsheet_connection_v1",
+	"sitetrack_gsheet_connection",
+	"sitetrack_connection_config"
+];
+var inMemoryCachedConfig = null;
 function isValidSpreadsheetId(id) {
 	return /^[a-zA-Z0-9_-]{15,80}$/.test((id || "").trim());
 }
@@ -11571,38 +11578,166 @@ function isValidAppsScriptUrl(url) {
 		return false;
 	}
 }
+function validateConnectionConfig(config) {
+	if (config.preferredMode === "dev_sandbox") return { isValid: true };
+	if (!isValidSpreadsheetId(config.spreadsheetId)) return {
+		isValid: false,
+		reason: "A valid Google Spreadsheet ID is required. Open Connection Settings to verify your Spreadsheet ID."
+	};
+	if (config.preferredMode === "apps_script") {
+		if (!config.appsScriptUrl.trim()) return {
+			isValid: false,
+			reason: "Google Apps Script Web App URL is not configured yet. Open Connection Settings to paste your deployed /exec Web App URL."
+		};
+		if (!isValidAppsScriptUrl(config.appsScriptUrl)) return {
+			isValid: false,
+			reason: "The saved Apps Script URL is invalid. It must be an HTTPS Google Apps Script Web App URL ending in /exec."
+		};
+	}
+	return { isValid: true };
+}
+function normalizeLastConnectedMeta(meta) {
+	if (!meta || typeof meta !== "object") return null;
+	const m = meta;
+	if (!m.spreadsheetId || !m.lastSyncedAt) return null;
+	return {
+		spreadsheetId: String(m.spreadsheetId),
+		spreadsheetTitle: String(m.spreadsheetTitle || "SiteTrack Pro Google Sheet"),
+		spreadsheetUrl: String(m.spreadsheetUrl || `https://docs.google.com/spreadsheets/d/${m.spreadsheetId}/edit`),
+		lastConnectedAt: String(m.lastConnectedAt || m.lastSyncedAt),
+		lastSyncedAt: String(m.lastSyncedAt),
+		apiVersion: m.apiVersion ? String(m.apiVersion) : void 0,
+		mode: m.mode === "apps_script" || m.mode === "public_gviz" || m.mode === "dev_sandbox" ? m.mode : "apps_script"
+	};
+}
+function normalizeConfig(partial, preserveRawMode = true) {
+	const extractedId = partial.spreadsheetId ? extractSpreadsheetId(partial.spreadsheetId) : "";
+	const spreadsheetId = isValidSpreadsheetId(extractedId) ? extractedId : DEFAULT_SPREADSHEET_ID;
+	const rawScriptUrl = (partial.appsScriptUrl || "").trim();
+	const appsScriptUrl = isValidAppsScriptUrl(rawScriptUrl) ? rawScriptUrl : "";
+	let preferredMode;
+	if (preserveRawMode && (partial.preferredMode === "apps_script" || partial.preferredMode === "public_gviz" || partial.preferredMode === "dev_sandbox")) preferredMode = partial.preferredMode;
+	else if (appsScriptUrl) preferredMode = "apps_script";
+	else preferredMode = "apps_script";
+	return {
+		spreadsheetId,
+		appsScriptUrl,
+		preferredMode,
+		lastConnectedMeta: normalizeLastConnectedMeta(partial.lastConnectedMeta)
+	};
+}
+function readUrlBootstrapConfig() {
+	if (typeof window === "undefined" || !window.location?.search) return null;
+	try {
+		const params = new URLSearchParams(window.location.search);
+		const rawSheetId = params.get("sheetId") || params.get("spreadsheetId");
+		const rawScriptUrl = params.get("scriptUrl") || params.get("appsScriptUrl");
+		const rawMode = params.get("mode");
+		if (!rawSheetId && !rawScriptUrl && !rawMode) return null;
+		const existing = readStoredConfigRaw();
+		const candidate = normalizeConfig({
+			spreadsheetId: rawSheetId ? extractSpreadsheetId(rawSheetId) : existing?.spreadsheetId || "1HNmAdZe7POIzIm9mCUPxQJL7p9BoBZEO1hXq6PZNs5M",
+			appsScriptUrl: rawScriptUrl || existing?.appsScriptUrl || "",
+			preferredMode: rawMode === "dev_sandbox" || rawMode === "public_gviz" || rawMode === "apps_script" ? rawMode : rawScriptUrl ? "apps_script" : existing?.preferredMode || "apps_script",
+			lastConnectedMeta: existing?.lastConnectedMeta || null
+		});
+		params.delete("sheetId");
+		params.delete("spreadsheetId");
+		params.delete("scriptUrl");
+		params.delete("appsScriptUrl");
+		params.delete("mode");
+		const remaining = params.toString();
+		const cleanUrl = `${window.location.pathname}${remaining ? `?${remaining}` : ""}${window.location.hash || ""}`;
+		window.history.replaceState({}, "", cleanUrl);
+		return candidate;
+	} catch {
+		return null;
+	}
+}
+function readWindowBootstrapConfig() {
+	if (typeof window === "undefined") return null;
+	const winCfg = window.__SITETRACK_CONFIG__;
+	if (!winCfg || typeof winCfg !== "object") return null;
+	if (!winCfg.spreadsheetId && !winCfg.appsScriptUrl && !winCfg.preferredMode) return null;
+	return normalizeConfig(winCfg);
+}
+function readStoredConfigRaw() {
+	if (typeof window === "undefined") return null;
+	try {
+		const raw = window.localStorage.getItem(STORAGE_KEY_CONNECTION_CONFIG);
+		if (raw) return normalizeConfig(JSON.parse(raw));
+		for (const legacyKey of LEGACY_STORAGE_KEYS) {
+			const legacyRaw = window.localStorage.getItem(legacyKey);
+			if (legacyRaw) {
+				const parsed = JSON.parse(legacyRaw);
+				const migrated = normalizeConfig({
+					...parsed,
+					preferredMode: parsed.appsScriptUrl && isValidAppsScriptUrl(parsed.appsScriptUrl) ? "apps_script" : parsed.preferredMode
+				});
+				window.localStorage.setItem(STORAGE_KEY_CONNECTION_CONFIG, JSON.stringify(migrated));
+				return migrated;
+			}
+		}
+	} catch {}
+	return null;
+}
 function loadSheetConnectionConfig() {
+	const urlConfig = readUrlBootstrapConfig();
+	if (urlConfig) return saveSheetConnectionConfig(urlConfig);
+	if (inMemoryCachedConfig) return inMemoryCachedConfig;
+	const stored = readStoredConfigRaw();
+	if (stored) {
+		inMemoryCachedConfig = stored;
+		return stored;
+	}
+	const winConfig = readWindowBootstrapConfig();
+	if (winConfig) {
+		inMemoryCachedConfig = winConfig;
+		return winConfig;
+	}
 	const fallback = {
 		spreadsheetId: DEFAULT_SPREADSHEET_ID,
 		appsScriptUrl: "",
-		preferredMode: "public_gviz"
+		preferredMode: "apps_script",
+		lastConnectedMeta: null
 	};
-	try {
-		const raw = window.localStorage.getItem(STORAGE_KEY_CONNECTION_CONFIG);
-		if (!raw) return fallback;
-		const parsed = JSON.parse(raw);
-		const spreadsheetId = parsed.spreadsheetId && isValidSpreadsheetId(parsed.spreadsheetId) ? parsed.spreadsheetId.trim() : DEFAULT_SPREADSHEET_ID;
-		const appsScriptUrl = parsed.appsScriptUrl && isValidAppsScriptUrl(parsed.appsScriptUrl) ? parsed.appsScriptUrl.trim() : "";
-		return {
-			spreadsheetId,
-			appsScriptUrl,
-			preferredMode: parsed.preferredMode === "apps_script" && appsScriptUrl ? "apps_script" : parsed.preferredMode === "dev_sandbox" ? "dev_sandbox" : appsScriptUrl ? "apps_script" : "public_gviz"
-		};
-	} catch {
-		return fallback;
-	}
+	inMemoryCachedConfig = fallback;
+	return fallback;
 }
 function saveSheetConnectionConfig(config) {
-	const normalized = {
-		spreadsheetId: isValidSpreadsheetId(config.spreadsheetId) ? config.spreadsheetId.trim() : DEFAULT_SPREADSHEET_ID,
-		appsScriptUrl: isValidAppsScriptUrl(config.appsScriptUrl) ? config.appsScriptUrl.trim() : "",
-		preferredMode: config.preferredMode
-	};
-	if (normalized.preferredMode === "apps_script" && !normalized.appsScriptUrl) normalized.preferredMode = "public_gviz";
+	const existing = inMemoryCachedConfig || readStoredConfigRaw();
+	const normalized = normalizeConfig({
+		...config,
+		lastConnectedMeta: config.lastConnectedMeta !== void 0 ? config.lastConnectedMeta : existing?.lastConnectedMeta || null
+	});
+	inMemoryCachedConfig = normalized;
 	try {
 		window.localStorage.setItem(STORAGE_KEY_CONNECTION_CONFIG, JSON.stringify(normalized));
 	} catch {}
 	return normalized;
+}
+function saveLastConnectedMetadata(meta) {
+	const updated = {
+		...loadSheetConnectionConfig(),
+		lastConnectedMeta: meta
+	};
+	inMemoryCachedConfig = updated;
+	try {
+		window.localStorage.setItem(STORAGE_KEY_CONNECTION_CONFIG, JSON.stringify(updated));
+	} catch {}
+	return updated;
+}
+function buildShareableConnectionUrl(config) {
+	if (typeof window === "undefined") return "";
+	const url = new URL(window.location.href);
+	url.search = "";
+	url.hash = "";
+	url.searchParams.set("sheetId", config.spreadsheetId);
+	if (config.appsScriptUrl && isValidAppsScriptUrl(config.appsScriptUrl)) {
+		url.searchParams.set("scriptUrl", config.appsScriptUrl);
+		url.searchParams.set("mode", "apps_script");
+	} else url.searchParams.set("mode", config.preferredMode);
+	return url.toString();
 }
 // src/lib/sheetsApi.ts
 var REQUEST_TIMEOUT_MS = 25e3;
@@ -12464,7 +12599,30 @@ function parseUserAccountsRows(rows) {
 	}
 	return out;
 }
+var ConnectionTransportError = class extends Error {
+	constructor(message, opts = {}) {
+		super(message);
+		this.name = "ConnectionTransportError";
+		this.isPermanent = Boolean(opts.isPermanent);
+		this.isTimeout = Boolean(opts.isTimeout);
+		this.statusCode = opts.statusCode;
+	}
+};
+function isPermanentConnectionError(err) {
+	if (err instanceof ConnectionTransportError) return err.isPermanent;
+	const msg = (err instanceof Error ? err.message : String(err)).toLowerCase();
+	return msg.includes("invalid spreadsheet id") || msg.includes("spreadsheet id mismatch") || msg.includes("html login") || msg.includes("permission") || msg.includes("access denied") || msg.includes("private") || msg.includes("duplicate record blocked") || msg.includes("does not exist") || msg.includes("unknown worksheet") || msg.includes("unsupported get action") || msg.includes("unsupported post action") || msg.includes("invalid json") || msg.includes("primary key") || msg.includes("http 400") || msg.includes("http 401") || msg.includes("http 403") || msg.includes("http 404");
+}
+function isTimeoutError(err) {
+	if (err instanceof ConnectionTransportError) return err.isTimeout;
+	const msg = (err instanceof Error ? err.message : String(err)).toLowerCase();
+	return msg.includes("timed out") || msg.includes("timeout") || msg.includes("abort");
+}
 async function fetchWithTimeout(url, init, timeoutMs = REQUEST_TIMEOUT_MS) {
+	if (typeof navigator !== "undefined" && navigator.onLine === false) throw new ConnectionTransportError("Your device appears to be offline. Check your internet connection and click Retry Connection.", {
+		isPermanent: false,
+		isTimeout: false
+	});
 	const controller = new AbortController();
 	const timer = window.setTimeout(() => controller.abort(), timeoutMs);
 	try {
@@ -12473,7 +12631,10 @@ async function fetchWithTimeout(url, init, timeoutMs = REQUEST_TIMEOUT_MS) {
 			signal: controller.signal
 		});
 	} catch (err) {
-		if (err instanceof DOMException && err.name === "AbortError") throw new Error(`Request timed out after ${Math.round(timeoutMs / 1e3)}s. Verify your Google Apps Script deployment and network connection.`);
+		if (err instanceof DOMException && err.name === "AbortError") throw new ConnectionTransportError(`Request timed out after ${Math.round(timeoutMs / 1e3)}s. Google Apps Script may be starting up or unreachable.`, {
+			isPermanent: false,
+			isTimeout: true
+		});
 		throw err;
 	} finally {
 		window.clearTimeout(timer);
@@ -12481,24 +12642,75 @@ async function fetchWithTimeout(url, init, timeoutMs = REQUEST_TIMEOUT_MS) {
 }
 async function parseAppsScriptResponse(res) {
 	const trimmed = (await res.text()).trim();
-	if (!res.ok) throw new Error(`Apps Script HTTP ${res.status}: ${trimmed.slice(0, 180) || res.statusText}`);
-	if (trimmed.startsWith("<!DOCTYPE") || trimmed.startsWith("<html")) throw new Error("Apps Script returned an HTML login/error page instead of JSON. Re-deploy Code.gs as a Web App with Execute as: \"Me\" and Who has access: \"Anyone\".");
+	if (!res.ok) {
+		const isClientError = res.status >= 400 && res.status < 500 && res.status !== 408 && res.status !== 429;
+		throw new ConnectionTransportError(`Apps Script HTTP ${res.status}: ${trimmed.slice(0, 180) || res.statusText}`, {
+			isPermanent: isClientError,
+			statusCode: res.status
+		});
+	}
+	if (trimmed.startsWith("<!DOCTYPE") || trimmed.startsWith("<html")) throw new ConnectionTransportError("Apps Script returned an HTML login/error page instead of JSON. Re-deploy Code.gs as a Web App with Execute as: \"Me\" and Who has access: \"Anyone\".", { isPermanent: true });
 	let parsed;
 	try {
 		parsed = JSON.parse(trimmed);
 	} catch {
-		throw new Error(`Apps Script returned invalid JSON: ${trimmed.slice(0, 160)}`);
+		throw new ConnectionTransportError(`Apps Script returned invalid JSON: ${trimmed.slice(0, 160)}`, { isPermanent: true });
 	}
-	if (!parsed.ok) throw new Error(parsed.error || "Apps Script rejected the operation.");
+	if (!parsed || typeof parsed !== "object") throw new ConnectionTransportError("Apps Script returned an unexpected response format.", { isPermanent: true });
+	if (!parsed.ok) {
+		const errMsg = parsed.error || "Apps Script rejected the operation.";
+		throw new ConnectionTransportError(errMsg, { isPermanent: isPermanentConnectionError(new Error(errMsg)) });
+	}
 	return parsed;
 }
 async function postToAppsScript(appsScriptUrl, payload) {
-	return parseAppsScriptResponse(await fetchWithTimeout(appsScriptUrl, {
-		method: "POST",
-		redirect: "follow",
-		headers: { "Content-Type": "text/plain;charset=utf-8" },
-		body: JSON.stringify(payload)
-	}));
+	try {
+		return await parseAppsScriptResponse(await fetchWithTimeout(appsScriptUrl, {
+			method: "POST",
+			redirect: "follow",
+			headers: { "Content-Type": "text/plain;charset=utf-8" },
+			body: JSON.stringify(payload)
+		}));
+	} catch (err) {
+		const action = String(payload.action || "");
+		const sheetName = String(payload.sheetName || "");
+		const spreadsheetId = String(payload.spreadsheetId || "");
+		const values = Array.isArray(payload.values) ? payload.values : [];
+		const recordId = String(payload.recordId || values[0] || "").trim();
+		if (isTimeoutError(err) && spreadsheetId && sheetName && recordId && (action === "appendRow" || action === "deleteRow")) {
+			try {
+				const exists = await verifyRecordExistsViaAppsScript({
+					appsScriptUrl,
+					spreadsheetId
+				}, sheetName, recordId);
+				if (action === "appendRow" && exists === true) return {
+					ok: true,
+					action: "appendRow",
+					data: { verifiedAfterTimeout: true }
+				};
+				if (action === "deleteRow" && exists === false) return {
+					ok: true,
+					action: "deleteRow",
+					data: { verifiedAfterTimeout: true }
+				};
+			} catch {}
+			throw new ConnectionTransportError(`Write timed out while waiting for Google Sheets confirmation (${sheetName}: ${recordId}). Click "Sync Now" before retrying to confirm whether the change was already recorded.`, {
+				isPermanent: false,
+				isTimeout: true
+			});
+		}
+		throw err;
+	}
+}
+function validateInspectPayload(data, expectedSpreadsheetId) {
+	if (!data || typeof data !== "object") throw new ConnectionTransportError("Apps Script returned an empty spreadsheet payload.", { isPermanent: true });
+	const returnedId = (data.spreadsheetId || "").trim();
+	const expectedId = expectedSpreadsheetId.trim();
+	if (!returnedId) throw new ConnectionTransportError("Apps Script response did not include a verified Spreadsheet ID.", { isPermanent: true });
+	if (expectedId && returnedId !== expectedId) throw new ConnectionTransportError(`Spreadsheet ID mismatch: connected to "${returnedId}" instead of expected "${expectedId}". Verify your deployed Code.gs and Spreadsheet ID.`, { isPermanent: true });
+	if (!data.tables || typeof data.tables !== "object") throw new ConnectionTransportError("Apps Script response is missing worksheet table data.", { isPermanent: true });
+	if (!Array.isArray(data.existingSheets) || !Array.isArray(data.missingSheets)) throw new ConnectionTransportError("Apps Script response is missing worksheet verification lists.", { isPermanent: true });
+	return data;
 }
 function buildInspectionFromTables(data) {
 	const tables = data.tables || {};
@@ -12509,7 +12721,7 @@ function buildInspectionFromTables(data) {
 		existingSheets: data.existingSheets || [],
 		missingSheets: data.missingSheets || [],
 		isSchemaReady: (data.missingSheets || []).length === 0,
-		lastSyncedAt: data.lastSyncedAt || (/* @__PURE__ */ new Date()).toISOString(),
+		lastSyncedAt: data.lastSyncedAt || data.serverTimestamp || (/* @__PURE__ */ new Date()).toISOString(),
 		sites: parseSitesRows(tables[SHEET_NAMES.SITES] || []),
 		projectTypes: parseProjectTypesRows(tables[SHEET_NAMES.PROJECT_TYPES] || []),
 		projects: parseProjectsRows(tables[SHEET_NAMES.PROJECTS] || []),
@@ -12520,29 +12732,91 @@ function buildInspectionFromTables(data) {
 		userAccounts: parseUserAccountsRows(tables[SHEET_NAMES.USER_ACCOUNTS] || [])
 	};
 }
+async function withExponentialBackoff(operation, maxAttempts = 3, baseDelayMs = 600) {
+	let lastError;
+	for (let attempt = 1; attempt <= maxAttempts; attempt++) try {
+		return await operation();
+	} catch (err) {
+		lastError = err;
+		if (isPermanentConnectionError(err)) throw err;
+		if (typeof navigator !== "undefined" && navigator.onLine === false) throw err;
+		if (attempt < maxAttempts) {
+			const delay = baseDelayMs * Math.pow(2, attempt - 1);
+			await new Promise((resolve) => window.setTimeout(resolve, delay));
+		}
+	}
+	throw lastError;
+}
 async function pingAppsScriptBridge(appsScriptUrl, spreadsheetId) {
-	const url = new URL(appsScriptUrl);
-	url.searchParams.set("action", "ping");
-	url.searchParams.set("spreadsheetId", spreadsheetId);
-	url.searchParams.set("_ts", String(Date.now()));
-	const envelope = await parseAppsScriptResponse(await fetchWithTimeout(url.toString(), {
-		method: "GET",
-		redirect: "follow"
-	}));
-	if (!envelope.data) throw new Error("Apps Script ping returned empty payload.");
-	return envelope.data;
+	return withExponentialBackoff(async () => {
+		const callAction = async (actionName) => {
+			const url = new URL(appsScriptUrl);
+			url.searchParams.set("action", actionName);
+			url.searchParams.set("spreadsheetId", spreadsheetId);
+			url.searchParams.set("_ts", String(Date.now()));
+			return parseAppsScriptResponse(await fetchWithTimeout(url.toString(), {
+				method: "GET",
+				redirect: "follow"
+			}));
+		};
+		let envelope;
+		try {
+			envelope = await callAction("healthCheck");
+		} catch (err) {
+			if ((err instanceof Error ? err.message.toLowerCase() : "").includes("unsupported get action")) envelope = await callAction("ping");
+			else throw err;
+		}
+		if (!envelope.data) throw new ConnectionTransportError("Apps Script health check returned an empty payload.", { isPermanent: true });
+		const returnedId = (envelope.data.spreadsheetId || "").trim();
+		if (spreadsheetId.trim() && returnedId !== spreadsheetId.trim()) throw new ConnectionTransportError(`Spreadsheet ID mismatch: endpoint responded for "${returnedId || "unknown"}" instead of "${spreadsheetId}".`, { isPermanent: true });
+		return {
+			...envelope.data,
+			isSchemaReady: envelope.data.isSchemaReady ?? (envelope.data.missingSheets || []).length === 0,
+			serverTimestamp: envelope.data.serverTimestamp || envelope.data.timestamp || (/* @__PURE__ */ new Date()).toISOString()
+		};
+	}, 3, 600);
+}
+async function verifyRecordExistsViaAppsScript(target, sheetName, recordId) {
+	try {
+		const url = new URL(target.appsScriptUrl);
+		url.searchParams.set("action", "verifyRecord");
+		url.searchParams.set("spreadsheetId", target.spreadsheetId);
+		url.searchParams.set("sheetName", sheetName);
+		url.searchParams.set("recordId", recordId);
+		url.searchParams.set("_ts", String(Date.now()));
+		const envelope = await parseAppsScriptResponse(await fetchWithTimeout(url.toString(), {
+			method: "GET",
+			redirect: "follow"
+		}, 1e4));
+		return typeof envelope.data?.exists === "boolean" ? envelope.data.exists : null;
+	} catch {
+		return null;
+	}
 }
 async function inspectAndLoadViaAppsScript(appsScriptUrl, spreadsheetId) {
-	const url = new URL(appsScriptUrl);
-	url.searchParams.set("action", "inspectAndLoad");
-	url.searchParams.set("spreadsheetId", spreadsheetId);
-	url.searchParams.set("_ts", String(Date.now()));
-	const envelope = await parseAppsScriptResponse(await fetchWithTimeout(url.toString(), {
-		method: "GET",
-		redirect: "follow"
-	}));
-	if (!envelope.data) throw new Error("Apps Script returned empty inspection payload.");
-	return buildInspectionFromTables(envelope.data);
+	return withExponentialBackoff(async () => {
+		const url = new URL(appsScriptUrl);
+		url.searchParams.set("action", "inspectAndLoad");
+		url.searchParams.set("spreadsheetId", spreadsheetId);
+		url.searchParams.set("_ts", String(Date.now()));
+		return buildInspectionFromTables(validateInspectPayload((await parseAppsScriptResponse(await fetchWithTimeout(url.toString(), {
+			method: "GET",
+			redirect: "follow"
+		}))).data, spreadsheetId));
+	}, 3, 600);
+}
+/**
+* Enforces the full verified connection lifecycle:
+* 1. Health-check Apps Script endpoint & verify Spreadsheet ID + worksheet presence.
+* 2. Load actual Google Sheets tables.
+* 3. Validate returned Spreadsheet ID & data structure before returning CONNECTED.
+*/
+async function verifyAndLoadViaAppsScript(appsScriptUrl, spreadsheetId) {
+	const health = await pingAppsScriptBridge(appsScriptUrl, spreadsheetId);
+	return {
+		inspection: await inspectAndLoadViaAppsScript(appsScriptUrl, spreadsheetId),
+		health
+	};
 }
 async function initializeSchemaViaAppsScript(appsScriptUrl, spreadsheetId, seedStarterData = false) {
 	const envelope = await postToAppsScript(appsScriptUrl, {
@@ -12568,59 +12842,61 @@ async function initializeSchemaViaAppsScript(appsScriptUrl, spreadsheetId, seedS
 		} : void 0
 	});
 	if (!envelope.data) return inspectAndLoadViaAppsScript(appsScriptUrl, spreadsheetId);
-	return buildInspectionFromTables(envelope.data);
+	return buildInspectionFromTables(validateInspectPayload(envelope.data, spreadsheetId));
 }
 async function inspectAndLoadSpreadsheetPublicGviz(spreadsheetId) {
-	const cleanId = spreadsheetId.trim();
-	const tables = {};
-	const existingSheets = [];
-	const missingSheets = [];
-	let anyNetworkSuccess = false;
-	let sawHtmlLoginRedirect = false;
-	await Promise.all(REQUIRED_SHEET_NAMES.map(async (sheetTitle) => {
-		const url = `https://docs.google.com/spreadsheets/d/${encodeURIComponent(cleanId)}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetTitle)}`;
-		try {
-			const res = await fetchWithTimeout(url, { method: "GET" }, 15e3);
-			if (!res.ok) {
+	return withExponentialBackoff(async () => {
+		const cleanId = spreadsheetId.trim();
+		const tables = {};
+		const existingSheets = [];
+		const missingSheets = [];
+		let anyNetworkSuccess = false;
+		let sawHtmlLoginRedirect = false;
+		await Promise.all(REQUIRED_SHEET_NAMES.map(async (sheetTitle) => {
+			const url = `https://docs.google.com/spreadsheets/d/${encodeURIComponent(cleanId)}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetTitle)}`;
+			try {
+				const res = await fetchWithTimeout(url, { method: "GET" }, 15e3);
+				if (!res.ok) {
+					missingSheets.push(sheetTitle);
+					tables[sheetTitle] = [];
+					return;
+				}
+				const text = await res.text();
+				const trimmed = text.trim();
+				if (trimmed.startsWith("<!DOCTYPE") || trimmed.startsWith("<html") || trimmed.includes("accounts.google.com")) {
+					sawHtmlLoginRedirect = true;
+					missingSheets.push(sheetTitle);
+					tables[sheetTitle] = [];
+					return;
+				}
+				anyNetworkSuccess = true;
+				const rows = parseCsvToRows(text);
+				if (rows.length > 0 && doesHeaderMatchSheet(sheetTitle, rows[0])) {
+					existingSheets.push(sheetTitle);
+					tables[sheetTitle] = rows;
+				} else {
+					missingSheets.push(sheetTitle);
+					tables[sheetTitle] = [];
+				}
+			} catch {
 				missingSheets.push(sheetTitle);
 				tables[sheetTitle] = [];
-				return;
 			}
-			const text = await res.text();
-			const trimmed = text.trim();
-			if (trimmed.startsWith("<!DOCTYPE") || trimmed.startsWith("<html") || trimmed.includes("accounts.google.com")) {
-				sawHtmlLoginRedirect = true;
-				missingSheets.push(sheetTitle);
-				tables[sheetTitle] = [];
-				return;
-			}
-			anyNetworkSuccess = true;
-			const rows = parseCsvToRows(text);
-			if (rows.length > 0 && doesHeaderMatchSheet(sheetTitle, rows[0])) {
-				existingSheets.push(sheetTitle);
-				tables[sheetTitle] = rows;
-			} else {
-				missingSheets.push(sheetTitle);
-				tables[sheetTitle] = [];
-			}
-		} catch {
-			missingSheets.push(sheetTitle);
-			tables[sheetTitle] = [];
+		}));
+		if (!anyNetworkSuccess) {
+			if (sawHtmlLoginRedirect) throw new ConnectionTransportError("This Google Sheet is private. Deploy the included Apps Script Web App (Code.gs) for full Read & Write access, or set Google Sheet sharing to \"Anyone with the link → Viewer\" for Read-Only CSV sync.", { isPermanent: true });
+			throw new ConnectionTransportError("Unable to reach Google Sheets via public CSV feed. Check your Spreadsheet ID, network connection, or deploy the Apps Script Web App (Code.gs).", { isPermanent: false });
 		}
-	}));
-	if (!anyNetworkSuccess) {
-		if (sawHtmlLoginRedirect) throw new Error("This Google Sheet is private. Deploy the included Apps Script Web App (Code.gs) for full Read & Write access, or set Google Sheet sharing to \"Anyone with the link → Viewer\" for Read-Only CSV sync.");
-		throw new Error("Unable to reach Google Sheets via public CSV feed. Check your Spreadsheet ID, network connection, or deploy the Apps Script Web App (Code.gs).");
-	}
-	return buildInspectionFromTables({
-		spreadsheetId: cleanId,
-		title: "SiteTrack Pro — Google Sheet (Read-Only CSV Feed)",
-		spreadsheetUrl: `https://docs.google.com/spreadsheets/d/${cleanId}/edit`,
-		existingSheets,
-		missingSheets,
-		lastSyncedAt: (/* @__PURE__ */ new Date()).toISOString(),
-		tables
-	});
+		return buildInspectionFromTables({
+			spreadsheetId: cleanId,
+			title: "SiteTrack Pro — Google Sheet (Read-Only CSV Feed)",
+			spreadsheetUrl: `https://docs.google.com/spreadsheets/d/${cleanId}/edit`,
+			existingSheets,
+			missingSheets,
+			lastSyncedAt: (/* @__PURE__ */ new Date()).toISOString(),
+			tables
+		});
+	}, 2, 600);
 }
 function serializeSiteRow(site) {
 	return [
@@ -13069,6 +13345,46 @@ function computeContractRollups(contractsTCP, contractPayments) {
 	}
 	return map;
 }
+function computePortfolioSummary(contractsTCP, contractRollups) {
+	let totalActiveTCP = 0;
+	let totalReceivedGross = 0;
+	let totalReceivedCheques = 0;
+	let totalRemainingBalance = 0;
+	let totalInFlightRFP = 0;
+	let totalRetentionTarget = 0;
+	let totalUnreleasedRetention = 0;
+	let totalSafeProgressRelease = 0;
+	let totalWithholdingTarget = 0;
+	let totalWithheldActual = 0;
+	for (const c of contractsTCP) {
+		if (c.contractStatus === "CANCEL") continue;
+		const r = contractRollups[c.contractId];
+		if (!r) continue;
+		totalActiveTCP = roundCurrency(totalActiveTCP + r.tcpAmount);
+		totalReceivedGross = roundCurrency(totalReceivedGross + r.receivedGrossDeducted);
+		totalReceivedCheques = roundCurrency(totalReceivedCheques + r.receivedChequePaid);
+		totalRemainingBalance = roundCurrency(totalRemainingBalance + r.remainingTCPAfterReceived);
+		totalInFlightRFP = roundCurrency(totalInFlightRFP + r.inFlightRFPAmount);
+		totalRetentionTarget = roundCurrency(totalRetentionTarget + r.retentionTargetAmount);
+		totalUnreleasedRetention = roundCurrency(totalUnreleasedRetention + r.unreleasedRetentionHoldback);
+		totalSafeProgressRelease = roundCurrency(totalSafeProgressRelease + r.safeRemainingProgressBillable);
+		totalWithholdingTarget = roundCurrency(totalWithholdingTarget + r.withholdingTargetAmount);
+		totalWithheldActual = roundCurrency(totalWithheldActual + r.withholdingAlreadyDeducted);
+	}
+	return {
+		totalActiveTCP,
+		totalReceivedGross,
+		totalReceivedCheques,
+		totalRemainingBalance,
+		totalInFlightRFP,
+		totalRetentionTarget,
+		totalUnreleasedRetention,
+		totalSafeProgressRelease,
+		totalWithholdingTarget,
+		totalWithheldActual,
+		totalRemainingWithholding: Math.max(0, roundCurrency(totalWithholdingTarget - totalWithheldActual))
+	};
+}
 /**
 * Validates referential integrity before deleting a record from any worksheet.
 */
@@ -13134,6 +13450,59 @@ function checkDeleteReferentialIntegrity(params) {
 	}
 	return { allowed: true };
 }
+// src/lib/formatters.ts
+/**
+* SiteTrack Pro — Shared Formatting & Presentation Helpers
+* Single source of truth for currency, numeric, date, and sync timestamp formatting.
+*/
+function formatCurrency(amount) {
+	const safe = Number.isFinite(amount) ? amount : 0;
+	return new Intl.NumberFormat("en-PH", {
+		style: "currency",
+		currency: "PHP",
+		minimumFractionDigits: 2,
+		maximumFractionDigits: 2
+	}).format(safe);
+}
+function formatNum(val) {
+	const safe = Number.isFinite(val) ? val : 0;
+	return new Intl.NumberFormat("en-US", {
+		minimumFractionDigits: 2,
+		maximumFractionDigits: 2
+	}).format(safe);
+}
+function formatDisplayDate(isoDate) {
+	if (!isoDate || !isoDate.trim()) return "—";
+	const trimmed = isoDate.trim();
+	const parsed = new Date(trimmed.length === 10 ? `${trimmed}T00:00:00` : trimmed);
+	if (Number.isNaN(parsed.getTime())) return trimmed;
+	return parsed.toLocaleDateString("en-US", {
+		year: "numeric",
+		month: "short",
+		day: "numeric"
+	});
+}
+function formatShortDate(isoDate) {
+	if (!isoDate || !isoDate.trim()) return "—";
+	const trimmed = isoDate.trim();
+	const parsed = new Date(trimmed.length === 10 ? `${trimmed}T00:00:00` : trimmed);
+	if (Number.isNaN(parsed.getTime())) return trimmed;
+	return parsed.toLocaleDateString("en-US", {
+		year: "2-digit",
+		month: "short",
+		day: "numeric"
+	});
+}
+function formatSyncTimestamp(isoString) {
+	if (!isoString) return "Not synced yet";
+	const parsed = new Date(isoString);
+	if (Number.isNaN(parsed.getTime())) return isoString;
+	return parsed.toLocaleTimeString("en-US", {
+		hour: "numeric",
+		minute: "2-digit",
+		second: "2-digit"
+	});
+}
 // src/lib/selfPackBuilder.ts
 var LOCAL_LOGO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36" width="36" height="36" fill="none">
   <rect width="36" height="36" rx="7" fill="#0F172A"/>
@@ -13150,21 +13519,20 @@ var LOCAL_FAVICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32
 `;
 var LOCAL_FONTS_CSS = `/**
  * SiteTrack Pro — Self-Contained Local Typography Stack
- * Zero external CDN dependencies. Uses high-legibility system and tabular monospace font stacks
- * optimized for clear 0, 6, 8, and 9 numeric distinction on compact and low-resolution screens.
+ * Zero external CDN dependencies. Uses crisp geometric/humanist system stacks
+ * and tabular monospace numerals for clean financial ledger scanning.
  */
 
 :root {
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  --font-display: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  --font-mono: 'IBM Plex Mono', 'Consolas', 'SFMono-Regular', 'Liberation Mono', 'Menlo', monospace;
+  --font-display: 'Plus Jakarta Sans', 'Manrope', 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-sans: 'Plus Jakarta Sans', 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: 'IBM Plex Mono', 'Cascadia Mono', 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
 }
 
 html,
 body {
   font-family: var(--font-sans);
   font-variant-numeric: tabular-nums;
-  font-feature-settings: "tnum" 1, "cv01" 1, "cv02" 1, "cv03" 1, "cv04" 1, "cv09" 1, "zero" 0;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -13175,7 +13543,6 @@ pre,
 .tabular-nums {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
-  font-feature-settings: "tnum" 1, "zero" 0;
 }
 `;
 /**
@@ -14008,15 +14375,10 @@ function buildZipArchive(entries) {
 	view.setUint16(ptr + 20, 0, true);
 	return buffer;
 }
-/**
-* Generates the portable index.html for each deployment target.
-* ALL file links are in the main directory (./favicon.svg, ./fonts.css, ./style.css, ./app.js)
-* with ZERO root (/) references so the app works cleanly in GitHub Pages subpaths,
-* Netlify Drop, Google Sites iframe embeds, or local folders.
-*/
-function buildPortableIndexHtml(target, initialDataJsonStr) {
+function buildPortableIndexHtml(target, initialDataJsonStr, connectionBootstrap) {
 	const isGoogleSitesEmbed = target === "google-sites-embed";
 	const title = isGoogleSitesEmbed ? "SiteTrack Pro — Embed-Ready Construction & Contract TCP Ledger" : "SiteTrack Pro — Real-Time Project & Sub-Project Monitor";
+	const safeInlineConfigScript = connectionBootstrap ? `    <script>window.__SITETRACK_CONFIG__ = ${JSON.stringify(connectionBootstrap).replace(/<\/script/gi, "<\\/script")};<\/script>\n` : "";
 	const safeInlineDataScript = initialDataJsonStr ? `    <script>window.__SITETRACK_INITIAL_DATA__ = ${initialDataJsonStr.replace(/<\/script/gi, "<\\/script")};<\/script>\n` : "";
 	return `<!doctype html>
 <html lang="en" data-deploy-target="${target}"${isGoogleSitesEmbed ? " data-embed-mode=\"google-sites\"" : ""}>
@@ -14035,7 +14397,7 @@ function buildPortableIndexHtml(target, initialDataJsonStr) {
   </head>
   <body>
     <div id="root"></div>
-${safeInlineDataScript}    <script defer src="./app.js"><\/script>
+${safeInlineConfigScript}${safeInlineDataScript}    <script defer src="./app.js"><\/script>
   </body>
 </html>
 `;
@@ -14090,23 +14452,24 @@ main/
 ├── README.md                    # Step-by-step deployment & Google Sheet setup guide
 ${target === "github-pages" ? "├── 404.html                     # GitHub Pages SPA fallback\n└── .nojekyll                    # Disables Jekyll processing on GitHub Pages" : "├── netlify.toml                 # Netlify static publish & iframe headers config\n└── _redirects                   # SPA routing rules"}
 \`\`\``;
-	const googleSheetsSection = `## Connecting Your Live Google Sheet (No Firebase Popup Required)
+	const googleSheetsSection = `## Connecting Your Live Google Sheet (Google Apps Script Primary Bridge — v2.1.0)
 
 SiteTrack Pro preserves your existing 8-worksheet Google Sheet schema (\`Sites\`, \`ProjectTypes\`, \`Projects\`, \`SubProjects\`, \`Contractors\`, \`ContractsTCP\`, \`ContractPayments\`, \`UserAccounts\`) and default Spreadsheet ID \`1HNmAdZe7POIzIm9mCUPxQJL7p9BoBZEO1hXq6PZNs5M\`.
 
-### Mode 1 (Recommended): Full Read & Write via Google Apps Script (\`google-apps-script/Code.gs\`)
+### Mode 1 (Primary & Required for Normal Operation): Full Read & Write via Google Apps Script (\`google-apps-script/Code.gs\` v2.1.0)
 1. Open your Google Sheet: \`https://docs.google.com/spreadsheets/d/1HNmAdZe7POIzIm9mCUPxQJL7p9BoBZEO1hXq6PZNs5M/edit\`
 2. Click **Extensions → Apps Script**.
-3. Delete any default code and paste the complete contents of **\`google-apps-script/Code.gs\`** (also available via one-click Copy inside the app's **Google Sheet Setup** modal).
-4. Click **Save**, then click **Deploy → New deployment → Web app**:
+3. Replace all code in \`Code.gs\` with the complete contents of **\`google-apps-script/Code.gs\`** (also available via one-click Copy inside the app's **Google Sheet Connection** modal).
+   - **v2.1.0 Reliability Enhancements**: Adds strict Spreadsheet ID verification (\`healthCheck\` / \`ping\`), post-timeout commit verification (\`verifyRecord\`), and \`SpreadsheetApp.flush()\` inside \`LockService\` on every write.
+4. Click **Save**, then click **Deploy → New deployment** (or **Deploy → Manage deployments → Edit → New version** to keep the same \`/exec\` URL):
    - **Execute as**: \`Me\`
-   - **Who has access**: \`Anyone\` (for development testing; restrict with server-side auth in Phase 2).
+   - **Who has access**: \`Anyone\` (for pre-authentication development testing; restrict with server-side auth in Phase 2).
 5. Copy the deployed \`https://script.google.com/macros/s/.../exec\` URL.
-6. In SiteTrack Pro, click the connection badge in the header → select **Google Apps Script Web App (Full Read & Write)** → paste the \`/exec\` URL → click **Test Connection** → **Save & Sync**.
-7. Your browser remembers the Spreadsheet ID and Apps Script URL across every page refresh.
+6. In SiteTrack Pro, click the connection status control in the sidebar/header → select **Google Apps Script Web App (Primary — Full Read & Write)** → paste the \`/exec\` URL → click **Test & Verify** → **Save & Connect**.
+7. Your browser persists the Spreadsheet ID, Apps Script URL, and last verified connection metadata across refreshes and browser restarts. SiteTrack Pro will **never** silently downgrade a configured Apps Script bridge to Read-Only mode on a transient error.
 
-### Mode 2: Link-Shared Read-Only CSV Sync
-- If your Google Sheet is shared as *"Anyone with the link → Viewer"* and no Apps Script is deployed yet, SiteTrack Pro can read all 8 worksheets directly in **Read-Only** mode. Writes are explicitly blocked with a clear notice rather than faking a save.
+### Mode 2 (Manual Fallback Only): Link-Shared Read-Only CSV Sync
+- Only used if you explicitly select **Read-Only CSV Mode**. Requires the Google Sheet to be shared as *"Anyone with the link → Viewer"*. Writes are explicitly disabled rather than faking a save.
 
 ### Mode 3: Dev Sandbox (Browser Local Only)
 - Explicitly switch to **Dev Sandbox** to test CRUD operations against the included synthetic placeholder dataset (\`./data.json\`) stored only in your browser's \`localStorage\`.
@@ -14200,10 +14563,10 @@ ${qaValidationSummary}
 * Zero redundant duplicate copies — all linked assets live in the main directory,
 * plus google-apps-script/Code.gs for live Google Sheets Read & Write.
 */
-function buildPortablePackageEntries(target, bundle, customDataOverride) {
+function buildPortablePackageEntries(target, bundle, customDataOverride, connectionBootstrap) {
 	const dataJsonStr = customDataOverride ? JSON.stringify(customDataOverride, null, 2) : bundle.defaultDataJson;
 	const wrappedJs = wrapPortableJsBundle(bundle.compiledJs);
-	const indexHtml = buildPortableIndexHtml(target, dataJsonStr);
+	const indexHtml = buildPortableIndexHtml(target, dataJsonStr, connectionBootstrap);
 	const readmeMd = buildPackageReadme(target);
 	const commonEntries = [
 		{
@@ -14415,8 +14778,8 @@ function validatePortablePackageEntries(target, entries) {
 * or ./exports/portable-bundle-manifest.json (with fallback to ./app.js and ./style.css).
 */
 async function loadPortableAssetBundle() {
-	for (const manifestPath of ["./portable-bundle-manifest.json", "./exports/portable-bundle-manifest.json"]) try {
-		const res = await fetch(manifestPath, { cache: "no-store" });
+	try {
+		const res = await fetch("./portable-bundle-manifest.json", { cache: "no-store" });
 		if (res.ok) {
 			const data = await res.json();
 			if (data && data.compiledJs && data.compiledJs.length > 5e4 && data.compiledCss) return data;
@@ -14532,6 +14895,19 @@ var createLucideIcon = (iconName, iconNode) => {
 * This source code is licensed under the ISC license.
 * See the LICENSE file in the root directory of this source tree.
 */
+var ArrowLeft = createLucideIcon("arrow-left", [["path", {
+	d: "m12 19-7-7 7-7",
+	key: "1l729n"
+}], ["path", {
+	d: "M19 12H5",
+	key: "x3x0zl"
+}]]);
+/**
+* @license lucide-react v0.546.0 - ISC
+*
+* This source code is licensed under the ISC license.
+* See the LICENSE file in the root directory of this source tree.
+*/
 var ArrowRight = createLucideIcon("arrow-right", [["path", {
 	d: "M5 12h14",
 	key: "1ays0h"
@@ -14539,6 +14915,30 @@ var ArrowRight = createLucideIcon("arrow-right", [["path", {
 	d: "m12 5 7 7-7 7",
 	key: "xquz4c"
 }]]);
+/**
+* @license lucide-react v0.546.0 - ISC
+*
+* This source code is licensed under the ISC license.
+* See the LICENSE file in the root directory of this source tree.
+*/
+var ArrowUpDown = createLucideIcon("arrow-up-down", [
+	["path", {
+		d: "m21 16-4 4-4-4",
+		key: "f6ql7i"
+	}],
+	["path", {
+		d: "M17 20V4",
+		key: "1ejh1v"
+	}],
+	["path", {
+		d: "m3 8 4-4 4 4",
+		key: "11wl7u"
+	}],
+	["path", {
+		d: "M7 4v16",
+		key: "1glfcx"
+	}]
+]);
 /**
 * @license lucide-react v0.546.0 - ISC
 *
@@ -14646,6 +15046,40 @@ var Calculator = createLucideIcon("calculator", [
 * This source code is licensed under the ISC license.
 * See the LICENSE file in the root directory of this source tree.
 */
+var CalendarClock = createLucideIcon("calendar-clock", [
+	["path", {
+		d: "M16 14v2.2l1.6 1",
+		key: "fo4ql5"
+	}],
+	["path", {
+		d: "M16 2v4",
+		key: "4m81vk"
+	}],
+	["path", {
+		d: "M21 7.5V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3.5",
+		key: "1osxxc"
+	}],
+	["path", {
+		d: "M3 10h5",
+		key: "r794hk"
+	}],
+	["path", {
+		d: "M8 2v4",
+		key: "1cmpym"
+	}],
+	["circle", {
+		cx: "16",
+		cy: "16",
+		r: "6",
+		key: "qoo3c4"
+	}]
+]);
+/**
+* @license lucide-react v0.546.0 - ISC
+*
+* This source code is licensed under the ISC license.
+* See the LICENSE file in the root directory of this source tree.
+*/
 var Calendar = createLucideIcon("calendar", [
 	["path", {
 		d: "M8 2v4",
@@ -14687,6 +15121,16 @@ var Check = createLucideIcon("check", [["path", {
 var ChevronDown = createLucideIcon("chevron-down", [["path", {
 	d: "m6 9 6 6 6-6",
 	key: "qrunsl"
+}]]);
+/**
+* @license lucide-react v0.546.0 - ISC
+*
+* This source code is licensed under the ISC license.
+* See the LICENSE file in the root directory of this source tree.
+*/
+var ChevronLeft = createLucideIcon("chevron-left", [["path", {
+	d: "m15 18-6-6 6-6",
+	key: "1wnfg3"
 }]]);
 /**
 * @license lucide-react v0.546.0 - ISC
@@ -14774,6 +15218,21 @@ var ClipboardCopy = createLucideIcon("clipboard-copy", [
 		key: "5dvupr"
 	}]
 ]);
+/**
+* @license lucide-react v0.546.0 - ISC
+*
+* This source code is licensed under the ISC license.
+* See the LICENSE file in the root directory of this source tree.
+*/
+var Clock = createLucideIcon("clock", [["path", {
+	d: "M12 6v6l4 2",
+	key: "mmk7yg"
+}], ["circle", {
+	cx: "12",
+	cy: "12",
+	r: "10",
+	key: "1mglay"
+}]]);
 /**
 * @license lucide-react v0.546.0 - ISC
 *
@@ -14984,6 +15443,38 @@ var FilePlus = createLucideIcon("file-plus", [
 * This source code is licensed under the ISC license.
 * See the LICENSE file in the root directory of this source tree.
 */
+var FileSpreadsheet = createLucideIcon("file-spreadsheet", [
+	["path", {
+		d: "M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z",
+		key: "1rqfz7"
+	}],
+	["path", {
+		d: "M14 2v4a2 2 0 0 0 2 2h4",
+		key: "tnqrlb"
+	}],
+	["path", {
+		d: "M8 13h2",
+		key: "yr2amv"
+	}],
+	["path", {
+		d: "M14 13h2",
+		key: "un5t4a"
+	}],
+	["path", {
+		d: "M8 17h2",
+		key: "2yhykz"
+	}],
+	["path", {
+		d: "M14 17h2",
+		key: "10kma7"
+	}]
+]);
+/**
+* @license lucide-react v0.546.0 - ISC
+*
+* This source code is licensed under the ISC license.
+* See the LICENSE file in the root directory of this source tree.
+*/
 var FileText = createLucideIcon("file-text", [
 	["path", {
 		d: "M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z",
@@ -15032,26 +15523,22 @@ var FlaskConical = createLucideIcon("flask-conical", [
 * This source code is licensed under the ISC license.
 * See the LICENSE file in the root directory of this source tree.
 */
-var FolderGit2 = createLucideIcon("folder-git-2", [
+var FolderKanban = createLucideIcon("folder-kanban", [
 	["path", {
-		d: "M9 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v5",
-		key: "1w6njk"
-	}],
-	["circle", {
-		cx: "13",
-		cy: "12",
-		r: "2",
-		key: "1j92g6"
+		d: "M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z",
+		key: "1fr9dc"
 	}],
 	["path", {
-		d: "M18 19c-2.8 0-5-2.2-5-5v8",
-		key: "pkpw2h"
+		d: "M8 10v4",
+		key: "tgpxqk"
 	}],
-	["circle", {
-		cx: "20",
-		cy: "19",
-		r: "2",
-		key: "1obnsp"
+	["path", {
+		d: "M12 10v2",
+		key: "hh53o1"
+	}],
+	["path", {
+		d: "M16 10v6",
+		key: "1d6xys"
 	}]
 ]);
 /**
@@ -15060,24 +15547,10 @@ var FolderGit2 = createLucideIcon("folder-git-2", [
 * This source code is licensed under the ISC license.
 * See the LICENSE file in the root directory of this source tree.
 */
-var FolderTree = createLucideIcon("folder-tree", [
-	["path", {
-		d: "M20 10a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-2.5a1 1 0 0 1-.8-.4l-.9-1.2A1 1 0 0 0 15 3h-2a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1Z",
-		key: "hod4my"
-	}],
-	["path", {
-		d: "M20 21a1 1 0 0 0 1-1v-3a1 1 0 0 0-1-1h-2.9a1 1 0 0 1-.88-.55l-.42-.85a1 1 0 0 0-.92-.6H13a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1Z",
-		key: "w4yl2u"
-	}],
-	["path", {
-		d: "M3 5a2 2 0 0 0 2 2h3",
-		key: "f2jnh7"
-	}],
-	["path", {
-		d: "M3 3v13a2 2 0 0 0 2 2h3",
-		key: "k8epm1"
-	}]
-]);
+var FolderOpen = createLucideIcon("folder-open", [["path", {
+	d: "m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2",
+	key: "usdka0"
+}]]);
 /**
 * @license lucide-react v0.546.0 - ISC
 *
@@ -15207,38 +15680,38 @@ var Layers = createLucideIcon("layers", [
 * This source code is licensed under the ISC license.
 * See the LICENSE file in the root directory of this source tree.
 */
-var LayoutGrid = createLucideIcon("layout-grid", [
+var LayoutDashboard = createLucideIcon("layout-dashboard", [
 	["rect", {
 		width: "7",
-		height: "7",
+		height: "9",
 		x: "3",
 		y: "3",
 		rx: "1",
-		key: "1g98yp"
+		key: "10lvy0"
 	}],
 	["rect", {
 		width: "7",
-		height: "7",
+		height: "5",
 		x: "14",
 		y: "3",
 		rx: "1",
-		key: "6d4xhi"
+		key: "16une8"
 	}],
 	["rect", {
 		width: "7",
-		height: "7",
+		height: "9",
 		x: "14",
-		y: "14",
+		y: "12",
 		rx: "1",
-		key: "nxv5o0"
+		key: "1hutg5"
 	}],
 	["rect", {
 		width: "7",
-		height: "7",
+		height: "5",
 		x: "3",
-		y: "14",
+		y: "16",
 		rx: "1",
-		key: "1bb6yr"
+		key: "ldoo1y"
 	}]
 ]);
 /**
@@ -15298,22 +15771,33 @@ var Lock = createLucideIcon("lock", [["rect", {
 * This source code is licensed under the ISC license.
 * See the LICENSE file in the root directory of this source tree.
 */
-var Package = createLucideIcon("package", [
+var MapPin = createLucideIcon("map-pin", [["path", {
+	d: "M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0",
+	key: "1r0f0z"
+}], ["circle", {
+	cx: "12",
+	cy: "10",
+	r: "3",
+	key: "ilqhr7"
+}]]);
+/**
+* @license lucide-react v0.546.0 - ISC
+*
+* This source code is licensed under the ISC license.
+* See the LICENSE file in the root directory of this source tree.
+*/
+var Menu = createLucideIcon("menu", [
 	["path", {
-		d: "M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z",
-		key: "1a0edw"
+		d: "M4 5h16",
+		key: "1tepv9"
 	}],
 	["path", {
-		d: "M12 22V12",
-		key: "d0xqtd"
-	}],
-	["polyline", {
-		points: "3.29 7 12 12 20.71 7",
-		key: "ousv84"
+		d: "M4 12h16",
+		key: "1lakjw"
 	}],
 	["path", {
-		d: "m7.5 4.27 9 5.15",
-		key: "1c824w"
+		d: "M4 19h16",
+		key: "1djgab"
 	}]
 ]);
 /**
@@ -15322,38 +15806,56 @@ var Package = createLucideIcon("package", [
 * This source code is licensed under the ISC license.
 * See the LICENSE file in the root directory of this source tree.
 */
-var Palette = createLucideIcon("palette", [
+var Moon = createLucideIcon("moon", [["path", {
+	d: "M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401",
+	key: "kfwtm"
+}]]);
+/**
+* @license lucide-react v0.546.0 - ISC
+*
+* This source code is licensed under the ISC license.
+* See the LICENSE file in the root directory of this source tree.
+*/
+var PanelLeftClose = createLucideIcon("panel-left-close", [
+	["rect", {
+		width: "18",
+		height: "18",
+		x: "3",
+		y: "3",
+		rx: "2",
+		key: "afitv7"
+	}],
 	["path", {
-		d: "M12 22a1 1 0 0 1 0-20 10 9 0 0 1 10 9 5 5 0 0 1-5 5h-2.25a1.75 1.75 0 0 0-1.4 2.8l.3.4a1.75 1.75 0 0 1-1.4 2.8z",
-		key: "e79jfc"
+		d: "M9 3v18",
+		key: "fh3hqa"
 	}],
-	["circle", {
-		cx: "13.5",
-		cy: "6.5",
-		r: ".5",
-		fill: "currentColor",
-		key: "1okk4w"
+	["path", {
+		d: "m16 15-3-3 3-3",
+		key: "14y99z"
+	}]
+]);
+/**
+* @license lucide-react v0.546.0 - ISC
+*
+* This source code is licensed under the ISC license.
+* See the LICENSE file in the root directory of this source tree.
+*/
+var PanelLeftOpen = createLucideIcon("panel-left-open", [
+	["rect", {
+		width: "18",
+		height: "18",
+		x: "3",
+		y: "3",
+		rx: "2",
+		key: "afitv7"
 	}],
-	["circle", {
-		cx: "17.5",
-		cy: "10.5",
-		r: ".5",
-		fill: "currentColor",
-		key: "f64h9f"
+	["path", {
+		d: "M9 3v18",
+		key: "fh3hqa"
 	}],
-	["circle", {
-		cx: "6.5",
-		cy: "12.5",
-		r: ".5",
-		fill: "currentColor",
-		key: "qy21gx"
-	}],
-	["circle", {
-		cx: "8.5",
-		cy: "7.5",
-		r: ".5",
-		fill: "currentColor",
-		key: "fotxhn"
+	["path", {
+		d: "m14 9 3 3-3 3",
+		key: "8010ee"
 	}]
 ]);
 /**
@@ -15469,30 +15971,6 @@ var RefreshCw = createLucideIcon("refresh-cw", [
 * This source code is licensed under the ISC license.
 * See the LICENSE file in the root directory of this source tree.
 */
-var Rows3 = createLucideIcon("rows-3", [
-	["rect", {
-		width: "18",
-		height: "18",
-		x: "3",
-		y: "3",
-		rx: "2",
-		key: "afitv7"
-	}],
-	["path", {
-		d: "M21 9H3",
-		key: "1338ky"
-	}],
-	["path", {
-		d: "M21 15H3",
-		key: "9uk58r"
-	}]
-]);
-/**
-* @license lucide-react v0.546.0 - ISC
-*
-* This source code is licensed under the ISC license.
-* See the LICENSE file in the root directory of this source tree.
-*/
 var Search = createLucideIcon("search", [["path", {
 	d: "m21 21-4.34-4.34",
 	key: "14j7rj"
@@ -15540,6 +16018,54 @@ var Server = createLucideIcon("server", [
 		y1: "18",
 		y2: "18",
 		key: "nzw8ys"
+	}]
+]);
+/**
+* @license lucide-react v0.546.0 - ISC
+*
+* This source code is licensed under the ISC license.
+* See the LICENSE file in the root directory of this source tree.
+*/
+var Settings2 = createLucideIcon("settings-2", [
+	["path", {
+		d: "M14 17H5",
+		key: "gfn3mx"
+	}],
+	["path", {
+		d: "M19 7h-9",
+		key: "6i9tg"
+	}],
+	["circle", {
+		cx: "17",
+		cy: "17",
+		r: "3",
+		key: "18b49y"
+	}],
+	["circle", {
+		cx: "7",
+		cy: "7",
+		r: "3",
+		key: "dfmy0x"
+	}]
+]);
+/**
+* @license lucide-react v0.546.0 - ISC
+*
+* This source code is licensed under the ISC license.
+* See the LICENSE file in the root directory of this source tree.
+*/
+var ShieldAlert = createLucideIcon("shield-alert", [
+	["path", {
+		d: "M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z",
+		key: "oel41y"
+	}],
+	["path", {
+		d: "M12 8v4",
+		key: "1got3b"
+	}],
+	["path", {
+		d: "M12 16h.01",
+		key: "1drbdi"
 	}]
 ]);
 /**
@@ -15615,27 +16141,90 @@ var SlidersVertical = createLucideIcon("sliders-vertical", [
 * This source code is licensed under the ISC license.
 * See the LICENSE file in the root directory of this source tree.
 */
-var SquareCheckBig = createLucideIcon("square-check-big", [["path", {
-	d: "M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344",
-	key: "2acyp4"
-}], ["path", {
-	d: "m9 11 3 3L22 4",
-	key: "1pflzl"
-}]]);
+var SlidersHorizontal = createLucideIcon("sliders-horizontal", [
+	["path", {
+		d: "M10 5H3",
+		key: "1qgfaw"
+	}],
+	["path", {
+		d: "M12 19H3",
+		key: "yhmn1j"
+	}],
+	["path", {
+		d: "M14 3v4",
+		key: "1sua03"
+	}],
+	["path", {
+		d: "M16 17v4",
+		key: "1q0r14"
+	}],
+	["path", {
+		d: "M21 12h-9",
+		key: "1o4lsq"
+	}],
+	["path", {
+		d: "M21 19h-5",
+		key: "1rlt1p"
+	}],
+	["path", {
+		d: "M21 5h-7",
+		key: "1oszz2"
+	}],
+	["path", {
+		d: "M8 10v4",
+		key: "tgpxqk"
+	}],
+	["path", {
+		d: "M8 12H3",
+		key: "a7s4jb"
+	}]
+]);
 /**
 * @license lucide-react v0.546.0 - ISC
 *
 * This source code is licensed under the ISC license.
 * See the LICENSE file in the root directory of this source tree.
 */
-var Square = createLucideIcon("square", [["rect", {
-	width: "18",
-	height: "18",
-	x: "3",
-	y: "3",
-	rx: "2",
-	key: "afitv7"
-}]]);
+var Sun = createLucideIcon("sun", [
+	["circle", {
+		cx: "12",
+		cy: "12",
+		r: "4",
+		key: "4exip2"
+	}],
+	["path", {
+		d: "M12 2v2",
+		key: "tus03m"
+	}],
+	["path", {
+		d: "M12 20v2",
+		key: "1lh1kg"
+	}],
+	["path", {
+		d: "m4.93 4.93 1.41 1.41",
+		key: "149t6j"
+	}],
+	["path", {
+		d: "m17.66 17.66 1.41 1.41",
+		key: "ptbguv"
+	}],
+	["path", {
+		d: "M2 12h2",
+		key: "1t8f8n"
+	}],
+	["path", {
+		d: "M20 12h2",
+		key: "1q8mjw"
+	}],
+	["path", {
+		d: "m6.34 17.66-1.41 1.41",
+		key: "1m8zz5"
+	}],
+	["path", {
+		d: "m19.07 4.93-1.41 1.41",
+		key: "1shlcs"
+	}]
+]);
 /**
 * @license lucide-react v0.546.0 - ISC
 *
@@ -15682,28 +16271,6 @@ var TriangleAlert = createLucideIcon("triangle-alert", [
 	["path", {
 		d: "M12 17h.01",
 		key: "p32p05"
-	}]
-]);
-/**
-* @license lucide-react v0.546.0 - ISC
-*
-* This source code is licensed under the ISC license.
-* See the LICENSE file in the root directory of this source tree.
-*/
-var UserCheck = createLucideIcon("user-check", [
-	["path", {
-		d: "m16 11 2 2 4-4",
-		key: "9rsbq5"
-	}],
-	["path", {
-		d: "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2",
-		key: "1yyitq"
-	}],
-	["circle", {
-		cx: "9",
-		cy: "7",
-		r: "4",
-		key: "nufk8"
 	}]
 ]);
 /**
@@ -15786,6 +16353,42 @@ var Users = createLucideIcon("users", [
 		cy: "7",
 		r: "4",
 		key: "nufk8"
+	}]
+]);
+/**
+* @license lucide-react v0.546.0 - ISC
+*
+* This source code is licensed under the ISC license.
+* See the LICENSE file in the root directory of this source tree.
+*/
+var WifiOff = createLucideIcon("wifi-off", [
+	["path", {
+		d: "M12 20h.01",
+		key: "zekei9"
+	}],
+	["path", {
+		d: "M8.5 16.429a5 5 0 0 1 7 0",
+		key: "1bycff"
+	}],
+	["path", {
+		d: "M5 12.859a10 10 0 0 1 5.17-2.69",
+		key: "1dl1wf"
+	}],
+	["path", {
+		d: "M19 12.859a10 10 0 0 0-2.007-1.523",
+		key: "4k23kn"
+	}],
+	["path", {
+		d: "M2 8.82a15 15 0 0 1 4.177-2.643",
+		key: "1grhjp"
+	}],
+	["path", {
+		d: "M22 8.82a15 15 0 0 0-11.288-3.764",
+		key: "z3jwby"
+	}],
+	["path", {
+		d: "m2 2 20 20",
+		key: "1ooewy"
 	}]
 ]);
 /**
@@ -15955,7 +16558,7 @@ var ConfirmActionModal = ({ config, isSubmitting, errorMessage, onClose }) => {
 	});
 };
 // src/lib/appsScriptTemplate.ts
-var APPS_SCRIPT_CODE_GS = "/**\n * SiteTrack Pro — Google Apps Script Web App Database Bridge (Code.gs)\n *\n * Target Spreadsheet ID (preserved): 1HNmAdZe7POIzIm9mCUPxQJL7p9BoBZEO1hXq6PZNs5M\n *\n * Preserved 8-Worksheet Schema (exact tab names & column orders):\n *   1. Sites             (A:E — 5 cols)  PK: SiteCode (Col A)\n *   2. ProjectTypes      (A:E — 5 cols)  PK: TypeCode (Col A)\n *   3. Projects          (A:L — 12 cols) PK: ProjectID (Col A)\n *   4. SubProjects       (A:J — 10 cols) PK: SubProjectID (Col A)\n *   5. Contractors       (A:G — 7 cols)  PK: ContractorCode (Col A)\n *   6. ContractsTCP      (A:W — 23 cols) PK: ContractID (Col A)\n *   7. ContractPayments  (A:W — 23 cols) PK: PaymentID (Col A)\n *   8. UserAccounts      (A:K — 11 cols) PK: UserID (Col A)\n *\n * Deployment Instructions:\n *   1. Open your Google Sheet -> Extensions -> Apps Script.\n *   2. Paste this entire file into Code.gs and Save.\n *   3. Click Deploy -> New deployment -> Select type: Web app.\n *   4. Execute as: \"Me\" | Who has access: \"Anyone\" (development mode; add server-side auth in Phase 2).\n *   5. Copy the Web App URL (https://script.google.com/macros/s/.../exec) into SiteTrack Pro.\n */\n\nvar DEFAULT_SPREADSHEET_ID = '1HNmAdZe7POIzIm9mCUPxQJL7p9BoBZEO1hXq6PZNs5M';\n\nvar REQUIRED_SHEETS = [\n  'Sites',\n  'ProjectTypes',\n  'Projects',\n  'SubProjects',\n  'Contractors',\n  'ContractsTCP',\n  'ContractPayments',\n  'UserAccounts',\n];\n\nvar SHEET_HEADERS = {\n  Sites: ['SiteCode', 'SiteName', 'Developer', 'Location', 'CreatedAt'],\n  ProjectTypes: ['TypeCode', 'TypeName', 'Description', 'Active', 'CreatedAt'],\n  Projects: [\n    'ProjectID',\n    'MainProjectCode',\n    'SiteCode',\n    'SiteName',\n    'Developer',\n    'TypeCode',\n    'TypeName',\n    'UnitIdentifier',\n    'ProjectName',\n    'Status',\n    'CreatedAt',\n    'UpdatedAt',\n  ],\n  SubProjects: [\n    'SubProjectID',\n    'ProjectID',\n    'MainProjectCode',\n    'SubProjectCode',\n    'SubProjectName',\n    'Status',\n    'Progress',\n    'TargetDate',\n    'Remarks',\n    'UpdatedAt',\n  ],\n  Contractors: [\n    'ContractorCode',\n    'ContractorName',\n    'Specialty',\n    'ContactPerson',\n    'ContactInfo',\n    'Active',\n    'CreatedAt',\n  ],\n  ContractsTCP: [\n    'ContractID',\n    'SubProjectID',\n    'SubProjectCode',\n    'SubProjectName',\n    'ProjectID',\n    'MainProjectCode',\n    'TCPType',\n    'TCPAmount',\n    'ContractorCode',\n    'ContractorName',\n    'ContractStatus',\n    'AwardDate',\n    'Remarks',\n    'UpdatedAt',\n    'DPPercent',\n    'ProgressBillingPercent',\n    'RetentionPercent',\n    'HasWithholdingTax',\n    'WithholdingTaxPercent',\n    'PaymentTermsNotes',\n    'TCPID',\n    'ParentContractID',\n    'BIRTaxBreakdownJSON',\n  ],\n  ContractPayments: [\n    'PaymentID',\n    'ContractID',\n    'SubProjectID',\n    'SubProjectCode',\n    'MainProjectCode',\n    'ContractorCode',\n    'ContractorName',\n    'BillingType',\n    'PaymentStatus',\n    'RFPNumber',\n    'RFPDate',\n    'RFPAmount',\n    'RFPPayee',\n    'RetentionDeducted',\n    'RFPRemarks',\n    'CVNumber',\n    'CVDate',\n    'ChequeAmount',\n    'WithheldAmount',\n    'ReceiptType',\n    'ReceiptNumber',\n    'ReceiptDate',\n    'UpdatedAt',\n  ],\n  UserAccounts: [\n    'UserID',\n    'FullName',\n    'Email',\n    'RoleTitle',\n    'Department',\n    'Phone',\n    'Status',\n    'BioNotes',\n    'PermissionsJSON',\n    'CreatedAt',\n    'UpdatedAt',\n  ],\n};\n\nfunction jsonResponse(payload) {\n  return ContentService.createTextOutput(JSON.stringify(payload)).setMimeType(\n    ContentService.MimeType.JSON\n  );\n}\n\nfunction getSpreadsheet(requestedId) {\n  var id = (requestedId || '').toString().trim() || DEFAULT_SPREADSHEET_ID;\n  try {\n    return SpreadsheetApp.openById(id);\n  } catch (err) {\n    var active = SpreadsheetApp.getActiveSpreadsheet();\n    if (active && (!requestedId || active.getId() === id)) {\n      return active;\n    }\n    throw new Error(\n      'Unable to open spreadsheet \"' +\n        id +\n        '\". Ensure the Apps Script owner has Editor access. Details: ' +\n        err.message\n    );\n  }\n}\n\nfunction normalizeCellValue(val) {\n  if (val === null || val === undefined) return '';\n  if (val instanceof Date) {\n    return Utilities.formatDate(\n      val,\n      Session.getScriptTimeZone() || 'UTC',\n      'yyyy-MM-dd'\n    );\n  }\n  return String(val);\n}\n\nfunction inspectSpreadsheetData(ss) {\n  var existingSheets = [];\n  var missingSheets = [];\n  var tables = {};\n\n  for (var i = 0; i < REQUIRED_SHEETS.length; i++) {\n    var name = REQUIRED_SHEETS[i];\n    var sheet = ss.getSheetByName(name);\n    if (!sheet) {\n      missingSheets.push(name);\n      tables[name] = [];\n      continue;\n    }\n    existingSheets.push(name);\n    var lastRow = sheet.getLastRow();\n    var lastCol = Math.max(sheet.getLastColumn(), SHEET_HEADERS[name].length);\n    if (lastRow === 0) {\n      tables[name] = [];\n    } else {\n      var rawValues = sheet.getRange(1, 1, lastRow, lastCol).getValues();\n      var normalized = [];\n      for (var r = 0; r < rawValues.length; r++) {\n        var rowOut = [];\n        for (var c = 0; c < rawValues[r].length; c++) {\n          rowOut.push(normalizeCellValue(rawValues[r][c]));\n        }\n        normalized.push(rowOut);\n      }\n      tables[name] = normalized;\n    }\n  }\n\n  return {\n    spreadsheetId: ss.getId(),\n    title: ss.getName(),\n    spreadsheetUrl: ss.getUrl(),\n    existingSheets: existingSheets,\n    missingSheets: missingSheets,\n    lastSyncedAt: new Date().toISOString(),\n    tables: tables,\n  };\n}\n\nfunction normalizeRowToWidth(sheetName, values) {\n  var headers = SHEET_HEADERS[sheetName];\n  if (!headers) {\n    throw new Error('Unknown worksheet: ' + sheetName);\n  }\n  if (!Array.isArray(values)) {\n    throw new Error('Row values must be an array.');\n  }\n  var out = [];\n  for (var i = 0; i < headers.length; i++) {\n    out.push(\n      i < values.length && values[i] !== undefined && values[i] !== null\n        ? values[i]\n        : ''\n    );\n  }\n  return out;\n}\n\nfunction ensureSheetWithHeaders(ss, sheetName) {\n  var headers = SHEET_HEADERS[sheetName];\n  if (!headers) {\n    throw new Error('Unknown worksheet: ' + sheetName);\n  }\n  var sheet = ss.getSheetByName(sheetName);\n  if (!sheet) {\n    sheet = ss.insertSheet(sheetName);\n  }\n  if (sheet.getLastRow() === 0) {\n    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);\n    sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold');\n  }\n  return sheet;\n}\n\nfunction findRowByPrimaryKey(sheet, recordId, fallbackRowNumber) {\n  var targetKey = (recordId || '').toString().trim().toUpperCase();\n  var lastRow = sheet.getLastRow();\n  if (lastRow >= 2 && targetKey) {\n    var keyCol = sheet.getRange(2, 1, lastRow - 1, 1).getValues();\n    for (var i = 0; i < keyCol.length; i++) {\n      var cellKey = (keyCol[i][0] || '').toString().trim().toUpperCase();\n      if (cellKey === targetKey) {\n        return i + 2;\n      }\n    }\n  }\n  if (\n    typeof fallbackRowNumber === 'number' &&\n    fallbackRowNumber >= 2 &&\n    fallbackRowNumber <= lastRow\n  ) {\n    var existingKey = (sheet.getRange(fallbackRowNumber, 1).getValue() || '')\n      .toString()\n      .trim()\n      .toUpperCase();\n    if (!targetKey || existingKey === targetKey) {\n      return fallbackRowNumber;\n    }\n  }\n  return -1;\n}\n\nfunction doGet(e) {\n  try {\n    var params = (e && e.parameter) || {};\n    var action = (params.action || 'inspectAndLoad').toString().trim();\n    var spreadsheetId = (params.spreadsheetId || '').toString().trim();\n    var ss = getSpreadsheet(spreadsheetId);\n\n    if (action === 'ping') {\n      var existing = [];\n      for (var i = 0; i < REQUIRED_SHEETS.length; i++) {\n        if (ss.getSheetByName(REQUIRED_SHEETS[i])) {\n          existing.push(REQUIRED_SHEETS[i]);\n        }\n      }\n      return jsonResponse({\n        ok: true,\n        action: 'ping',\n        data: {\n          spreadsheetId: ss.getId(),\n          title: ss.getName(),\n          spreadsheetUrl: ss.getUrl(),\n          existingSheets: existing,\n          missingSheets: REQUIRED_SHEETS.filter(function (s) {\n            return existing.indexOf(s) === -1;\n          }),\n          timestamp: new Date().toISOString(),\n        },\n      });\n    }\n\n    if (action === 'inspectAndLoad') {\n      return jsonResponse({\n        ok: true,\n        action: 'inspectAndLoad',\n        data: inspectSpreadsheetData(ss),\n      });\n    }\n\n    return jsonResponse({\n      ok: false,\n      error: 'Unsupported GET action: ' + action,\n    });\n  } catch (err) {\n    return jsonResponse({\n      ok: false,\n      error: err && err.message ? err.message : String(err),\n    });\n  }\n}\n\nfunction doPost(e) {\n  var lock = LockService.getScriptLock();\n  var lockAcquired = false;\n\n  try {\n    lock.waitLock(20000);\n    lockAcquired = true;\n\n    var rawBody =\n      e && e.postData && e.postData.contents ? e.postData.contents : '{}';\n    var payload = JSON.parse(rawBody);\n    var action = (payload.action || '').toString().trim();\n    var ss = getSpreadsheet(payload.spreadsheetId);\n\n    if (action === 'initializeSchema') {\n      var seedData = payload.seedData || null;\n      for (var i = 0; i < REQUIRED_SHEETS.length; i++) {\n        var tabName = REQUIRED_SHEETS[i];\n        var sheet = ensureSheetWithHeaders(ss, tabName);\n        if (\n          seedData &&\n          Array.isArray(seedData[tabName]) &&\n          seedData[tabName].length > 0 &&\n          sheet.getLastRow() <= 1\n        ) {\n          var normalizedSeed = seedData[tabName].map(function (row) {\n            return normalizeRowToWidth(tabName, row);\n          });\n          sheet\n            .getRange(2, 1, normalizedSeed.length, SHEET_HEADERS[tabName].length)\n            .setValues(normalizedSeed);\n        }\n      }\n      return jsonResponse({\n        ok: true,\n        action: 'initializeSchema',\n        data: inspectSpreadsheetData(ss),\n      });\n    }\n\n    if (action === 'appendRow') {\n      var sheetName = (payload.sheetName || '').toString().trim();\n      var sheetToAppend = ensureSheetWithHeaders(ss, sheetName);\n      var row = normalizeRowToWidth(sheetName, payload.values);\n      var primaryKey = (row[0] || '').toString().trim();\n      if (!primaryKey) {\n        throw new Error(\n          'Primary key (Column A) is required to append a row to ' + sheetName\n        );\n      }\n      var dupRow = findRowByPrimaryKey(sheetToAppend, primaryKey, -1);\n      if (dupRow !== -1) {\n        throw new Error(\n          'Duplicate record blocked: \"' +\n            primaryKey +\n            '\" already exists in ' +\n            sheetName +\n            ' (Row ' +\n            dupRow +\n            ').'\n        );\n      }\n      sheetToAppend.appendRow(row);\n      return jsonResponse({\n        ok: true,\n        action: 'appendRow',\n        data: {\n          sheetName: sheetName,\n          recordId: primaryKey,\n          rowNumber: sheetToAppend.getLastRow(),\n        },\n      });\n    }\n\n    if (action === 'appendRows') {\n      var operations = Array.isArray(payload.operations)\n        ? payload.operations\n        : [];\n      if (operations.length === 0) {\n        throw new Error('appendRows requires at least one operation.');\n      }\n      // Pre-validate all operations for duplicates before mutating any sheet\n      var preparedOps = [];\n      for (var opIdx = 0; opIdx < operations.length; opIdx++) {\n        var op = operations[opIdx];\n        var opSheetName = (op.sheetName || '').toString().trim();\n        var opSheet = ensureSheetWithHeaders(ss, opSheetName);\n        var opRows = Array.isArray(op.rows) ? op.rows : [];\n        var normalizedRows = [];\n        var seenKeys = {};\n\n        for (var rIdx = 0; rIdx < opRows.length; rIdx++) {\n          var normRow = normalizeRowToWidth(opSheetName, opRows[rIdx]);\n          var pk = (normRow[0] || '').toString().trim();\n          var pkUpper = pk.toUpperCase();\n          if (!pk) {\n            throw new Error(\n              'Primary key (Column A) is required in batch append for ' +\n                opSheetName\n            );\n          }\n          if (seenKeys[pkUpper]) {\n            throw new Error(\n              'Duplicate primary key \"' + pk + '\" in batch for ' + opSheetName\n            );\n          }\n          seenKeys[pkUpper] = true;\n          if (findRowByPrimaryKey(opSheet, pk, -1) !== -1) {\n            throw new Error(\n              'Duplicate record blocked: \"' +\n                pk +\n                '\" already exists in ' +\n                opSheetName +\n                '.'\n            );\n          }\n          normalizedRows.push(normRow);\n        }\n\n        preparedOps.push({\n          sheet: opSheet,\n          sheetName: opSheetName,\n          rows: normalizedRows,\n        });\n      }\n\n      for (var wIdx = 0; wIdx < preparedOps.length; wIdx++) {\n        var item = preparedOps[wIdx];\n        if (item.rows.length > 0) {\n          var startRow = item.sheet.getLastRow() + 1;\n          item.sheet\n            .getRange(\n              startRow,\n              1,\n              item.rows.length,\n              SHEET_HEADERS[item.sheetName].length\n            )\n            .setValues(item.rows);\n        }\n      }\n\n      return jsonResponse({\n        ok: true,\n        action: 'appendRows',\n        data: { committedOperations: preparedOps.length },\n      });\n    }\n\n    if (action === 'updateRow') {\n      var updSheetName = (payload.sheetName || '').toString().trim();\n      var updSheet = ss.getSheetByName(updSheetName);\n      if (!updSheet) {\n        throw new Error('Worksheet \"' + updSheetName + '\" does not exist.');\n      }\n      var updRowValues = normalizeRowToWidth(updSheetName, payload.values);\n      var updRecordId = (payload.recordId || updRowValues[0] || '')\n        .toString()\n        .trim();\n      var targetRow = findRowByPrimaryKey(\n        updSheet,\n        updRecordId,\n        payload.rowNumber\n      );\n      if (targetRow === -1) {\n        throw new Error(\n          'Record \"' +\n            updRecordId +\n            '\" was not found in ' +\n            updSheetName +\n            '. Please click Sync Sheet to refresh latest rows.'\n        );\n      }\n      updSheet\n        .getRange(targetRow, 1, 1, updRowValues.length)\n        .setValues([updRowValues]);\n      return jsonResponse({\n        ok: true,\n        action: 'updateRow',\n        data: {\n          sheetName: updSheetName,\n          recordId: updRecordId,\n          rowNumber: targetRow,\n        },\n      });\n    }\n\n    if (action === 'deleteRow') {\n      var delSheetName = (payload.sheetName || '').toString().trim();\n      var delSheet = ss.getSheetByName(delSheetName);\n      if (!delSheet) {\n        throw new Error('Worksheet \"' + delSheetName + '\" does not exist.');\n      }\n      var delRecordId = (payload.recordId || '').toString().trim();\n      if (!delRecordId) {\n        throw new Error('recordId is required to delete a row.');\n      }\n      var delRow = findRowByPrimaryKey(\n        delSheet,\n        delRecordId,\n        payload.rowNumber\n      );\n      if (delRow === -1) {\n        throw new Error(\n          'Record \"' +\n            delRecordId +\n            '\" was not found in ' +\n            delSheetName +\n            '. It may have already been deleted.'\n        );\n      }\n      delSheet.deleteRow(delRow);\n      return jsonResponse({\n        ok: true,\n        action: 'deleteRow',\n        data: {\n          sheetName: delSheetName,\n          recordId: delRecordId,\n          deletedRowNumber: delRow,\n        },\n      });\n    }\n\n    return jsonResponse({\n      ok: false,\n      error: 'Unsupported POST action: ' + action,\n    });\n  } catch (err) {\n    return jsonResponse({\n      ok: false,\n      error: err && err.message ? err.message : String(err),\n    });\n  } finally {\n    if (lockAcquired) {\n      lock.releaseLock();\n    }\n  }\n}\n";
+var APPS_SCRIPT_CODE_GS = "/**\n * SiteTrack Pro — Google Apps Script Web App Database Bridge (Code.gs)\n * API Version: 2.1.0\n *\n * Target Spreadsheet ID (preserved): 1HNmAdZe7POIzIm9mCUPxQJL7p9BoBZEO1hXq6PZNs5M\n *\n * Preserved 8-Worksheet Schema (exact tab names & column orders):\n *   1. Sites             (A:E — 5 cols)  PK: SiteCode (Col A)\n *   2. ProjectTypes      (A:E — 5 cols)  PK: TypeCode (Col A)\n *   3. Projects          (A:L — 12 cols) PK: ProjectID (Col A)\n *   4. SubProjects       (A:J — 10 cols) PK: SubProjectID (Col A)\n *   5. Contractors       (A:G — 7 cols)  PK: ContractorCode (Col A)\n *   6. ContractsTCP      (A:W — 23 cols) PK: ContractID (Col A)\n *   7. ContractPayments  (A:W — 23 cols) PK: PaymentID (Col A)\n *   8. UserAccounts      (A:K — 11 cols) PK: UserID (Col A)\n *\n * Supported GET actions:\n *   - healthCheck     : Verifies spreadsheet ID, worksheets, server timestamp & API version\n *   - ping            : Backward-compatible alias of healthCheck\n *   - inspectAndLoad  : Returns verified metadata + all 8 worksheet tables (no auto-seeding)\n *   - verifyRecord    : Checks if a primary key exists in a worksheet (used for timeout commit checks)\n *\n * Supported POST actions (serialized via LockService + SpreadsheetApp.flush()):\n *   - initializeSchema: Creates missing tabs/headers (optional starter seed for empty lookup tabs)\n *   - appendRow       : Appends a validated row with duplicate primary-key blocking\n *   - appendRows      : Atomically pre-validates and appends multiple rows across sheets\n *   - updateRow       : Updates an existing row verified by primary key\n *   - deleteRow       : Deletes an existing row verified by primary key\n *\n * Deployment Instructions:\n *   1. Open your Google Sheet -> Extensions -> Apps Script.\n *   2. Paste this entire file into Code.gs and Save.\n *   3. Click Deploy -> Manage deployments (or New deployment) -> Web app.\n *   4. Execute as: \"Me\" | Who has access: \"Anyone\".\n *      NOTE: Public Web App access is intended for internal/development testing prior to\n *      production authentication. Add token/OAuth verification before public internet exposure.\n *   5. Copy the Web App URL (https://script.google.com/macros/s/.../exec) into SiteTrack Pro.\n */\n\nvar API_VERSION = '2.1.0';\nvar DEFAULT_SPREADSHEET_ID = '1HNmAdZe7POIzIm9mCUPxQJL7p9BoBZEO1hXq6PZNs5M';\n\nvar REQUIRED_SHEETS = [\n  'Sites',\n  'ProjectTypes',\n  'Projects',\n  'SubProjects',\n  'Contractors',\n  'ContractsTCP',\n  'ContractPayments',\n  'UserAccounts',\n];\n\nvar SHEET_HEADERS = {\n  Sites: ['SiteCode', 'SiteName', 'Developer', 'Location', 'CreatedAt'],\n  ProjectTypes: ['TypeCode', 'TypeName', 'Description', 'Active', 'CreatedAt'],\n  Projects: [\n    'ProjectID',\n    'MainProjectCode',\n    'SiteCode',\n    'SiteName',\n    'Developer',\n    'TypeCode',\n    'TypeName',\n    'UnitIdentifier',\n    'ProjectName',\n    'Status',\n    'CreatedAt',\n    'UpdatedAt',\n  ],\n  SubProjects: [\n    'SubProjectID',\n    'ProjectID',\n    'MainProjectCode',\n    'SubProjectCode',\n    'SubProjectName',\n    'Status',\n    'Progress',\n    'TargetDate',\n    'Remarks',\n    'UpdatedAt',\n  ],\n  Contractors: [\n    'ContractorCode',\n    'ContractorName',\n    'Specialty',\n    'ContactPerson',\n    'ContactInfo',\n    'Active',\n    'CreatedAt',\n  ],\n  ContractsTCP: [\n    'ContractID',\n    'SubProjectID',\n    'SubProjectCode',\n    'SubProjectName',\n    'ProjectID',\n    'MainProjectCode',\n    'TCPType',\n    'TCPAmount',\n    'ContractorCode',\n    'ContractorName',\n    'ContractStatus',\n    'AwardDate',\n    'Remarks',\n    'UpdatedAt',\n    'DPPercent',\n    'ProgressBillingPercent',\n    'RetentionPercent',\n    'HasWithholdingTax',\n    'WithholdingTaxPercent',\n    'PaymentTermsNotes',\n    'TCPID',\n    'ParentContractID',\n    'BIRTaxBreakdownJSON',\n  ],\n  ContractPayments: [\n    'PaymentID',\n    'ContractID',\n    'SubProjectID',\n    'SubProjectCode',\n    'MainProjectCode',\n    'ContractorCode',\n    'ContractorName',\n    'BillingType',\n    'PaymentStatus',\n    'RFPNumber',\n    'RFPDate',\n    'RFPAmount',\n    'RFPPayee',\n    'RetentionDeducted',\n    'RFPRemarks',\n    'CVNumber',\n    'CVDate',\n    'ChequeAmount',\n    'WithheldAmount',\n    'ReceiptType',\n    'ReceiptNumber',\n    'ReceiptDate',\n    'UpdatedAt',\n  ],\n  UserAccounts: [\n    'UserID',\n    'FullName',\n    'Email',\n    'RoleTitle',\n    'Department',\n    'Phone',\n    'Status',\n    'BioNotes',\n    'PermissionsJSON',\n    'CreatedAt',\n    'UpdatedAt',\n  ],\n};\n\nfunction jsonResponse(payload) {\n  return ContentService.createTextOutput(JSON.stringify(payload)).setMimeType(\n    ContentService.MimeType.JSON\n  );\n}\n\nfunction isValidSpreadsheetIdFormat(id) {\n  return /^[a-zA-Z0-9_-]{15,80}$/.test(id);\n}\n\nfunction getSpreadsheet(requestedId) {\n  var raw = (requestedId || '').toString().trim();\n  var id = raw || DEFAULT_SPREADSHEET_ID;\n\n  if (!isValidSpreadsheetIdFormat(id)) {\n    throw new Error(\n      'Invalid Spreadsheet ID format: \"' +\n        id +\n        '\". Expected a Google Sheets document ID.'\n    );\n  }\n\n  var ss = null;\n  try {\n    ss = SpreadsheetApp.openById(id);\n  } catch (err) {\n    // Only fall back to container-bound active spreadsheet if its ID matches exactly\n    var active = SpreadsheetApp.getActiveSpreadsheet();\n    if (active && active.getId() === id) {\n      ss = active;\n    } else {\n      throw new Error(\n        'Unable to open spreadsheet \"' +\n          id +\n          '\". Ensure the Apps Script owner has Editor access to this spreadsheet. Details: ' +\n          (err && err.message ? err.message : String(err))\n      );\n    }\n  }\n\n  if (!ss || ss.getId() !== id) {\n    throw new Error(\n      'Spreadsheet ID mismatch: requested \"' +\n        id +\n        '\" but opened \"' +\n        (ss ? ss.getId() : 'none') +\n        '\".'\n    );\n  }\n\n  return ss;\n}\n\nfunction normalizeCellValue(val) {\n  if (val === null || val === undefined) return '';\n  if (val instanceof Date) {\n    return Utilities.formatDate(\n      val,\n      Session.getScriptTimeZone() || 'UTC',\n      'yyyy-MM-dd'\n    );\n  }\n  if (typeof val === 'boolean') {\n    return val ? 'TRUE' : 'FALSE';\n  }\n  return String(val);\n}\n\nfunction buildHealthPayload(ss) {\n  var existingSheets = [];\n  var missingSheets = [];\n  for (var i = 0; i < REQUIRED_SHEETS.length; i++) {\n    var name = REQUIRED_SHEETS[i];\n    if (ss.getSheetByName(name)) {\n      existingSheets.push(name);\n    } else {\n      missingSheets.push(name);\n    }\n  }\n  var nowIso = new Date().toISOString();\n  return {\n    spreadsheetId: ss.getId(),\n    title: ss.getName(),\n    spreadsheetUrl: ss.getUrl(),\n    existingSheets: existingSheets,\n    missingSheets: missingSheets,\n    isSchemaReady: missingSheets.length === 0,\n    serverTimestamp: nowIso,\n    timestamp: nowIso,\n    apiVersion: API_VERSION,\n  };\n}\n\nfunction inspectSpreadsheetData(ss) {\n  var existingSheets = [];\n  var missingSheets = [];\n  var tables = {};\n\n  for (var i = 0; i < REQUIRED_SHEETS.length; i++) {\n    var name = REQUIRED_SHEETS[i];\n    var sheet = ss.getSheetByName(name);\n    if (!sheet) {\n      missingSheets.push(name);\n      tables[name] = [];\n      continue;\n    }\n    existingSheets.push(name);\n    var lastRow = sheet.getLastRow();\n    var lastCol = Math.max(sheet.getLastColumn(), SHEET_HEADERS[name].length);\n    if (lastRow === 0) {\n      tables[name] = [];\n    } else {\n      var rawValues = sheet.getRange(1, 1, lastRow, lastCol).getValues();\n      var normalized = [];\n      for (var r = 0; r < rawValues.length; r++) {\n        var rowOut = [];\n        for (var c = 0; c < rawValues[r].length; c++) {\n          rowOut.push(normalizeCellValue(rawValues[r][c]));\n        }\n        normalized.push(rowOut);\n      }\n      tables[name] = normalized;\n    }\n  }\n\n  var nowIso = new Date().toISOString();\n  return {\n    spreadsheetId: ss.getId(),\n    title: ss.getName(),\n    spreadsheetUrl: ss.getUrl(),\n    existingSheets: existingSheets,\n    missingSheets: missingSheets,\n    isSchemaReady: missingSheets.length === 0,\n    lastSyncedAt: nowIso,\n    serverTimestamp: nowIso,\n    apiVersion: API_VERSION,\n    tables: tables,\n  };\n}\n\nfunction normalizeRowToWidth(sheetName, values) {\n  var headers = SHEET_HEADERS[sheetName];\n  if (!headers) {\n    throw new Error('Unknown worksheet: ' + sheetName);\n  }\n  if (!Array.isArray(values)) {\n    throw new Error('Row values must be an array.');\n  }\n  var out = [];\n  for (var i = 0; i < headers.length; i++) {\n    out.push(\n      i < values.length && values[i] !== undefined && values[i] !== null\n        ? values[i]\n        : ''\n    );\n  }\n  return out;\n}\n\nfunction ensureSheetWithHeaders(ss, sheetName) {\n  var headers = SHEET_HEADERS[sheetName];\n  if (!headers) {\n    throw new Error('Unknown worksheet: ' + sheetName);\n  }\n  var sheet = ss.getSheetByName(sheetName);\n  if (!sheet) {\n    sheet = ss.insertSheet(sheetName);\n  }\n  if (sheet.getLastRow() === 0) {\n    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);\n    sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold');\n  }\n  return sheet;\n}\n\nfunction findRowByPrimaryKey(sheet, recordId, fallbackRowNumber) {\n  var targetKey = (recordId || '').toString().trim().toUpperCase();\n  var lastRow = sheet.getLastRow();\n  if (lastRow >= 2 && targetKey) {\n    var keyCol = sheet.getRange(2, 1, lastRow - 1, 1).getValues();\n    for (var i = 0; i < keyCol.length; i++) {\n      var cellKey = (keyCol[i][0] || '').toString().trim().toUpperCase();\n      if (cellKey === targetKey) {\n        return i + 2;\n      }\n    }\n  }\n  if (\n    typeof fallbackRowNumber === 'number' &&\n    fallbackRowNumber >= 2 &&\n    fallbackRowNumber <= lastRow\n  ) {\n    var existingKey = (sheet.getRange(fallbackRowNumber, 1).getValue() || '')\n      .toString()\n      .trim()\n      .toUpperCase();\n    if (!targetKey || existingKey === targetKey) {\n      return fallbackRowNumber;\n    }\n  }\n  return -1;\n}\n\nfunction doGet(e) {\n  try {\n    var params = (e && e.parameter) || {};\n    var action = (params.action || 'inspectAndLoad').toString().trim();\n    var spreadsheetId = (params.spreadsheetId || '').toString().trim();\n    var ss = getSpreadsheet(spreadsheetId);\n\n    if (action === 'healthCheck' || action === 'ping') {\n      return jsonResponse({\n        ok: true,\n        action: action,\n        data: buildHealthPayload(ss),\n      });\n    }\n\n    if (action === 'verifyRecord') {\n      var vSheetName = (params.sheetName || '').toString().trim();\n      var vRecordId = (params.recordId || '').toString().trim();\n      if (!SHEET_HEADERS[vSheetName]) {\n        throw new Error('Unknown worksheet: ' + vSheetName);\n      }\n      if (!vRecordId) {\n        throw new Error('recordId is required for verifyRecord.');\n      }\n      var vSheet = ss.getSheetByName(vSheetName);\n      var foundRow = vSheet ? findRowByPrimaryKey(vSheet, vRecordId, -1) : -1;\n      return jsonResponse({\n        ok: true,\n        action: 'verifyRecord',\n        data: {\n          spreadsheetId: ss.getId(),\n          sheetName: vSheetName,\n          recordId: vRecordId,\n          exists: foundRow !== -1,\n          rowNumber: foundRow,\n          serverTimestamp: new Date().toISOString(),\n          apiVersion: API_VERSION,\n        },\n      });\n    }\n\n    if (action === 'inspectAndLoad') {\n      return jsonResponse({\n        ok: true,\n        action: 'inspectAndLoad',\n        data: inspectSpreadsheetData(ss),\n      });\n    }\n\n    return jsonResponse({\n      ok: false,\n      error: 'Unsupported GET action: ' + action,\n      apiVersion: API_VERSION,\n    });\n  } catch (err) {\n    return jsonResponse({\n      ok: false,\n      error: err && err.message ? err.message : String(err),\n      apiVersion: API_VERSION,\n    });\n  }\n}\n\nfunction doPost(e) {\n  var lock = LockService.getScriptLock();\n  var lockAcquired = false;\n\n  try {\n    lock.waitLock(20000);\n    lockAcquired = true;\n\n    var rawBody =\n      e && e.postData && e.postData.contents ? e.postData.contents : '{}';\n    var payload;\n    try {\n      payload = JSON.parse(rawBody);\n    } catch (parseErr) {\n      throw new Error('Invalid JSON request payload.');\n    }\n\n    var action = (payload.action || '').toString().trim();\n    var ss = getSpreadsheet(payload.spreadsheetId);\n\n    if (action === 'initializeSchema') {\n      var seedData = payload.seedData || null;\n      for (var i = 0; i < REQUIRED_SHEETS.length; i++) {\n        var tabName = REQUIRED_SHEETS[i];\n        var sheet = ensureSheetWithHeaders(ss, tabName);\n        if (\n          seedData &&\n          Array.isArray(seedData[tabName]) &&\n          seedData[tabName].length > 0 &&\n          sheet.getLastRow() <= 1\n        ) {\n          var normalizedSeed = seedData[tabName].map(function (row) {\n            return normalizeRowToWidth(tabName, row);\n          });\n          sheet\n            .getRange(2, 1, normalizedSeed.length, SHEET_HEADERS[tabName].length)\n            .setValues(normalizedSeed);\n        }\n      }\n      SpreadsheetApp.flush();\n      return jsonResponse({\n        ok: true,\n        action: 'initializeSchema',\n        data: inspectSpreadsheetData(ss),\n      });\n    }\n\n    if (action === 'appendRow') {\n      var sheetName = (payload.sheetName || '').toString().trim();\n      var sheetToAppend = ensureSheetWithHeaders(ss, sheetName);\n      var row = normalizeRowToWidth(sheetName, payload.values);\n      var primaryKey = (row[0] || '').toString().trim();\n      if (!primaryKey) {\n        throw new Error(\n          'Primary key (Column A) is required to append a row to ' + sheetName\n        );\n      }\n      var dupRow = findRowByPrimaryKey(sheetToAppend, primaryKey, -1);\n      if (dupRow !== -1) {\n        throw new Error(\n          'Duplicate record blocked: \"' +\n            primaryKey +\n            '\" already exists in ' +\n            sheetName +\n            ' (Row ' +\n            dupRow +\n            ').'\n        );\n      }\n      sheetToAppend.appendRow(row);\n      SpreadsheetApp.flush();\n      return jsonResponse({\n        ok: true,\n        action: 'appendRow',\n        data: {\n          spreadsheetId: ss.getId(),\n          sheetName: sheetName,\n          recordId: primaryKey,\n          rowNumber: sheetToAppend.getLastRow(),\n          serverTimestamp: new Date().toISOString(),\n          apiVersion: API_VERSION,\n        },\n      });\n    }\n\n    if (action === 'appendRows') {\n      var operations = Array.isArray(payload.operations)\n        ? payload.operations\n        : [];\n      if (operations.length === 0) {\n        throw new Error('appendRows requires at least one operation.');\n      }\n      // Pre-validate all operations for duplicates before mutating any sheet\n      var preparedOps = [];\n      for (var opIdx = 0; opIdx < operations.length; opIdx++) {\n        var op = operations[opIdx];\n        var opSheetName = (op.sheetName || '').toString().trim();\n        var opSheet = ensureSheetWithHeaders(ss, opSheetName);\n        var opRows = Array.isArray(op.rows) ? op.rows : [];\n        var normalizedRows = [];\n        var seenKeys = {};\n\n        for (var rIdx = 0; rIdx < opRows.length; rIdx++) {\n          var normRow = normalizeRowToWidth(opSheetName, opRows[rIdx]);\n          var pk = (normRow[0] || '').toString().trim();\n          var pkUpper = pk.toUpperCase();\n          if (!pk) {\n            throw new Error(\n              'Primary key (Column A) is required in batch append for ' +\n                opSheetName\n            );\n          }\n          if (seenKeys[pkUpper]) {\n            throw new Error(\n              'Duplicate primary key \"' + pk + '\" in batch for ' + opSheetName\n            );\n          }\n          seenKeys[pkUpper] = true;\n          if (findRowByPrimaryKey(opSheet, pk, -1) !== -1) {\n            throw new Error(\n              'Duplicate record blocked: \"' +\n                pk +\n                '\" already exists in ' +\n                opSheetName +\n                '.'\n            );\n          }\n          normalizedRows.push(normRow);\n        }\n\n        preparedOps.push({\n          sheet: opSheet,\n          sheetName: opSheetName,\n          rows: normalizedRows,\n        });\n      }\n\n      for (var wIdx = 0; wIdx < preparedOps.length; wIdx++) {\n        var item = preparedOps[wIdx];\n        if (item.rows.length > 0) {\n          var startRow = item.sheet.getLastRow() + 1;\n          item.sheet\n            .getRange(\n              startRow,\n              1,\n              item.rows.length,\n              SHEET_HEADERS[item.sheetName].length\n            )\n            .setValues(item.rows);\n        }\n      }\n\n      SpreadsheetApp.flush();\n      return jsonResponse({\n        ok: true,\n        action: 'appendRows',\n        data: {\n          spreadsheetId: ss.getId(),\n          committedOperations: preparedOps.length,\n          serverTimestamp: new Date().toISOString(),\n          apiVersion: API_VERSION,\n        },\n      });\n    }\n\n    if (action === 'updateRow') {\n      var updSheetName = (payload.sheetName || '').toString().trim();\n      var updSheet = ss.getSheetByName(updSheetName);\n      if (!updSheet) {\n        throw new Error('Worksheet \"' + updSheetName + '\" does not exist.');\n      }\n      var updRowValues = normalizeRowToWidth(updSheetName, payload.values);\n      var updRecordId = (payload.recordId || updRowValues[0] || '')\n        .toString()\n        .trim();\n      if (!updRecordId) {\n        throw new Error('recordId is required to update a row.');\n      }\n      var targetRow = findRowByPrimaryKey(\n        updSheet,\n        updRecordId,\n        payload.rowNumber\n      );\n      if (targetRow === -1) {\n        throw new Error(\n          'Record \"' +\n            updRecordId +\n            '\" was not found in ' +\n            updSheetName +\n            '. Please click Sync Now to refresh latest rows.'\n        );\n      }\n      updSheet\n        .getRange(targetRow, 1, 1, updRowValues.length)\n        .setValues([updRowValues]);\n      SpreadsheetApp.flush();\n      return jsonResponse({\n        ok: true,\n        action: 'updateRow',\n        data: {\n          spreadsheetId: ss.getId(),\n          sheetName: updSheetName,\n          recordId: updRecordId,\n          rowNumber: targetRow,\n          serverTimestamp: new Date().toISOString(),\n          apiVersion: API_VERSION,\n        },\n      });\n    }\n\n    if (action === 'deleteRow') {\n      var delSheetName = (payload.sheetName || '').toString().trim();\n      var delSheet = ss.getSheetByName(delSheetName);\n      if (!delSheet) {\n        throw new Error('Worksheet \"' + delSheetName + '\" does not exist.');\n      }\n      var delRecordId = (payload.recordId || '').toString().trim();\n      if (!delRecordId) {\n        throw new Error('recordId is required to delete a row.');\n      }\n      var delRow = findRowByPrimaryKey(\n        delSheet,\n        delRecordId,\n        payload.rowNumber\n      );\n      if (delRow === -1) {\n        throw new Error(\n          'Record \"' +\n            delRecordId +\n            '\" was not found in ' +\n            delSheetName +\n            '. It may have already been deleted.'\n        );\n      }\n      delSheet.deleteRow(delRow);\n      SpreadsheetApp.flush();\n      return jsonResponse({\n        ok: true,\n        action: 'deleteRow',\n        data: {\n          spreadsheetId: ss.getId(),\n          sheetName: delSheetName,\n          recordId: delRecordId,\n          deletedRowNumber: delRow,\n          serverTimestamp: new Date().toISOString(),\n          apiVersion: API_VERSION,\n        },\n      });\n    }\n\n    return jsonResponse({\n      ok: false,\n      error: 'Unsupported POST action: ' + action,\n      apiVersion: API_VERSION,\n    });\n  } catch (err) {\n    return jsonResponse({\n      ok: false,\n      error: err && err.message ? err.message : String(err),\n      apiVersion: API_VERSION,\n    });\n  } finally {\n    if (lockAcquired) {\n      lock.releaseLock();\n    }\n  }\n}\n";
 /**
 * Returns Code.gs with the user's selected Spreadsheet ID substituted into DEFAULT_SPREADSHEET_ID.
 */
@@ -15964,10 +16567,18 @@ function getAppsScriptCodeForSpreadsheet(spreadsheetId) {
 	return APPS_SCRIPT_CODE_GS.replace(/var DEFAULT_SPREADSHEET_ID = '[^']*';/, `var DEFAULT_SPREADSHEET_ID = '${cleanId}';`);
 }
 // src/components/SheetConnectionModal.tsx
-var SheetConnectionModal = ({ isOpen, config, activeMode, isSyncing, onClose, onApplyConnection }) => {
+var HEALTH_LABEL_MAP = {
+	CONNECTING: "CONNECTING",
+	CONNECTED: "CONNECTED",
+	SYNCING: "SYNCING",
+	OFFLINE: "OFFLINE",
+	CONNECTION_ERROR: "CONNECTION ERROR",
+	CONFIGURATION_REQUIRED: "CONFIGURATION REQUIRED"
+};
+var SheetConnectionModal = ({ isOpen, config, activeMode, healthState, isSyncing, onClose, onApplyConnection }) => {
 	const [spreadsheetInput, setSpreadsheetInput] = (0, import_react.useState)(config.spreadsheetId || "1HNmAdZe7POIzIm9mCUPxQJL7p9BoBZEO1hXq6PZNs5M");
 	const [appsScriptUrlInput, setAppsScriptUrlInput] = (0, import_react.useState)(config.appsScriptUrl || "");
-	const [selectedMode, setSelectedMode] = (0, import_react.useState)(config.preferredMode || (config.appsScriptUrl ? "apps_script" : "public_gviz"));
+	const [selectedMode, setSelectedMode] = (0, import_react.useState)(config.preferredMode || "apps_script");
 	const [showScriptCode, setShowScriptCode] = (0, import_react.useState)(false);
 	const [copiedCode, setCopiedCode] = (0, import_react.useState)(false);
 	const [isTesting, setIsTesting] = (0, import_react.useState)(false);
@@ -15976,7 +16587,7 @@ var SheetConnectionModal = ({ isOpen, config, activeMode, isSyncing, onClose, on
 		if (isOpen) {
 			setSpreadsheetInput(config.spreadsheetId || "1HNmAdZe7POIzIm9mCUPxQJL7p9BoBZEO1hXq6PZNs5M");
 			setAppsScriptUrlInput(config.appsScriptUrl || "");
-			setSelectedMode(config.preferredMode || (config.appsScriptUrl ? "apps_script" : "public_gviz"));
+			setSelectedMode(config.preferredMode || "apps_script");
 			setTestResult(null);
 		}
 	}, [isOpen, config]);
@@ -15987,6 +16598,7 @@ var SheetConnectionModal = ({ isOpen, config, activeMode, isSyncing, onClose, on
 	const isScriptValid = isValidAppsScriptUrl(cleanScriptUrl);
 	const scriptSource = getAppsScriptCodeForSpreadsheet(isSheetIdValid ? cleanSpreadsheetId : DEFAULT_SPREADSHEET_ID);
 	const sheetUrl = `https://docs.google.com/spreadsheets/d/${isSheetIdValid ? cleanSpreadsheetId : DEFAULT_SPREADSHEET_ID}/edit`;
+	const lastMeta = config.lastConnectedMeta;
 	const handleCopyCode = async () => {
 		try {
 			await navigator.clipboard.writeText(scriptSource);
@@ -16028,15 +16640,15 @@ var SheetConnectionModal = ({ isOpen, config, activeMode, isSyncing, onClose, on
 		setIsTesting(true);
 		setTestResult(null);
 		try {
-			const ping = await pingAppsScriptBridge(cleanScriptUrl, cleanSpreadsheetId);
+			const health = await pingAppsScriptBridge(cleanScriptUrl, cleanSpreadsheetId);
 			setTestResult({
 				type: "success",
-				message: `Connected to "${ping.title}" — ${ping.existingSheets.length}/8 worksheets detected${ping.missingSheets.length > 0 ? ` (Missing: ${ping.missingSheets.join(", ")})` : " (All 8 tabs ready)"}.`
+				message: `Verified "${health.title}" (ID matched${health.apiVersion ? ` · API v${health.apiVersion}` : ""}) — ${health.existingSheets.length}/8 worksheets found${health.missingSheets.length > 0 ? ` (Missing: ${health.missingSheets.join(", ")})` : " (All 8 tabs verified)"}.`
 			});
 		} catch (err) {
 			setTestResult({
 				type: "error",
-				message: err instanceof Error ? err.message : "Apps Script connection test failed."
+				message: err instanceof Error ? err.message : "Apps Script connection health check failed."
 			});
 		} finally {
 			setIsTesting(false);
@@ -16060,8 +16672,9 @@ var SheetConnectionModal = ({ isOpen, config, activeMode, isSyncing, onClose, on
 		}
 		await onApplyConnection({
 			spreadsheetId: isSheetIdValid ? cleanSpreadsheetId : DEFAULT_SPREADSHEET_ID,
-			appsScriptUrl: isScriptValid ? cleanScriptUrl : "",
-			preferredMode: selectedMode
+			appsScriptUrl: isScriptValid ? cleanScriptUrl : config.appsScriptUrl || "",
+			preferredMode: selectedMode,
+			lastConnectedMeta: config.lastConnectedMeta
 		});
 	};
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
@@ -16076,24 +16689,30 @@ var SheetConnectionModal = ({ isOpen, config, activeMode, isSyncing, onClose, on
 					className: "flex items-center gap-2",
 					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Link2, { className: "h-4 w-4 text-slate-900" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", {
 						className: "text-sm font-bold text-slate-900",
-						children: "Google Sheet Connection & Apps Script Bridge"
+						children: "Google Sheets Connection Settings"
 					}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
 						className: "text-[11px] text-slate-500",
 						children: [
-							"Current Mode:",
+							"Status:",
 							" ",
 							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", {
 								className: "font-mono text-slate-800",
-								children: activeMode === "apps_script" ? "Apps Script Web App (Read & Write)" : activeMode === "public_gviz" ? "Google Sheet CSV (Read-Only)" : "Dev Sandbox (Browser Local Only)"
+								children: HEALTH_LABEL_MAP[healthState]
 							}),
 							" ",
-							"· Saved in browser storage across refreshes"
+							"· Mode:",
+							" ",
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", {
+								className: "font-mono text-slate-800",
+								children: activeMode === "apps_script" ? "Apps Script Web App (Read & Write)" : activeMode === "public_gviz" ? "Sheet CSV (Read-Only Fallback)" : "Dev Sandbox (Browser Local Only)"
+							})
 						]
 					})] })]
 				}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
 					type: "button",
 					onClick: onClose,
 					className: "rounded p-1 text-slate-500 hover:bg-slate-200/60 hover:text-slate-800",
+					"aria-label": "Close connection settings",
 					children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(X, { className: "h-4 w-4" })
 				})]
 			}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("form", {
@@ -16101,6 +16720,29 @@ var SheetConnectionModal = ({ isOpen, config, activeMode, isSyncing, onClose, on
 				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 					className: "p-5 space-y-4 max-h-[75vh] overflow-y-auto",
 					children: [
+						lastMeta && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-2 text-[11px]",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "space-y-0.5",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "font-semibold text-slate-800",
+									children: ["Last Verified Connection: ", lastMeta.spreadsheetTitle]
+								}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "text-slate-500 font-mono",
+									children: [
+										"ID: ",
+										lastMeta.spreadsheetId,
+										lastMeta.apiVersion ? ` · Code.gs v${lastMeta.apiVersion}` : ""
+									]
+								})]
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "text-right text-slate-500",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { children: "Last Synced" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+									className: "font-mono font-semibold text-slate-800",
+									children: formatSyncTimestamp(lastMeta.lastSyncedAt)
+								})]
+							})]
+						}),
 						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 							className: "rounded-lg border border-slate-200 bg-slate-50 p-3.5 space-y-2",
 							children: [
@@ -16166,11 +16808,17 @@ var SheetConnectionModal = ({ isOpen, config, activeMode, isSyncing, onClose, on
 										onClick: () => setSelectedMode("apps_script"),
 										className: `rounded-lg border p-3 text-left transition-colors ${selectedMode === "apps_script" ? "border-emerald-600 bg-emerald-50/70 ring-1 ring-emerald-600" : "border-slate-200 bg-white hover:bg-slate-50"}`,
 										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-											className: "flex items-center gap-1.5 font-bold text-slate-900",
-											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Cloud, { className: "h-3.5 w-3.5 text-emerald-700" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Apps Script (R/W)" })]
+											className: "flex items-center justify-between gap-1",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+												className: "flex items-center gap-1.5 font-bold text-slate-900",
+												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Cloud, { className: "h-3.5 w-3.5 text-emerald-700" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Apps Script (R/W)" })]
+											}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+												className: "rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-emerald-800",
+												children: "Primary"
+											})]
 										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 											className: "mt-1 text-[11px] text-slate-600",
-											children: "Full Create, Read, Update & Delete directly on Google Sheets. Works on GitHub Pages."
+											children: "Required for normal operation. Verified health check + full Create, Read, Update & Delete on Google Sheets."
 										})]
 									}),
 									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
@@ -16182,7 +16830,7 @@ var SheetConnectionModal = ({ isOpen, config, activeMode, isSyncing, onClose, on
 											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Database, { className: "h-3.5 w-3.5 text-blue-700" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Sheet CSV (Read-Only)" })]
 										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 											className: "mt-1 text-[11px] text-slate-600",
-											children: "Reads link-shared Google Sheets without a script. Writes are blocked to prevent fake saves."
+											children: "Explicit read-only viewing for link-shared Google Sheets. Writes are disabled to prevent unsaved changes."
 										})]
 									}),
 									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
@@ -16194,7 +16842,7 @@ var SheetConnectionModal = ({ isOpen, config, activeMode, isSyncing, onClose, on
 											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(FlaskConical, { className: "h-3.5 w-3.5 text-amber-700" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Dev Sandbox (Local)" })]
 										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 											className: "mt-1 text-[11px] text-slate-600",
-											children: "Test CRUD locally using synthetic placeholder data in browser storage only."
+											children: "Test workflows locally using synthetic placeholder records in browser storage only."
 										})]
 									})
 								]
@@ -16213,7 +16861,8 @@ var SheetConnectionModal = ({ isOpen, config, activeMode, isSyncing, onClose, on
 												className: "font-mono",
 												children: "Code.gs"
 											}),
-											" to Your Google Sheet (One-Time Setup)"
+											" ",
+											"(v2.1.0) to Your Google Sheet"
 										]
 									}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 										className: "flex flex-wrap items-center gap-1.5",
@@ -16263,20 +16912,25 @@ var SheetConnectionModal = ({ isOpen, config, activeMode, isSyncing, onClose, on
 										] }),
 										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("li", { children: [
 											"Click ",
-											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Deploy → New deployment → Web app" }),
-											". Set ",
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Deploy → Manage deployments" }),
+											" (edit existing deployment to a ",
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "New version" }),
+											" so your URL stays unchanged) or",
+											" ",
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "New deployment → Web app" }),
+											" with",
+											" ",
 											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Execute as: Me" }),
 											" and",
 											" ",
 											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Who has access: Anyone" }),
-											", then authorize and copy the ",
-											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", {
-												className: "font-mono",
-												children: "/exec"
-											}),
-											" URL."
+											"."
 										] })
 									]
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "flex items-start gap-2 rounded border border-amber-200 bg-amber-50/80 px-3 py-2 text-[11px] text-amber-950",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(ShieldAlert, { className: "h-3.5 w-3.5 text-amber-700 shrink-0 mt-0.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Pre-Auth Notice:" }), " Setting “Who has access: Anyone” allows team testing from GitHub Pages without login. Treat the Web App URL as confidential until authentication is added in production."] })]
 								}),
 								showScriptCode && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("pre", {
 									className: "max-h-56 overflow-auto rounded border border-slate-300 bg-slate-900 p-3 font-mono text-[10px] leading-relaxed text-slate-100",
@@ -16308,7 +16962,7 @@ var SheetConnectionModal = ({ isOpen, config, activeMode, isSyncing, onClose, on
 											disabled: isTesting || !isScriptValid || !isSheetIdValid,
 											onClick: () => void handleTestAppsScript(),
 											className: "inline-flex items-center justify-center gap-1.5 rounded border border-slate-300 bg-white px-3 py-2 font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-40 shrink-0",
-											children: [isTesting ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(LoaderCircle, { className: "h-3.5 w-3.5 animate-spin" }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)(CircleCheck, { className: "h-3.5 w-3.5 text-emerald-700" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Test Connection" })]
+											children: [isTesting ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(LoaderCircle, { className: "h-3.5 w-3.5 animate-spin" }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)(CircleCheck, { className: "h-3.5 w-3.5 text-emerald-700" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Test & Verify" })]
 										})]
 									})]
 								})
@@ -16326,7 +16980,7 @@ var SheetConnectionModal = ({ isOpen, config, activeMode, isSyncing, onClose, on
 					className: "flex items-center justify-between border-t border-slate-200 bg-slate-50 px-5 py-3",
 					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
 						className: "text-[11px] text-slate-500",
-						children: "Connection settings persist automatically in browser storage."
+						children: "Saved permanently in browser storage across refreshes & restarts."
 					}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 						className: "flex items-center gap-2",
 						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
@@ -16338,7 +16992,7 @@ var SheetConnectionModal = ({ isOpen, config, activeMode, isSyncing, onClose, on
 							type: "submit",
 							disabled: isSyncing,
 							className: "inline-flex items-center gap-1.5 rounded bg-slate-900 px-4 py-1.5 font-semibold text-white hover:bg-slate-800 disabled:opacity-50",
-							children: [isSyncing && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(LoaderCircle, { className: "h-3.5 w-3.5 animate-spin" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Save & Sync" })]
+							children: [isSyncing && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(LoaderCircle, { className: "h-3.5 w-3.5 animate-spin" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Save & Connect" })]
 						})]
 					})]
 				})]
@@ -16346,204 +17000,69 @@ var SheetConnectionModal = ({ isOpen, config, activeMode, isSyncing, onClose, on
 		})
 	});
 };
-// src/components/UserAccountsAndProfileView.tsx
-var ActiveUserWorkspaceBar = ({ activeUser, allUsers, onSelectUser, onOpenProfileModal, onOpenAdminAccounts, themeMode, onChangeTheme, isMainAccessLocked = false }) => {
-	const activeUsersList = (0, import_react.useMemo)(() => allUsers.filter((u) => u.status === "ACTIVE" || u.userId === activeUser.userId), [allUsers, activeUser.userId]);
-	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-		className: "flex flex-1 flex-wrap items-center justify-between gap-3 text-xs",
-		children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-			className: "flex flex-wrap items-center gap-1.5 text-slate-700",
+// src/components/FormDrawerModal.tsx
+/**
+* Unified slide-over / centered form modal used across Sites, Contractors,
+* Projects, Contracts, Project Types, and User Accounts so adding, checking,
+* and updating records follows one clear, uncluttered pattern.
+*/
+var FormDrawerModal = ({ isOpen, title, subtitle, size = "lg", onClose, children, footer }) => {
+	(0, import_react.useEffect)(() => {
+		if (!isOpen) return;
+		const handleKey = (e) => {
+			if (e.key === "Escape") onClose();
+		};
+		window.addEventListener("keydown", handleKey);
+		return () => window.removeEventListener("keydown", handleKey);
+	}, [isOpen, onClose]);
+	if (!isOpen) return null;
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+		className: "no-print fixed inset-0 z-50 flex justify-end bg-slate-950/50 backdrop-blur-[1px]",
+		onClick: (e) => {
+			if (e.target === e.currentTarget) onClose();
+		},
+		children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+			role: "dialog",
+			"aria-modal": "true",
+			className: `flex h-full w-full ${size === "xl" ? "max-w-3xl" : size === "lg" ? "max-w-xl" : "max-w-md"} flex-col bg-white shadow-2xl border-l border-slate-200`,
 			children: [
-				/* @__PURE__ */ (0, import_jsx_runtime.jsx)(UserCheck, { className: "h-3.5 w-3.5 text-slate-800 shrink-0" }),
-				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-					className: "text-slate-500",
-					children: "Active Session:"
-				}),
-				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", {
-					className: "font-semibold text-slate-900",
-					children: activeUser.fullName
-				}),
-				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-					className: "text-slate-400",
-					children: "·"
-				}),
-				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-					className: "font-mono text-slate-700",
-					children: activeUser.userId
-				}),
-				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-					className: "text-slate-400",
-					children: "·"
-				}),
-				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-					className: "font-medium text-slate-800",
-					children: activeUser.roleTitle
-				}),
-				activeUser.department && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-					className: "text-slate-400 hidden xl:inline",
-					children: "·"
-				}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-					className: "text-slate-500 hidden xl:inline",
-					children: activeUser.department
-				})] })
-			]
-		}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-			className: "flex flex-wrap items-center gap-2",
-			children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				className: "flex items-center gap-1.5 rounded border border-slate-300 bg-white px-2.5 py-1",
-				children: [
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Palette, { className: "h-3.5 w-3.5 text-slate-600 shrink-0" }),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", {
-						htmlFor: "app-theme-selector",
-						className: "text-[11px] font-semibold text-slate-600 whitespace-nowrap",
-						children: "Themes:"
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("select", {
-						id: "app-theme-selector",
-						value: themeMode,
-						onChange: (e) => onChangeTheme(e.target.value),
-						className: "bg-transparent text-xs font-semibold text-slate-900 focus:outline-none cursor-pointer",
-						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
-							value: "light",
-							children: "Light (Default Slate)"
-						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
-							value: "dark-grey",
-							children: "Dark Mode (Shades of Grey)"
-						})]
-					})
-				]
-			}), !isMainAccessLocked && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
 				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-					className: "flex items-center gap-1.5",
-					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", {
-						htmlFor: "active-user-switcher",
-						className: "text-[11px] font-medium text-slate-500 whitespace-nowrap",
-						children: "Switch Account:"
-					}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("select", {
-						id: "active-user-switcher",
-						value: activeUser.userId,
-						onChange: (e) => onSelectUser(e.target.value),
-						className: "rounded border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-900 focus:border-slate-900 focus:outline-none",
-						children: activeUsersList.map((u) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("option", {
-							value: u.userId,
-							children: [
-								u.userId,
-								" — ",
-								u.fullName,
-								" (",
-								u.roleTitle,
-								")"
-							]
-						}, u.userId))
+					className: "flex items-start justify-between gap-4 border-b border-slate-200 px-6 py-4 bg-slate-50/70 shrink-0",
+					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "min-w-0",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", {
+							className: "text-base font-semibold text-slate-900 truncate",
+							children: title
+						}), subtitle && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+							className: "mt-0.5 text-xs text-slate-500 leading-relaxed",
+							children: subtitle
+						})]
+					}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+						type: "button",
+						onClick: onClose,
+						"aria-label": "Close panel",
+						className: "rounded-md p-1.5 text-slate-500 hover:bg-slate-200/70 hover:text-slate-900 transition-colors shrink-0",
+						children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(X, { className: "h-4 w-4" })
 					})]
 				}),
-				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-					type: "button",
-					onClick: onOpenProfileModal,
-					className: "inline-flex items-center gap-1.5 rounded border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-800 hover:bg-slate-50 transition-colors whitespace-nowrap",
-					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(UserCog, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "My Profile" })]
+				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+					className: "flex-1 overflow-y-auto px-6 py-5",
+					children
 				}),
-				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-					type: "button",
-					onClick: onOpenAdminAccounts,
-					className: "inline-flex items-center gap-1.5 rounded border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-800 hover:bg-slate-50 transition-colors whitespace-nowrap",
-					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Shield, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Account Management" })]
-				})
-			] })]
-		})]
-	});
-};
-var ModulePermissionBanner = ({ moduleLabel, permission, activeUser, onOpenProfileModal, onOpenAdminAccounts }) => {
-	const isFullAccess = permission.view && permission.add && permission.edit;
-	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-		className: `flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 rounded-lg border px-4 py-2.5 text-xs ${isFullAccess ? "border-slate-200 bg-white text-slate-700" : "border-amber-200 bg-amber-50/70 text-amber-900"}`,
-		children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-			className: "flex flex-wrap items-center gap-2",
-			children: [
-				/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Shield, { className: `h-3.5 w-3.5 shrink-0 ${isFullAccess ? "text-slate-700" : "text-amber-700"}` }),
-				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-					className: "font-semibold text-slate-900",
-					children: [moduleLabel, " Access"]
-				}),
-				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-					className: "text-slate-400",
-					children: "·"
-				}),
-				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-					className: "font-mono",
-					children: [
-						"Viewing:",
-						" ",
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", {
-							className: permission.view ? "text-emerald-700" : "text-red-600",
-							children: permission.view ? "Allowed" : "Restricted"
-						})
-					]
-				}),
-				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-					className: "text-slate-400",
-					children: "/"
-				}),
-				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-					className: "font-mono",
-					children: [
-						"Adding:",
-						" ",
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", {
-							className: permission.add ? "text-emerald-700" : "text-amber-700",
-							children: permission.add ? "Allowed" : "Disabled"
-						})
-					]
-				}),
-				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-					className: "text-slate-400",
-					children: "/"
-				}),
-				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-					className: "font-mono",
-					children: [
-						"Editing:",
-						" ",
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", {
-							className: permission.edit ? "text-emerald-700" : "text-amber-700",
-							children: permission.edit ? "Allowed" : "Disabled"
-						})
-					]
+				footer && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+					className: "border-t border-slate-200 bg-slate-50/70 px-6 py-3.5 shrink-0",
+					children: footer
 				})
 			]
-		}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-			className: "flex items-center gap-3 shrink-0",
-			children: [
-				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-					className: "text-slate-500",
-					children: ["Profile: ", /* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", {
-						className: "text-slate-800",
-						children: activeUser.fullName
-					})]
-				}),
-				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-					type: "button",
-					onClick: onOpenProfileModal,
-					className: "font-medium text-slate-700 underline-offset-2 hover:text-slate-900 hover:underline",
-					children: "My Profile"
-				}),
-				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-					className: "text-slate-300",
-					children: "·"
-				}),
-				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-					type: "button",
-					onClick: onOpenAdminAccounts,
-					className: "font-medium text-slate-700 underline-offset-2 hover:text-slate-900 hover:underline",
-					children: "Manage Access"
-				})
-			]
-		})]
+		})
 	});
 };
-var ModuleViewRestrictedState = ({ moduleLabel, activeUser, onSwitchToAdmin, onOpenProfileModal }) => {
+// src/components/UserAccountsAndProfileView.tsx
+var ModuleViewRestrictedState = ({ moduleLabel, moduleTitle, activeUser, onSwitchToAdmin, onOpenAdminAccounts, onOpenProfileModal }) => {
+	const displayLabel = moduleLabel || moduleTitle || "This Module";
+	const primaryAction = onSwitchToAdmin || onOpenAdminAccounts;
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-		className: "rounded-lg border border-slate-200 bg-white p-10 text-center max-w-2xl mx-auto my-6 space-y-4",
+		className: "rounded-xl border border-slate-200 bg-white p-10 text-center max-w-2xl mx-auto my-6 space-y-4",
 		children: [
 			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 				className: "mx-auto flex h-11 w-11 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-slate-800",
@@ -16553,7 +17072,7 @@ var ModuleViewRestrictedState = ({ moduleLabel, activeUser, onSwitchToAdmin, onO
 				className: "space-y-1",
 				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("h2", {
 					className: "text-base font-bold text-slate-900",
-					children: ["Viewing Access Restricted for ", moduleLabel]
+					children: ["Viewing Access Restricted for ", displayLabel]
 				}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
 					className: "text-xs text-slate-600 leading-relaxed",
 					children: [
@@ -16579,22 +17098,22 @@ var ModuleViewRestrictedState = ({ moduleLabel, activeUser, onSwitchToAdmin, onO
 						}),
 						" ",
 						"for the ",
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: moduleLabel }),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: displayLabel }),
 						" module."
 					]
 				})]
 			}),
 			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 				className: "flex flex-wrap items-center justify-center gap-3 pt-2",
-				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+				children: [primaryAction && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
 					type: "button",
-					onClick: onSwitchToAdmin,
-					className: "rounded-md bg-slate-900 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-800 transition-colors",
-					children: "Switch to System Administrator (USR-0001)"
+					onClick: primaryAction,
+					className: "rounded-lg bg-slate-900 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-800 transition-colors",
+					children: onSwitchToAdmin ? "Switch to System Administrator (USR-0001)" : "Manage Access Permissions"
 				}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
 					type: "button",
 					onClick: onOpenProfileModal,
-					className: "rounded-md border border-slate-300 bg-white px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors",
+					className: "rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors",
 					children: "View My Profile & Permissions"
 				})]
 			})
@@ -16958,7 +17477,7 @@ var UserProfileModal = ({ isOpen, activeUser, allUsers, onClose, onSelectUser, o
 	});
 };
 var AdminAccountManagementDashboard = ({ userAccounts, activeUser, canAddAccount, canEditAccount, onSelectActiveUser, onCreateUserAccount, onUpdateUserAccount, onDeleteUserAccount, requestConfirmation }) => {
-	const [isCreateOpen, setIsCreateOpen] = (0, import_react.useState)(true);
+	const [isCreateOpen, setIsCreateOpen] = (0, import_react.useState)(false);
 	const [fullName, setFullName] = (0, import_react.useState)("");
 	const [email, setEmail] = (0, import_react.useState)("");
 	const [roleTitle, setRoleTitle] = (0, import_react.useState)("Project Engineer");
@@ -18016,682 +18535,805 @@ var AdminAccountManagementDashboard = ({ userAccounts, activeUser, canAddAccount
 		]
 	});
 };
-// src/components/ContractorsSheetView.tsx
-function formatCurrency(amount) {
-	return new Intl.NumberFormat("en-PH", {
-		style: "currency",
-		currency: "PHP",
-		minimumFractionDigits: 2,
-		maximumFractionDigits: 2
-	}).format(amount);
+// src/lib/printAttachments.ts
+/**
+* SiteTrack Pro — Formal Printable Record Attachments
+*
+* Generates clean, audit-ready A4 business documents suitable as attachments to
+* payment vouchers, RFPs, project folders, and contractor files.
+*
+* Uses a hidden print iframe (never window.open) so printing works reliably inside
+* iframes, GitHub Pages, Netlify, and Google Sites without popup blockers.
+* All dynamic strings are strictly HTML-escaped.
+*/
+function escapeHtml(value) {
+	return String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
-var ContractorsSheetView = ({ contractors, contractsTCP, modulePermission, activeUser, onSelectActiveUser, onOpenProfileModal, onOpenAdminAccounts, onAddContractor, onUpdateContractor, onDeleteContractor, requestConfirmation }) => {
-	const [contractorName, setContractorName] = (0, import_react.useState)("");
-	const [specialty, setSpecialty] = (0, import_react.useState)("");
-	const [contactPerson, setContactPerson] = (0, import_react.useState)("");
-	const [contactInfo, setContactInfo] = (0, import_react.useState)("");
-	const [active, setActive] = (0, import_react.useState)(true);
-	const [searchQuery, setSearchQuery] = (0, import_react.useState)("");
-	const [editingRow, setEditingRow] = (0, import_react.useState)(null);
-	const [editForm, setEditForm] = (0, import_react.useState)(null);
-	const autoContractorCode = (0, import_react.useMemo)(() => {
-		const existingCodes = new Set(contractors.map((c) => c.contractorCode.toUpperCase()));
-		let maxNum = contractors.length;
-		for (const c of contractors) {
-			const match = c.contractorCode.match(/(\d+)$/);
-			if (match) {
-				const parsed = Number.parseInt(match[1], 10);
-				if (!Number.isNaN(parsed) && parsed > maxNum) maxNum = parsed;
-			}
-		}
-		let nextNum = maxNum + 1;
-		let candidate = `CTR-${String(nextNum).padStart(4, "0")}`;
-		while (existingCodes.has(candidate)) {
-			nextNum += 1;
-			candidate = `CTR-${String(nextNum).padStart(4, "0")}`;
-		}
-		return candidate;
-	}, [contractors]);
-	const duplicateName = (0, import_react.useMemo)(() => {
-		const cleanName = contractorName.trim().toLowerCase();
-		if (!cleanName) return null;
-		return contractors.find((c) => c.contractorName.trim().toLowerCase() === cleanName) || null;
-	}, [contractors, contractorName]);
-	const contractorStats = (0, import_react.useMemo)(() => {
-		const stats = {};
-		for (const c of contractsTCP) {
-			const code = c.contractorCode.toUpperCase();
-			if (!stats[code]) stats[code] = {
-				openCount: 0,
-				closedCount: 0,
-				cancelCount: 0,
-				activeAwardedTCP: 0
-			};
-			if (c.contractStatus === "OPEN") {
-				stats[code].openCount += 1;
-				stats[code].activeAwardedTCP += c.tcpAmount;
-			} else if (c.contractStatus === "CLOSED") {
-				stats[code].closedCount += 1;
-				stats[code].activeAwardedTCP += c.tcpAmount;
-			} else if (c.contractStatus === "CANCEL") stats[code].cancelCount += 1;
-		}
-		return stats;
-	}, [contractsTCP]);
-	const filteredContractors = (0, import_react.useMemo)(() => {
-		const q = searchQuery.trim().toLowerCase();
-		if (!q) return contractors;
-		return contractors.filter((c) => c.contractorCode.toLowerCase().includes(q) || c.contractorName.toLowerCase().includes(q) || c.specialty.toLowerCase().includes(q) || c.contactPerson.toLowerCase().includes(q));
-	}, [contractors, searchQuery]);
-	const handleAddSubmit = (e) => {
-		e.preventDefault();
-		if (!modulePermission.add || !autoContractorCode || !contractorName.trim() || duplicateName) return;
-		requestConfirmation({
-			title: "Add Contractor to Contractors Sheet",
-			description: "This will append a new contractor record with an automatically generated Contractor Code to the \"Contractors\" tab in your connected Google Sheet.",
-			sheetName: SHEET_NAMES.CONTRACTORS,
-			details: [
-				{
-					label: "Auto Contractor Code",
-					value: autoContractorCode
-				},
-				{
-					label: "Contractor Name",
-					value: contractorName.trim()
-				},
-				{
-					label: "Specialty / Trade",
-					value: specialty.trim() || "General"
-				},
-				{
-					label: "Contact Person",
-					value: contactPerson.trim() || "—"
-				},
-				{
-					label: "Contact Info",
-					value: contactInfo.trim() || "—"
-				},
-				{
-					label: "Accreditation Status",
-					value: active ? "Active (Eligible for Award)" : "Inactive"
-				}
-			],
-			confirmLabel: "Confirm & Add Contractor",
-			onConfirm: async () => {
-				await onAddContractor({
-					contractorCode: autoContractorCode,
-					contractorName: contractorName.trim(),
-					specialty: specialty.trim() || "General Contracting",
-					contactPerson: contactPerson.trim(),
-					contactInfo: contactInfo.trim(),
-					active
-				});
-				setContractorName("");
-				setSpecialty("");
-				setContactPerson("");
-				setContactInfo("");
-				setActive(true);
-			}
-		});
-	};
-	const startEditing = (c) => {
-		if (!modulePermission.edit) return;
-		setEditingRow(c.rowNumber);
-		setEditForm({
-			contractorCode: c.contractorCode,
-			contractorName: c.contractorName,
-			specialty: c.specialty,
-			contactPerson: c.contactPerson,
-			contactInfo: c.contactInfo,
-			active: c.active,
-			createdAt: c.createdAt
-		});
-	};
-	const editDuplicateContractorName = (0, import_react.useMemo)(() => {
-		if (!editForm) return null;
-		const cleanName = editForm.contractorName.trim().toLowerCase();
-		if (!cleanName) return null;
-		return contractors.find((c) => c.rowNumber !== editingRow && c.contractorName.trim().toLowerCase() === cleanName) || null;
-	}, [
-		contractors,
-		editForm,
-		editingRow
-	]);
-	const handleSaveEdit = (rowNumber) => {
-		if (!modulePermission.edit || !editForm || !editForm.contractorName.trim() || editDuplicateContractorName) return;
-		requestConfirmation({
-			title: `Update Contractor Row #${rowNumber}`,
-			description: `This will update row ${rowNumber} in the "${SHEET_NAMES.CONTRACTORS}" sheet of your Google Spreadsheet.`,
-			sheetName: `${SHEET_NAMES.CONTRACTORS}!A${rowNumber}:G${rowNumber}`,
-			details: [
-				{
-					label: "Contractor Code",
-					value: editForm.contractorCode
-				},
-				{
-					label: "Contractor Name",
-					value: editForm.contractorName.trim()
-				},
-				{
-					label: "Specialty / Trade",
-					value: editForm.specialty.trim()
-				},
-				{
-					label: "Contact Person",
-					value: editForm.contactPerson.trim() || "—"
-				},
-				{
-					label: "Status",
-					value: editForm.active ? "Active" : "Inactive"
-				}
-			],
-			confirmLabel: "Confirm & Update Contractor",
-			onConfirm: async () => {
-				await onUpdateContractor(rowNumber, {
-					...editForm,
-					contractorName: editForm.contractorName.trim(),
-					specialty: editForm.specialty.trim(),
-					contactPerson: editForm.contactPerson.trim(),
-					contactInfo: editForm.contactInfo.trim()
-				});
-				setEditingRow(null);
-				setEditForm(null);
-			}
-		});
-	};
-	const handleDeleteContractor = (c) => {
-		if (!modulePermission.edit) return;
-		const st = contractorStats[c.contractorCode.toUpperCase()];
-		const linkedContracts = (st?.openCount || 0) + (st?.closedCount || 0) + (st?.cancelCount || 0);
-		requestConfirmation({
-			title: `Delete Contractor — ${c.contractorCode}`,
-			description: `This will permanently delete "${c.contractorCode} (${c.contractorName})" from the "${SHEET_NAMES.CONTRACTORS}" sheet. Contractors with awarded contracts cannot be deleted (mark them Inactive instead).`,
-			sheetName: `${SHEET_NAMES.CONTRACTORS}!A${c.rowNumber}:G${c.rowNumber}`,
-			isDestructive: true,
-			details: [
-				{
-					label: "Contractor Code",
-					value: c.contractorCode
-				},
-				{
-					label: "Contractor Name",
-					value: c.contractorName
-				},
-				{
-					label: "Linked Contracts",
-					value: String(linkedContracts)
-				}
-			],
-			confirmLabel: "Confirm & Delete Contractor",
-			onConfirm: async () => {
-				await onDeleteContractor(c);
-				if (editingRow === c.rowNumber) {
-					setEditingRow(null);
-					setEditForm(null);
-				}
-			}
-		});
-	};
-	if (!modulePermission.view) return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-		className: "space-y-6",
-		children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(ModulePermissionBanner, {
-			moduleKey: "contractors",
-			moduleLabel: "Contractors Directory",
-			permission: modulePermission,
-			activeUser,
-			onOpenProfileModal,
-			onOpenAdminAccounts
-		}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ModuleViewRestrictedState, {
-			moduleLabel: "Contractors Directory",
-			activeUser,
-			onSwitchToAdmin: () => onSelectActiveUser("USR-0001"),
-			onOpenProfileModal
-		})]
+function formatDateReadable(isoOrText) {
+	if (!isoOrText || !isoOrText.trim()) return "—";
+	const raw = isoOrText.trim();
+	const parsed = /* @__PURE__ */ new Date(`${raw.slice(0, 10)}T00:00:00`);
+	if (!Number.isNaN(parsed.getTime()) && /^\d{4}-\d{2}-\d{2}/.test(raw)) return parsed.toLocaleDateString("en-US", {
+		year: "numeric",
+		month: "short",
+		day: "2-digit"
 	});
-	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-		className: "space-y-6",
-		children: [
-			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(ModulePermissionBanner, {
-				moduleKey: "contractors",
-				moduleLabel: "Contractors Directory",
-				permission: modulePermission,
-				activeUser,
-				onOpenProfileModal,
-				onOpenAdminAccounts
-			}),
-			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				className: "flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-b border-slate-200 pb-5",
-				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h1", {
-					className: "text-xl font-bold tracking-tight text-slate-900",
-					children: "Contractor List & Award Directory"
-				}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
-					className: "mt-1 text-sm text-slate-600",
-					children: [
-						"Synced with the",
-						" ",
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-							className: "font-mono font-medium text-slate-800",
-							children: SHEET_NAMES.CONTRACTORS
-						}),
-						" ",
-						"sheet tab. Active contractors can be awarded Sub-Project TCP contracts."
-					]
-				})] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-					className: "flex items-center gap-3 text-xs text-slate-500",
-					children: [
-						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { children: [
-							"Active Contractors:",
-							" ",
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", {
-								className: "font-mono font-semibold text-slate-900 tabular-nums",
-								children: contractors.filter((c) => c.active).length
-							})
-						] }),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-							"aria-hidden": "true",
-							children: "·"
-						}),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { children: [
-							"Total Registered:",
-							" ",
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", {
-								className: "font-mono font-semibold text-slate-900 tabular-nums",
-								children: contractors.length
-							})
-						] })
-					]
-				})]
-			}),
-			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				className: "grid grid-cols-1 lg:grid-cols-12 gap-8 items-start",
-				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-					className: "lg:col-span-4 rounded-lg border border-slate-200 bg-white p-6",
-					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "flex items-center gap-2.5 pb-4 border-b border-slate-200",
-						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(HardHat, { className: "h-4 w-4 text-slate-800" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", {
-							className: "text-sm font-semibold text-slate-900",
-							children: "Register New Contractor"
-						})]
-					}), !modulePermission.add ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "mt-5 rounded-md border border-amber-200 bg-amber-50/70 p-4 text-xs text-amber-900",
-						children: [
-							"Adding new Contractors is disabled for your active user profile (",
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: activeUser.fullName }),
-							")."
-						]
-					}) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("form", {
-						onSubmit: handleAddSubmit,
-						className: "mt-5 space-y-4",
-						children: [
-							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								className: "rounded-md border border-slate-200 bg-slate-50 p-3 flex items-center justify-between",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-									className: "text-xs font-medium text-slate-500",
-									children: "Auto-Generated Contractor Code"
-								}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-									className: "mt-0.5 font-mono text-base font-bold text-slate-900 tabular-nums",
-									children: autoContractorCode
-								})] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-									className: "flex items-center gap-1 text-xs text-emerald-700 font-medium",
-									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CircleCheck, { className: "h-3.5 w-3.5 shrink-0" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Auto-Assigned" })]
-								})]
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
-								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
-									htmlFor: "contractor-name-input",
-									className: "block text-xs font-medium text-slate-700",
-									children: ["Contractor / Company Name ", /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-										className: "text-red-600",
-										children: "*"
-									})]
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-									id: "contractor-name-input",
-									type: "text",
-									value: contractorName,
-									onChange: (e) => setContractorName(e.target.value),
-									placeholder: "e.g. Makati Development Corp.",
-									required: true,
-									className: `mt-1.5 w-full rounded-md border px-3 py-2 text-sm focus:outline-none ${duplicateName ? "border-red-500 bg-red-50/40 text-red-900" : "border-slate-300 bg-white text-slate-900 focus:border-slate-900"}`
-								}),
-								duplicateName && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
-									className: "mt-1.5 flex items-center gap-1.5 text-xs text-red-600",
-									children: [
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CircleAlert, { className: "h-3.5 w-3.5 shrink-0" }),
-										"Contractor already exists under code ",
-										duplicateName.contractorCode,
-										"."
-									]
-								})
-							] }),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", {
-								htmlFor: "contractor-specialty-input",
-								className: "block text-xs font-medium text-slate-700",
-								children: "Specialty / Trade Package"
-							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-								id: "contractor-specialty-input",
-								type: "text",
-								value: specialty,
-								onChange: (e) => setSpecialty(e.target.value),
-								placeholder: "e.g. General Civil, MEPFS, Structural",
-								className: "mt-1.5 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-slate-900 focus:outline-none"
-							})] }),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								className: "grid grid-cols-1 sm:grid-cols-2 gap-3",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", {
-									htmlFor: "contractor-contact-person",
-									className: "block text-xs font-medium text-slate-700",
-									children: "Contact Person"
-								}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-									id: "contractor-contact-person",
-									type: "text",
-									value: contactPerson,
-									onChange: (e) => setContactPerson(e.target.value),
-									placeholder: "Engr. Name",
-									className: "mt-1.5 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-slate-900 focus:outline-none"
-								})] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", {
-									htmlFor: "contractor-contact-info",
-									className: "block text-xs font-medium text-slate-700",
-									children: "Email / Phone"
-								}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-									id: "contractor-contact-info",
-									type: "text",
-									value: contactInfo,
-									onChange: (e) => setContactInfo(e.target.value),
-									placeholder: "email@company.com",
-									className: "mt-1.5 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-slate-900 focus:outline-none"
-								})] })]
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								className: "flex items-center justify-between pt-1",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", {
-									htmlFor: "contractor-active-toggle",
-									className: "text-xs font-medium text-slate-700",
-									children: "Active for Contract Awarding"
-								}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-									id: "contractor-active-toggle",
-									type: "checkbox",
-									checked: active,
-									onChange: (e) => setActive(e.target.checked),
-									className: "h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-900"
-								})]
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-								className: "pt-2",
-								children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-									type: "submit",
-									disabled: !contractorName.trim() || Boolean(duplicateName),
-									className: "flex w-full items-center justify-center gap-2 rounded-md bg-slate-900 px-4 py-2.5 text-xs font-medium text-white hover:bg-slate-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap shrink-0",
-									children: [
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Plus, { className: "h-4 w-4" }),
-										"Add Contractor (",
-										autoContractorCode,
-										")"
-									]
-								})
-							})
-						]
-					})]
-				}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-					className: "lg:col-span-8 rounded-lg border border-slate-200 bg-white",
-					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 px-6 py-4",
-						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", {
-							className: "text-sm font-semibold text-slate-900",
-							children: "Registered Contractors & Awarded TCP Summary"
-						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
-							className: "text-xs text-slate-500",
-							children: [
-								"Displays live contract counts (",
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-									className: "font-mono",
-									children: "OPEN · CLOSED · CANCEL"
-								}),
-								") and cumulative active TCP value per contractor."
-							]
-						})] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-							className: "relative w-full sm:w-64",
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Search, { className: "pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-								type: "text",
-								value: searchQuery,
-								onChange: (e) => setSearchQuery(e.target.value),
-								placeholder: "Search code, contractor, trade...",
-								className: "w-full rounded-md border border-slate-300 bg-slate-50/50 pl-8 pr-3 py-1.5 text-xs text-slate-900 focus:border-slate-900 focus:bg-white focus:outline-none"
-							})]
-						})]
-					}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-						className: "overflow-x-auto",
-						children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("table", {
-							className: "w-full text-left border-collapse",
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("thead", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", {
-								className: "border-b border-slate-200 bg-slate-50/70 text-[11px] font-semibold text-slate-500",
-								children: [
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-										className: "py-2.5 px-4 font-mono",
-										children: "Code"
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-										className: "py-2.5 px-4",
-										children: "Contractor Name"
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-										className: "py-2.5 px-4",
-										children: "Specialty / Trade"
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-										className: "py-2.5 px-4",
-										children: "Contact"
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-										className: "py-2.5 px-4",
-										children: "Contracts (O / C / X)"
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-										className: "py-2.5 px-4 text-right",
-										children: "Net Awarded TCP"
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-										className: "py-2.5 px-4",
-										children: "Status"
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-										className: "py-2.5 px-4 text-right",
-										children: "Actions"
-									})
-								]
-							}) }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tbody", {
-								className: "divide-y divide-slate-200 text-xs",
-								children: filteredContractors.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tr", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
-									colSpan: 8,
-									className: "py-10 px-6 text-center text-slate-500",
-									children: [
-										"No contractors found in the",
-										" ",
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-											className: "font-mono",
-											children: SHEET_NAMES.CONTRACTORS
-										}),
-										" ",
-										"sheet. Add a contractor on the left or seed starter contractors in the Admin & Backend tab."
-									]
-								}) }) : filteredContractors.map((c) => {
-									const isEditing = editingRow === c.rowNumber && editForm;
-									const st = contractorStats[c.contractorCode.toUpperCase()] || {
-										openCount: 0,
-										closedCount: 0,
-										cancelCount: 0,
-										activeAwardedTCP: 0
-									};
-									return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", {
-										className: "hover:bg-slate-50/80 transition-colors",
-										children: [
-											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-												className: "py-3 px-4 font-mono font-semibold text-slate-900 whitespace-nowrap",
-												children: c.contractorCode
-											}),
-											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-												className: "py-3 px-4 font-medium text-slate-900",
-												children: isEditing ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-													className: "space-y-1",
-													children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-														type: "text",
-														value: editForm.contractorName,
-														onChange: (e) => setEditForm({
-															...editForm,
-															contractorName: e.target.value
-														}),
-														className: `w-full rounded border px-2 py-1 text-xs ${editDuplicateContractorName ? "border-red-400 bg-red-50/50 text-red-900" : "border-slate-300"}`
-													}), editDuplicateContractorName && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
-														className: "text-[11px] text-red-600",
-														children: [
-															"Duplicate name (",
-															editDuplicateContractorName.contractorCode,
-															")"
-														]
-													})]
-												}) : c.contractorName
-											}),
-											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-												className: "py-3 px-4 text-slate-600",
-												children: isEditing ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-													type: "text",
-													value: editForm.specialty,
-													onChange: (e) => setEditForm({
-														...editForm,
-														specialty: e.target.value
-													}),
-													className: "w-full rounded border border-slate-300 px-2 py-1 text-xs"
-												}) : c.specialty || "—"
-											}),
-											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-												className: "py-3 px-4 text-slate-600",
-												children: isEditing ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-													className: "space-y-1",
-													children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-														type: "text",
-														value: editForm.contactPerson,
-														onChange: (e) => setEditForm({
-															...editForm,
-															contactPerson: e.target.value
-														}),
-														placeholder: "Person",
-														className: "w-full rounded border border-slate-300 px-2 py-1 text-xs"
-													}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-														type: "text",
-														value: editForm.contactInfo,
-														onChange: (e) => setEditForm({
-															...editForm,
-															contactInfo: e.target.value
-														}),
-														placeholder: "Email/Phone",
-														className: "w-full rounded border border-slate-300 px-2 py-1 text-xs"
-													})]
-												}) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-													className: "font-medium text-slate-800",
-													children: c.contactPerson || "—"
-												}), c.contactInfo && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-													className: "text-[11px] text-slate-500",
-													children: c.contactInfo
-												})] })
-											}),
-											/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
-												className: "py-3 px-4 font-mono tabular-nums whitespace-nowrap",
-												children: [
-													/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-														className: "text-emerald-700 font-semibold",
-														title: "OPEN",
-														children: [st.openCount, " OPEN"]
-													}),
-													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-														className: "text-slate-400 mx-1",
-														children: "/"
-													}),
-													/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-														className: "text-slate-700",
-														title: "CLOSED",
-														children: [st.closedCount, " CLSD"]
-													}),
-													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-														className: "text-slate-400 mx-1",
-														children: "/"
-													}),
-													/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-														className: "text-red-600",
-														title: "CANCEL",
-														children: [st.cancelCount, " CNCL"]
-													})
-												]
-											}),
-											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-												className: "py-3 px-4 text-right font-mono font-semibold text-slate-900 tabular-nums whitespace-nowrap",
-												children: formatCurrency(st.activeAwardedTCP)
-											}),
-											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-												className: "py-3 px-4 whitespace-nowrap",
-												children: isEditing ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
-													className: "inline-flex items-center gap-1.5 text-xs",
-													children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-														type: "checkbox",
-														checked: editForm.active,
-														onChange: (e) => setEditForm({
-															...editForm,
-															active: e.target.checked
-														})
-													}), "Active"]
-												}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-													className: `font-medium ${c.active ? "text-emerald-700" : "text-slate-400"}`,
-													children: c.active ? "Active" : "Inactive"
-												})
-											}),
-											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-												className: "py-3 px-4 text-right whitespace-nowrap",
-												children: !modulePermission.edit ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-													className: "text-[11px] font-mono text-slate-400",
-													children: "Read-Only"
-												}) : isEditing ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-													className: "flex items-center justify-end gap-1.5",
-													children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-														type: "button",
-														onClick: () => handleSaveEdit(c.rowNumber),
-														disabled: !editForm.contractorName.trim() || Boolean(editDuplicateContractorName),
-														className: "rounded bg-slate-900 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-slate-800 disabled:opacity-40",
-														children: "Save"
-													}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-														type: "button",
-														onClick: () => {
-															setEditingRow(null);
-															setEditForm(null);
-														},
-														className: "rounded border border-slate-300 p-1 text-slate-500 hover:bg-slate-100",
-														children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(X, { className: "h-3.5 w-3.5" })
-													})]
-												}) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-													className: "flex items-center justify-end gap-1.5",
-													children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-														type: "button",
-														onClick: () => startEditing(c),
-														className: "inline-flex items-center gap-1 rounded border border-slate-200 px-2 py-1 text-[11px] font-medium text-slate-600 hover:border-slate-300 hover:bg-slate-100",
-														children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(PenLine, { className: "h-3 w-3" }), "Edit"]
-													}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-														type: "button",
-														onClick: () => handleDeleteContractor(c),
-														disabled: st.openCount + st.closedCount + st.cancelCount > 0,
-														title: st.openCount + st.closedCount + st.cancelCount > 0 ? "Cannot delete contractor with awarded contracts; mark Inactive instead" : `Delete contractor ${c.contractorCode}`,
-														className: "inline-flex items-center gap-1 rounded border border-red-200 bg-red-50/60 px-2 py-1 text-[11px] font-medium text-red-700 hover:bg-red-100 disabled:opacity-35 disabled:cursor-not-allowed",
-														children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Trash2, { className: "h-3 w-3" }), "Delete"]
-													})]
-												})
-											})
-										]
-									}, `${c.contractorCode}-${c.rowNumber}`);
-								})
-							})]
-						})
-					})]
-				})]
-			})
-		]
+	return raw;
+}
+function buildPrintDocumentHtml(params) {
+	const { docTitle, docReference, docCategory, preparedBy = "SiteTrack Pro User", orientation = "portrait", bodyHtml } = params;
+	const printedDate = (/* @__PURE__ */ new Date()).toLocaleString("en-US", {
+		year: "numeric",
+		month: "short",
+		day: "2-digit",
+		hour: "2-digit",
+		minute: "2-digit"
 	});
-};
+	return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>${escapeHtml(docTitle)} — ${escapeHtml(docReference)}</title>
+  <style>
+    @page {
+      size: A4 ${orientation};
+      margin: 12mm 12mm 14mm 12mm;
+      @bottom-left {
+        content: "SiteTrack Pro · ${escapeHtml(docReference)}";
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        font-size: 8pt;
+        color: #64748b;
+      }
+      @bottom-right {
+        content: "Page " counter(page) " of " counter(pages);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        font-size: 8pt;
+        color: #64748b;
+      }
+    }
+    * {
+      box-sizing: border-box;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: #ffffff;
+      color: #0f172a;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-size: 9.5pt;
+      line-height: 1.4;
+    }
+    .doc-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      border-bottom: 2px solid #0f172a;
+      padding-bottom: 8px;
+      margin-bottom: 12px;
+      gap: 12px;
+    }
+    .doc-brand {
+      font-size: 13pt;
+      font-weight: 800;
+      letter-spacing: -0.01em;
+      color: #0f172a;
+    }
+    .doc-category {
+      font-size: 8.5pt;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #475569;
+      margin-top: 2px;
+    }
+    .doc-meta {
+      text-align: right;
+      font-size: 8pt;
+      color: #334155;
+      line-height: 1.45;
+    }
+    .doc-meta strong {
+      color: #0f172a;
+    }
+    h2 {
+      font-size: 10pt;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: #0f172a;
+      border-bottom: 1px solid #cbd5e1;
+      padding-bottom: 3px;
+      margin: 14px 0 7px 0;
+      break-after: avoid;
+      page-break-after: avoid;
+    }
+    .meta-grid {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 10px;
+      table-layout: fixed;
+    }
+    .meta-grid td {
+      border: 1px solid #cbd5e1;
+      padding: 5px 8px;
+      vertical-align: top;
+      font-size: 8.5pt;
+      word-break: break-word;
+    }
+    .meta-grid td.k {
+      background: #f1f5f9;
+      font-weight: 700;
+      color: #334155;
+      width: 18%;
+    }
+    .kpi-strip {
+      display: table;
+      width: 100%;
+      table-layout: fixed;
+      border-collapse: separate;
+      border-spacing: 6px 0;
+      margin: 8px -6px 12px -6px;
+    }
+    .kpi-box {
+      display: table-cell;
+      border: 1px solid #cbd5e1;
+      background: #f8fafc;
+      padding: 6px 8px;
+      vertical-align: top;
+    }
+    .kpi-label {
+      font-size: 7.5pt;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: #475569;
+      letter-spacing: 0.03em;
+    }
+    .kpi-val {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 10.5pt;
+      font-weight: 800;
+      color: #0f172a;
+      margin-top: 2px;
+    }
+    .kpi-sub {
+      font-size: 7.5pt;
+      color: #64748b;
+      margin-top: 1px;
+    }
+    table.data-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 10px;
+      font-size: 8pt;
+    }
+    table.data-table thead {
+      display: table-header-group;
+    }
+    table.data-table tr {
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+    table.data-table th {
+      background: #1e293b;
+      color: #ffffff;
+      font-weight: 700;
+      text-align: left;
+      padding: 5px 6px;
+      border: 1px solid #1e293b;
+      font-size: 7.5pt;
+      white-space: nowrap;
+    }
+    table.data-table td {
+      border: 1px solid #cbd5e1;
+      padding: 4.5px 6px;
+      vertical-align: top;
+      word-break: break-word;
+    }
+    table.data-table tbody tr:nth-child(even) {
+      background: #f8fafc;
+    }
+    table.data-table tfoot td {
+      background: #f1f5f9;
+      font-weight: 800;
+      border-top: 1.5px solid #0f172a;
+    }
+    .num {
+      text-align: right;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+    .mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+    .muted {
+      color: #64748b;
+      font-size: 7.5pt;
+    }
+    .badge {
+      display: inline-block;
+      border: 1px solid #94a3b8;
+      border-radius: 3px;
+      padding: 1px 5px;
+      font-size: 7pt;
+      font-weight: 700;
+      text-transform: uppercase;
+      background: #f8fafc;
+      color: #0f172a;
+    }
+    .note-box {
+      border: 1px solid #cbd5e1;
+      background: #f8fafc;
+      padding: 7px 9px;
+      font-size: 8pt;
+      color: #334155;
+      margin-top: 8px;
+    }
+    .signoff {
+      margin-top: 18px;
+      display: table;
+      width: 100%;
+      table-layout: fixed;
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+    .signoff-col {
+      display: table-cell;
+      padding-right: 18px;
+      vertical-align: bottom;
+    }
+    .signoff-line {
+      border-top: 1px solid #334155;
+      margin-top: 26px;
+      padding-top: 3px;
+      font-size: 8pt;
+      color: #334155;
+    }
+    .doc-footer {
+      margin-top: 14px;
+      border-top: 1px solid #cbd5e1;
+      padding-top: 5px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 7.5pt;
+      color: #64748b;
+    }
+  </style>
+</head>
+<body>
+  <div class="doc-header">
+    <div>
+      <div class="doc-brand">SiteTrack Pro</div>
+      <div class="doc-category">${escapeHtml(docCategory)}</div>
+    </div>
+    <div class="doc-meta">
+      <div><strong>Document Ref:</strong> <span class="mono">${escapeHtml(docReference)}</span></div>
+      <div><strong>Printed:</strong> ${escapeHtml(printedDate)}</div>
+      <div><strong>Prepared By:</strong> ${escapeHtml(preparedBy)}</div>
+    </div>
+  </div>
+  ${bodyHtml}
+  <div class="signoff">
+    <div class="signoff-col">
+      <div class="signoff-line"><strong>Prepared By:</strong> ${escapeHtml(preparedBy)}</div>
+    </div>
+    <div class="signoff-col">
+      <div class="signoff-line"><strong>Reviewed / Verified By:</strong> _______________________</div>
+    </div>
+    <div class="signoff-col">
+      <div class="signoff-line"><strong>Approved By:</strong> _______________________</div>
+    </div>
+  </div>
+  <div class="doc-footer">
+    <span>SiteTrack Pro · Project, Contract &amp; Payment Ledger Attachment</span>
+    <span>Reference: ${escapeHtml(docReference)}</span>
+  </div>
+</body>
+</html>`;
+}
+function triggerIframePrint(html) {
+	const existing = document.getElementById("sitetrack-attachment-print-frame");
+	if (existing) existing.remove();
+	const iframe = document.createElement("iframe");
+	iframe.id = "sitetrack-attachment-print-frame";
+	iframe.style.position = "fixed";
+	iframe.style.right = "0";
+	iframe.style.bottom = "0";
+	iframe.style.width = "0";
+	iframe.style.height = "0";
+	iframe.style.border = "0";
+	iframe.style.visibility = "hidden";
+	document.body.appendChild(iframe);
+	const doc = iframe.contentDocument || iframe.contentWindow?.document;
+	if (!doc || !iframe.contentWindow) {
+		iframe.remove();
+		return;
+	}
+	doc.open();
+	doc.write(html);
+	doc.close();
+	const runPrint = () => {
+		try {
+			iframe.contentWindow?.focus();
+			iframe.contentWindow?.print();
+		} finally {
+			window.setTimeout(() => {
+				iframe.remove();
+			}, 1500);
+		}
+	};
+	window.setTimeout(runPrint, 200);
+}
+/**
+* 1. Printable Project Details Attachment
+*/
+function printProjectDetailsAttachment(params) {
+	const { project, subProjects, contracts, payments, preparedBy } = params;
+	const rollups = computeContractRollups(contracts, payments);
+	const activeContracts = contracts.filter((c) => c.contractStatus !== "CANCEL");
+	const totalTcp = activeContracts.reduce((s, c) => roundCurrency(s + c.tcpAmount), 0);
+	const totalPaid = activeContracts.reduce((s, c) => roundCurrency(s + (rollups[c.contractId]?.receivedGrossDeducted || 0)), 0);
+	const totalBalance = activeContracts.reduce((s, c) => roundCurrency(s + (rollups[c.contractId]?.remainingTCPAfterReceived || 0)), 0);
+	const totalRetention = activeContracts.reduce((s, c) => roundCurrency(s + (rollups[c.contractId]?.unreleasedRetentionHoldback || 0)), 0);
+	const subRowsHtml = subProjects.length > 0 ? subProjects.map((sp) => `<tr>
+              <td class="mono">${escapeHtml(sp.subProjectCode)}</td>
+              <td>${escapeHtml(sp.subProjectName)}</td>
+              <td><span class="badge">${escapeHtml(sp.status)}</span></td>
+              <td class="num">${escapeHtml(sp.progress)}%</td>
+              <td>${escapeHtml(formatDateReadable(sp.targetDate))}</td>
+              <td>${escapeHtml(sp.remarks || "—")}</td>
+            </tr>`).join("") : "<tr><td colspan=\"6\" class=\"muted\">No sub-projects linked to this project.</td></tr>";
+	const contractRowsHtml = contracts.length > 0 ? contracts.map((c) => {
+		const r = rollups[c.contractId];
+		return `<tr>
+              <td class="mono">${escapeHtml(c.subProjectCode)}</td>
+              <td>${escapeHtml(c.contractorName)}<div class="muted">${escapeHtml(c.tcpType)} · ${escapeHtml(c.contractStatus)}</div></td>
+              <td>${escapeHtml(formatDateReadable(c.awardDate))}</td>
+              <td class="num">${escapeHtml(formatCurrency(c.tcpAmount))}</td>
+              <td class="num">${escapeHtml(formatCurrency(r?.receivedGrossDeducted || 0))}</td>
+              <td class="num">${escapeHtml(formatCurrency(r?.unreleasedRetentionHoldback || 0))}</td>
+              <td class="num">${escapeHtml(formatCurrency(r?.remainingTCPAfterReceived || 0))}</td>
+            </tr>`;
+	}).join("") : "<tr><td colspan=\"7\" class=\"muted\">No contracts awarded under this project yet.</td></tr>";
+	const bodyHtml = `
+    <table class="meta-grid">
+      <tr>
+        <td class="k">Project Code</td>
+        <td class="mono"><strong>${escapeHtml(project.mainProjectCode)}</strong></td>
+        <td class="k">Status</td>
+        <td><span class="badge">${escapeHtml(project.status)}</span></td>
+      </tr>
+      <tr>
+        <td class="k">Project Name</td>
+        <td colspan="3"><strong>${escapeHtml(project.projectName)}</strong></td>
+      </tr>
+      <tr>
+        <td class="k">Site / Location</td>
+        <td>${escapeHtml(project.siteCode)} — ${escapeHtml(project.siteName)}</td>
+        <td class="k">Developer</td>
+        <td>${escapeHtml(project.developer || "—")}</td>
+      </tr>
+      <tr>
+        <td class="k">Classification</td>
+        <td>${escapeHtml(project.typeCode)} — ${escapeHtml(project.typeName)}</td>
+        <td class="k">Unit / Updated</td>
+        <td>${escapeHtml(project.unitIdentifier || "—")} · Updated ${escapeHtml(formatDateReadable(project.updatedAt))}</td>
+      </tr>
+    </table>
+
+    <div class="kpi-strip">
+      <div class="kpi-box">
+        <div class="kpi-label">Active Contract TCP</div>
+        <div class="kpi-val">${escapeHtml(formatCurrency(totalTcp))}</div>
+        <div class="kpi-sub">${activeContracts.length} active contract(s)</div>
+      </div>
+      <div class="kpi-box">
+        <div class="kpi-label">Gross Paid / Settled</div>
+        <div class="kpi-val">${escapeHtml(formatCurrency(totalPaid))}</div>
+        <div class="kpi-sub">${payments.filter((p) => p.paymentStatus !== "CANCELLED").length} active payment record(s)</div>
+      </div>
+      <div class="kpi-box">
+        <div class="kpi-label">Unreleased Retention</div>
+        <div class="kpi-val">${escapeHtml(formatCurrency(totalRetention))}</div>
+        <div class="kpi-sub">Protected TCP holdback</div>
+      </div>
+      <div class="kpi-box">
+        <div class="kpi-label">Remaining Balance</div>
+        <div class="kpi-val">${escapeHtml(formatCurrency(totalBalance))}</div>
+        <div class="kpi-sub">Safe release: ${escapeHtml(formatCurrency(Math.max(0, roundCurrency(totalBalance - totalRetention))))}</div>
+      </div>
+    </div>
+
+    <h2>1. Linked Sub-Projects (${subProjects.length})</h2>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th style="width:18%">Sub-Project Code</th>
+          <th style="width:24%">Sub-Project Name</th>
+          <th style="width:12%">Status</th>
+          <th style="width:8%" class="num">Prog.</th>
+          <th style="width:13%">Target Date</th>
+          <th style="width:25%">Remarks</th>
+        </tr>
+      </thead>
+      <tbody>${subRowsHtml}</tbody>
+    </table>
+
+    <h2>2. Awarded Contracts Summary (${contracts.length})</h2>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th style="width:18%">Sub-Project</th>
+          <th style="width:24%">Contractor / Type</th>
+          <th style="width:11%">Award Date</th>
+          <th style="width:12%" class="num">TCP Amount</th>
+          <th style="width:12%" class="num">Gross Paid</th>
+          <th style="width:11%" class="num">Ret. Held</th>
+          <th style="width:12%" class="num">Balance</th>
+        </tr>
+      </thead>
+      <tbody>${contractRowsHtml}</tbody>
+      <tfoot>
+        <tr>
+          <td colspan="3">Totals (Active Contracts)</td>
+          <td class="num">${escapeHtml(formatCurrency(totalTcp))}</td>
+          <td class="num">${escapeHtml(formatCurrency(totalPaid))}</td>
+          <td class="num">${escapeHtml(formatCurrency(totalRetention))}</td>
+          <td class="num">${escapeHtml(formatCurrency(totalBalance))}</td>
+        </tr>
+      </tfoot>
+    </table>
+  `;
+	triggerIframePrint(buildPrintDocumentHtml({
+		docTitle: `Project Summary — ${project.mainProjectCode}`,
+		docReference: `PRJ-${project.mainProjectCode}`,
+		docCategory: "Project Details & Financial Summary Attachment",
+		preparedBy,
+		orientation: "portrait",
+		bodyHtml
+	}));
+}
+/**
+* 2. Printable Sub-Project Details Attachment
+*/
+function printSubProjectDetailsAttachment(params) {
+	const { project, subProject, contracts, payments, preparedBy } = params;
+	const rollups = computeContractRollups(contracts, payments);
+	const sortedPayments = [...payments].sort((a, b) => (a.rfpDate || a.updatedAt || "").localeCompare(b.rfpDate || b.updatedAt || ""));
+	const contractRowsHtml = contracts.length > 0 ? contracts.map((c) => {
+		const r = rollups[c.contractId];
+		return `<tr>
+              <td>${escapeHtml(c.contractorName)}<div class="muted">${escapeHtml(c.contractorCode)}</div></td>
+              <td>${escapeHtml(c.tcpType)}</td>
+              <td><span class="badge">${escapeHtml(c.contractStatus)}</span></td>
+              <td>${escapeHtml(formatDateReadable(c.awardDate))}</td>
+              <td class="num">${escapeHtml(formatCurrency(c.tcpAmount))}</td>
+              <td class="num">${escapeHtml(formatCurrency(r?.receivedGrossDeducted || 0))}</td>
+              <td class="num">${escapeHtml(formatCurrency(r?.remainingTCPAfterReceived || 0))}</td>
+            </tr>`;
+	}).join("") : "<tr><td colspan=\"7\" class=\"muted\">No contracts linked to this sub-project.</td></tr>";
+	const paymentRowsHtml = sortedPayments.length > 0 ? sortedPayments.map((p) => `<tr>
+              <td>${escapeHtml(formatDateReadable(p.cvDate || p.rfpDate))}</td>
+              <td class="mono">${escapeHtml(p.rfpNumber || p.paymentId)}</td>
+              <td class="mono">${escapeHtml(p.cvNumber || "—")}</td>
+              <td>${escapeHtml(p.billingType)}</td>
+              <td class="num">${escapeHtml(formatCurrency(p.rfpAmount))}</td>
+              <td class="num">${escapeHtml(formatCurrency(p.withheldAmount))}</td>
+              <td class="num">${escapeHtml(formatCurrency(p.chequeAmount))}</td>
+              <td>${escapeHtml(PAYMENT_STAGE_STATUS_LABELS[p.paymentStatus] || p.paymentStatus)}</td>
+            </tr>`).join("") : "<tr><td colspan=\"8\" class=\"muted\">No payment records recorded for this sub-project.</td></tr>";
+	const bodyHtml = `
+    <table class="meta-grid">
+      <tr>
+        <td class="k">Sub-Project Code</td>
+        <td class="mono"><strong>${escapeHtml(subProject.subProjectCode)}</strong></td>
+        <td class="k">Parent Project</td>
+        <td class="mono">${escapeHtml(subProject.mainProjectCode)}${project ? ` (${escapeHtml(project.siteCode)})` : ""}</td>
+      </tr>
+      <tr>
+        <td class="k">Sub-Project Name</td>
+        <td colspan="3"><strong>${escapeHtml(subProject.subProjectName)}</strong></td>
+      </tr>
+      <tr>
+        <td class="k">Status &amp; Progress</td>
+        <td><span class="badge">${escapeHtml(subProject.status)}</span> · <strong>${escapeHtml(subProject.progress)}%</strong></td>
+        <td class="k">Target Date</td>
+        <td>${escapeHtml(formatDateReadable(subProject.targetDate))}</td>
+      </tr>
+      <tr>
+        <td class="k">Remarks</td>
+        <td colspan="3">${escapeHtml(subProject.remarks || "—")}</td>
+      </tr>
+    </table>
+
+    <h2>1. Linked Contracts (${contracts.length})</h2>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Contractor</th>
+          <th>TCP Type</th>
+          <th>Status</th>
+          <th>Award Date</th>
+          <th class="num">TCP Amount</th>
+          <th class="num">Gross Paid</th>
+          <th class="num">Balance</th>
+        </tr>
+      </thead>
+      <tbody>${contractRowsHtml}</tbody>
+    </table>
+
+    <h2>2. Chronological Payment Activity (${sortedPayments.length})</h2>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>RFP Ref</th>
+          <th>CV #</th>
+          <th>Billing Type</th>
+          <th class="num">RFP Gross</th>
+          <th class="num">WHT (2307)</th>
+          <th class="num">Net Cheque</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>${paymentRowsHtml}</tbody>
+    </table>
+  `;
+	triggerIframePrint(buildPrintDocumentHtml({
+		docTitle: `Sub-Project Details — ${subProject.subProjectCode}`,
+		docReference: `SUB-${subProject.subProjectCode}`,
+		docCategory: "Sub-Project Progress & Cost Attachment",
+		preparedBy,
+		orientation: "portrait",
+		bodyHtml
+	}));
+}
+/**
+* 3. Printable Contract Details & Chronological Payment History Attachment
+* Designed as an official RFP / Check Voucher supporting schedule with running remaining balance.
+*/
+function printContractPaymentHistoryAttachment(params) {
+	const { contract, rollup, payments, preparedBy } = params;
+	const chronological = [...payments].sort((a, b) => {
+		const da = a.rfpDate || a.cvDate || a.updatedAt || "";
+		const db = b.rfpDate || b.cvDate || b.updatedAt || "";
+		return da.localeCompare(db) || a.paymentId.localeCompare(b.paymentId);
+	});
+	let runningBalance = roundCurrency(contract.tcpAmount);
+	let totalRfpGross = 0;
+	let totalRetentionDeducted = 0;
+	let totalWithheld = 0;
+	let totalCheque = 0;
+	const paymentRowsHtml = chronological.length > 0 ? chronological.map((p) => {
+		const isCancelled = p.paymentStatus === "CANCELLED";
+		const isSettled = p.paymentStatus === "CHEQUE_RELEASED" || p.paymentStatus === "RECEIVED";
+		const settledGross = isSettled ? getPaymentSettledGross(p) : 0;
+		if (!isCancelled) {
+			totalRfpGross = roundCurrency(totalRfpGross + (Number(p.rfpAmount) || 0));
+			totalRetentionDeducted = roundCurrency(totalRetentionDeducted + (Number(p.retentionDeducted) || 0));
+			totalWithheld = roundCurrency(totalWithheld + (Number(p.withheldAmount) || 0));
+			if (isSettled) {
+				totalCheque = roundCurrency(totalCheque + (Number(p.chequeAmount) || 0));
+				runningBalance = Math.max(0, roundCurrency(runningBalance - settledGross));
+			}
+		}
+		const receiptLabel = p.receiptNumber ? `${p.receiptType || "OR"} ${p.receiptNumber}` : "—";
+		return `<tr style="${isCancelled ? "opacity:0.55;text-decoration:line-through;" : ""}">
+              <td>${escapeHtml(formatDateReadable(p.cvDate || p.rfpDate))}</td>
+              <td class="mono">${escapeHtml(p.paymentId)}</td>
+              <td class="mono">${escapeHtml(p.rfpNumber || "—")}<div class="muted">CV: ${escapeHtml(p.cvNumber || "—")}</div></td>
+              <td>${escapeHtml(p.billingType)}<div class="muted">${escapeHtml(p.rfpRemarks || "")}</div></td>
+              <td class="num">${escapeHtml(formatCurrency(p.rfpAmount))}</td>
+              <td class="num">${escapeHtml(formatCurrency(p.retentionDeducted))}</td>
+              <td class="num">${escapeHtml(formatCurrency(p.withheldAmount))}</td>
+              <td class="num"><strong>${escapeHtml(formatCurrency(p.chequeAmount))}</strong></td>
+              <td class="num">${isCancelled ? "—" : escapeHtml(formatCurrency(runningBalance))}</td>
+              <td>${escapeHtml(PAYMENT_STAGE_STATUS_LABELS[p.paymentStatus] || p.paymentStatus)}<div class="muted">${escapeHtml(receiptLabel)}</div></td>
+            </tr>`;
+	}).join("") : "<tr><td colspan=\"10\" class=\"muted\">No payment history entries recorded for this contract yet.</td></tr>";
+	const bodyHtml = `
+    <table class="meta-grid">
+      <tr>
+        <td class="k">Project / Sub-Project</td>
+        <td><strong class="mono">${escapeHtml(contract.mainProjectCode)}</strong> · ${escapeHtml(contract.subProjectCode)} (${escapeHtml(contract.subProjectName)})</td>
+        <td class="k">Contract Status</td>
+        <td><span class="badge">${escapeHtml(contract.contractStatus)}</span> · ${escapeHtml(contract.tcpType)}</td>
+      </tr>
+      <tr>
+        <td class="k">Contractor / Payee</td>
+        <td><strong>${escapeHtml(contract.contractorName)}</strong> (${escapeHtml(contract.contractorCode)})</td>
+        <td class="k">Award Date</td>
+        <td>${escapeHtml(formatDateReadable(contract.awardDate))}</td>
+      </tr>
+      <tr>
+        <td class="k">Payment Terms</td>
+        <td>DP: ${escapeHtml(contract.dpPercent)}% · Progress: ${escapeHtml(contract.progressBillingPercent)}% · Retention: ${escapeHtml(contract.retentionPercent)}%</td>
+        <td class="k">BIR Withholding</td>
+        <td>${contract.hasWithholdingTax ? `${escapeHtml(contract.birTaxInfo?.taxMode || "Standard")} (${escapeHtml(formatCurrency(rollup.withholdingTargetAmount))} target)` : "Not Applicable"}</td>
+      </tr>
+      <tr>
+        <td class="k">Remarks / Terms</td>
+        <td colspan="3">${escapeHtml([contract.remarks, contract.paymentTermsNotes].filter(Boolean).join(" · ") || "—")}</td>
+      </tr>
+    </table>
+
+    <div class="kpi-strip">
+      <div class="kpi-box">
+        <div class="kpi-label">Contract TCP</div>
+        <div class="kpi-val">${escapeHtml(formatCurrency(rollup.tcpAmount))}</div>
+        <div class="kpi-sub">Total Contract Price</div>
+      </div>
+      <div class="kpi-box">
+        <div class="kpi-label">Gross Paid / Settled</div>
+        <div class="kpi-val">${escapeHtml(formatCurrency(rollup.receivedGrossDeducted))}</div>
+        <div class="kpi-sub">Cheques: ${escapeHtml(formatCurrency(rollup.receivedChequePaid))}</div>
+      </div>
+      <div class="kpi-box">
+        <div class="kpi-label">WHT (2307) Deducted</div>
+        <div class="kpi-val">${escapeHtml(formatCurrency(rollup.withholdingAlreadyDeducted))}</div>
+        <div class="kpi-sub">Target: ${escapeHtml(formatCurrency(rollup.withholdingTargetAmount))}</div>
+      </div>
+      <div class="kpi-box">
+        <div class="kpi-label">Unreleased Retention</div>
+        <div class="kpi-val">${escapeHtml(formatCurrency(rollup.unreleasedRetentionHoldback))}</div>
+        <div class="kpi-sub">Safe Release: ${escapeHtml(formatCurrency(rollup.safeRemainingProgressBillable))}</div>
+      </div>
+      <div class="kpi-box">
+        <div class="kpi-label">Remaining Balance</div>
+        <div class="kpi-val">${escapeHtml(formatCurrency(rollup.remainingTCPAfterReceived))}</div>
+        <div class="kpi-sub">In-flight RFPs: ${escapeHtml(formatCurrency(rollup.inFlightRFPAmount))}</div>
+      </div>
+    </div>
+
+    <h2>Chronological Payment History &amp; Running Balance (${chronological.length} Record${chronological.length === 1 ? "" : "s"})</h2>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th style="width:9%">Date</th>
+          <th style="width:9%">Payment Ref</th>
+          <th style="width:12%">RFP / CV #</th>
+          <th style="width:17%">Billing Type &amp; Remarks</th>
+          <th style="width:9%" class="num">Gross RFP</th>
+          <th style="width:8%" class="num">Retention</th>
+          <th style="width:8%" class="num">WHT 2307</th>
+          <th style="width:9%" class="num">Net Cheque</th>
+          <th style="width:9%" class="num">Rem. TCP</th>
+          <th style="width:10%">Status / Receipt</th>
+        </tr>
+      </thead>
+      <tbody>${paymentRowsHtml}</tbody>
+      <tfoot>
+        <tr>
+          <td colspan="4">Active Totals (Excl. Cancelled)</td>
+          <td class="num">${escapeHtml(formatCurrency(totalRfpGross))}</td>
+          <td class="num">${escapeHtml(formatCurrency(totalRetentionDeducted))}</td>
+          <td class="num">${escapeHtml(formatCurrency(totalWithheld))}</td>
+          <td class="num">${escapeHtml(formatCurrency(totalCheque))}</td>
+          <td class="num">${escapeHtml(formatCurrency(rollup.remainingTCPAfterReceived))}</td>
+          <td></td>
+        </tr>
+      </tfoot>
+    </table>
+
+    <div class="note-box">
+      <strong>Accounting Basis:</strong> Retention is held TCP money (not a tax) and is subject to applicable BIR Withholding Tax upon release. Running Remaining TCP Balance deducts released/received gross settlements (Net Cheque + Form 2307 WHT).
+    </div>
+  `;
+	triggerIframePrint(buildPrintDocumentHtml({
+		docTitle: `Contract Payment History — ${contract.subProjectCode}`,
+		docReference: `CTR-${contract.contractId}`,
+		docCategory: "Contract Statement & Chronological Payment History",
+		preparedBy,
+		orientation: "landscape",
+		bodyHtml
+	}));
+}
+/**
+* 4. Printable Contractor Information & Contract Summary Attachment
+*/
+function printContractorInfoAttachment(params) {
+	const { contractor, contracts, payments, preparedBy } = params;
+	const rollups = computeContractRollups(contracts, payments);
+	const activeContracts = contracts.filter((c) => c.contractStatus !== "CANCEL");
+	const totalTcp = activeContracts.reduce((s, c) => roundCurrency(s + c.tcpAmount), 0);
+	const totalPaid = activeContracts.reduce((s, c) => roundCurrency(s + (rollups[c.contractId]?.receivedGrossDeducted || 0)), 0);
+	const totalBalance = activeContracts.reduce((s, c) => roundCurrency(s + (rollups[c.contractId]?.remainingTCPAfterReceived || 0)), 0);
+	const rowsHtml = contracts.length > 0 ? contracts.map((c) => {
+		const r = rollups[c.contractId];
+		return `<tr>
+              <td class="mono">${escapeHtml(c.mainProjectCode)}</td>
+              <td>${escapeHtml(c.subProjectCode)} — ${escapeHtml(c.subProjectName)}</td>
+              <td>${escapeHtml(c.tcpType)} · <span class="badge">${escapeHtml(c.contractStatus)}</span></td>
+              <td>${escapeHtml(formatDateReadable(c.awardDate))}</td>
+              <td class="num">${escapeHtml(formatCurrency(c.tcpAmount))}</td>
+              <td class="num">${escapeHtml(formatCurrency(r?.receivedGrossDeducted || 0))}</td>
+              <td class="num">${escapeHtml(formatCurrency(r?.remainingTCPAfterReceived || 0))}</td>
+            </tr>`;
+	}).join("") : "<tr><td colspan=\"7\" class=\"muted\">No contracts currently awarded to this contractor.</td></tr>";
+	const bodyHtml = `
+    <table class="meta-grid">
+      <tr>
+        <td class="k">Contractor Code</td>
+        <td class="mono"><strong>${escapeHtml(contractor.contractorCode)}</strong></td>
+        <td class="k">Accreditation Status</td>
+        <td><span class="badge">${contractor.active ? "ACTIVE" : "INACTIVE"}</span></td>
+      </tr>
+      <tr>
+        <td class="k">Company Name</td>
+        <td colspan="3"><strong>${escapeHtml(contractor.contractorName)}</strong></td>
+      </tr>
+      <tr>
+        <td class="k">Trade Specialty</td>
+        <td>${escapeHtml(contractor.specialty || "—")}</td>
+        <td class="k">Registered Date</td>
+        <td>${escapeHtml(formatDateReadable(contractor.createdAt))}</td>
+      </tr>
+      <tr>
+        <td class="k">Contact Person</td>
+        <td>${escapeHtml(contractor.contactPerson || "—")}</td>
+        <td class="k">Contact Details</td>
+        <td>${escapeHtml(contractor.contactInfo || "—")}</td>
+      </tr>
+    </table>
+
+    <div class="kpi-strip">
+      <div class="kpi-box">
+        <div class="kpi-label">Active Contracts</div>
+        <div class="kpi-val">${activeContracts.length}</div>
+        <div class="kpi-sub">${contracts.length} total on file</div>
+      </div>
+      <div class="kpi-box">
+        <div class="kpi-label">Total Awarded TCP</div>
+        <div class="kpi-val">${escapeHtml(formatCurrency(totalTcp))}</div>
+        <div class="kpi-sub">Active contract value</div>
+      </div>
+      <div class="kpi-box">
+        <div class="kpi-label">Total Gross Settled</div>
+        <div class="kpi-val">${escapeHtml(formatCurrency(totalPaid))}</div>
+        <div class="kpi-sub">Released &amp; received</div>
+      </div>
+      <div class="kpi-box">
+        <div class="kpi-label">Outstanding Balance</div>
+        <div class="kpi-val">${escapeHtml(formatCurrency(totalBalance))}</div>
+        <div class="kpi-sub">Incl. retention holdbacks</div>
+      </div>
+    </div>
+
+    <h2>Awarded Contracts Schedule (${contracts.length})</h2>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th style="width:14%">Project</th>
+          <th style="width:26%">Sub-Project</th>
+          <th style="width:15%">Type / Status</th>
+          <th style="width:11%">Award Date</th>
+          <th style="width:12%" class="num">TCP Amount</th>
+          <th style="width:11%" class="num">Gross Paid</th>
+          <th style="width:11%" class="num">Balance</th>
+        </tr>
+      </thead>
+      <tbody>${rowsHtml}</tbody>
+      <tfoot>
+        <tr>
+          <td colspan="4">Active Contract Totals</td>
+          <td class="num">${escapeHtml(formatCurrency(totalTcp))}</td>
+          <td class="num">${escapeHtml(formatCurrency(totalPaid))}</td>
+          <td class="num">${escapeHtml(formatCurrency(totalBalance))}</td>
+        </tr>
+      </tfoot>
+    </table>
+  `;
+	triggerIframePrint(buildPrintDocumentHtml({
+		docTitle: `Contractor Summary — ${contractor.contractorName}`,
+		docReference: `VND-${contractor.contractorCode}`,
+		docCategory: "Accredited Contractor Profile & Contract Schedule",
+		preparedBy,
+		orientation: "portrait",
+		bodyHtml
+	}));
+}
 // src/components/ProjectCreationAndList.tsx
 var AUTO_CREATION_STATUS = "Started";
 function createInitialSubDraft(index = 1) {
@@ -18705,31 +19347,65 @@ function createInitialSubDraft(index = 1) {
 		remarks: ""
 	};
 }
-var ProjectCreationAndList = ({ sites, projectTypes, projects, subProjects, contractsTCP, modulePermission, canAwardContracts, activeUser, onSelectActiveUser, onOpenProfileModal, onOpenAdminAccounts, onCreateProject, onAddSubProjectToExisting, onUpdateMainProjectStatus, onDeleteMainProject, onUpdateSubProject, onDeleteSubProject, onNavigateTab, onOpenAwardTCPForSubProject, requestConfirmation }) => {
+function getStatusBadgeClass(status) {
+	switch (status) {
+		case "Completed": return "bg-emerald-50 text-emerald-800 border border-emerald-200";
+		case "In Progress": return "bg-blue-50 text-blue-800 border border-blue-200";
+		case "Under Review": return "bg-amber-50 text-amber-800 border border-amber-200";
+		case "Delayed": return "bg-red-50 text-red-700 border border-red-200";
+		default: return "bg-slate-100 text-slate-700 border border-slate-200";
+	}
+}
+var ProjectCreationAndList = ({ sites, projectTypes, projects, subProjects, contractsTCP, contractPayments = [], modulePermission, canAwardContracts, activeUser, onOpenProfileModal, onOpenAdminAccounts, onCreateProject, onAddSubProjectToExisting, onUpdateMainProjectStatus, onDeleteMainProject, onUpdateSubProject, onDeleteSubProject, onNavigateTab, onOpenAwardTCPForSubProject, requestConfirmation }) => {
 	const activeProjectTypes = (0, import_react.useMemo)(() => projectTypes.filter((t) => t.active), [projectTypes]);
-	const [isCreateProjectModalOpen, setIsCreateProjectModalOpen] = (0, import_react.useState)(false);
+	const [searchQuery, setSearchQuery] = (0, import_react.useState)("");
+	const [statusFilter, setStatusFilter] = (0, import_react.useState)("ALL");
+	const [siteFilter, setSiteFilter] = (0, import_react.useState)("ALL");
+	const [sortBy, setSortBy] = (0, import_react.useState)("code");
+	const [sortDir, setSortDir] = (0, import_react.useState)("asc");
+	const [page, setPage] = (0, import_react.useState)(1);
+	const PAGE_SIZE = 15;
+	const [openedProjectId, setOpenedProjectId] = (0, import_react.useState)(null);
+	const [openedPanelTab, setOpenedPanelTab] = (0, import_react.useState)("subprojects");
+	const [isProjectDropdownOpen, setIsProjectDropdownOpen] = (0, import_react.useState)(false);
+	const [projectDropdownSearch, setProjectDropdownSearch] = (0, import_react.useState)("");
+	const [subSearchQuery, setSubSearchQuery] = (0, import_react.useState)("");
+	const dropdownContainerRef = (0, import_react.useRef)(null);
+	(0, import_react.useEffect)(() => {
+		if (!isProjectDropdownOpen) return;
+		const handleClickOutside = (e) => {
+			if (dropdownContainerRef.current && !dropdownContainerRef.current.contains(e.target)) setIsProjectDropdownOpen(false);
+		};
+		document.addEventListener("mousedown", handleClickOutside);
+		return () => document.removeEventListener("mousedown", handleClickOutside);
+	}, [isProjectDropdownOpen]);
+	const [isCreateDrawerOpen, setIsCreateDrawerOpen] = (0, import_react.useState)(false);
 	const [selectedSiteCode, setSelectedSiteCode] = (0, import_react.useState)("");
 	const [selectedTypeCode, setSelectedTypeCode] = (0, import_react.useState)("");
 	const [unitIdentifier, setUnitIdentifier] = (0, import_react.useState)("");
 	const [projectName, setProjectName] = (0, import_react.useState)("");
 	const [subDrafts, setSubDrafts] = (0, import_react.useState)([createInitialSubDraft(1)]);
-	const [isAddSubModalOpen, setIsAddSubModalOpen] = (0, import_react.useState)(false);
-	const [targetParentProjectId, setTargetParentProjectId] = (0, import_react.useState)("");
-	const [newSubDraft, setNewSubDraft] = (0, import_react.useState)(createInitialSubDraft(99));
-	const [searchQuery, setSearchQuery] = (0, import_react.useState)("");
-	const [statusFilter, setStatusFilter] = (0, import_react.useState)("ALL");
-	const [siteFilter, setSiteFilter] = (0, import_react.useState)("ALL");
-	const [typeFilter, setTypeFilter] = (0, import_react.useState)("ALL");
-	const [selectedMainProjectId, setSelectedMainProjectId] = (0, import_react.useState)(null);
-	const [editingSubRow, setEditingSubRow] = (0, import_react.useState)(null);
-	const [editSubForm, setEditSubForm] = (0, import_react.useState)(null);
+	const [createFormError, setCreateFormError] = (0, import_react.useState)(null);
+	const [editingMainProject, setEditingMainProject] = (0, import_react.useState)(null);
+	const [editMainName, setEditMainName] = (0, import_react.useState)("");
+	const [editMainStatus, setEditMainStatus] = (0, import_react.useState)("Started");
+	const [isSubDrawerOpen, setIsSubDrawerOpen] = (0, import_react.useState)(false);
+	const [editingSubProject, setEditingSubProject] = (0, import_react.useState)(null);
+	const [subParentProjectId, setSubParentProjectId] = (0, import_react.useState)("");
+	const [subCodeInput, setSubCodeInput] = (0, import_react.useState)("");
+	const [subNameInput, setSubNameInput] = (0, import_react.useState)("");
+	const [subStatusInput, setSubStatusInput] = (0, import_react.useState)("Started");
+	const [subProgressInput, setSubProgressInput] = (0, import_react.useState)(0);
+	const [subTargetDateInput, setSubTargetDateInput] = (0, import_react.useState)("");
+	const [subRemarksInput, setSubRemarksInput] = (0, import_react.useState)("");
+	const [subFormError, setSubFormError] = (0, import_react.useState)(null);
 	const nextProjectId = (0, import_react.useMemo)(() => {
 		let maxNum = 0;
 		for (const p of projects) {
-			const match = p.projectId.match(/(\d+)$/);
-			if (match) {
-				const num = Number.parseInt(match[1], 10);
-				if (num > maxNum) maxNum = num;
+			const m = p.projectId.match(/(\d+)$/);
+			if (m) {
+				const n = parseInt(m[1], 10);
+				if (!Number.isNaN(n) && n > maxNum) maxNum = n;
 			}
 		}
 		return `PRJ-${String(maxNum + 1).padStart(4, "0")}`;
@@ -18737,255 +19413,70 @@ var ProjectCreationAndList = ({ sites, projectTypes, projects, subProjects, cont
 	const nextSubProjectBaseNum = (0, import_react.useMemo)(() => {
 		let maxNum = 0;
 		for (const sp of subProjects) {
-			const match = sp.subProjectId.match(/(\d+)$/);
-			if (match) {
-				const num = Number.parseInt(match[1], 10);
-				if (num > maxNum) maxNum = num;
+			const m = sp.subProjectId.match(/(\d+)$/);
+			if (m) {
+				const n = parseInt(m[1], 10);
+				if (!Number.isNaN(n) && n > maxNum) maxNum = n;
 			}
 		}
 		return maxNum + 1;
 	}, [subProjects]);
-	const selectedSite = (0, import_react.useMemo)(() => sites.find((s) => s.siteCode === selectedSiteCode) || null, [sites, selectedSiteCode]);
-	const selectedType = (0, import_react.useMemo)(() => activeProjectTypes.find((t) => t.typeCode === selectedTypeCode) || null, [activeProjectTypes, selectedTypeCode]);
-	const normalizedUnitId = (0, import_react.useMemo)(() => {
-		return unitIdentifier.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, "");
-	}, [unitIdentifier]);
-	const assembledMainProjectCode = (0, import_react.useMemo)(() => {
-		return `${selectedSiteCode || "SITECODE"}-${selectedTypeCode || "TYPE"}-${normalizedUnitId || "UNIQUEID"}`;
+	const filteredProjects = (0, import_react.useMemo)(() => {
+		const q = searchQuery.trim().toLowerCase();
+		return projects.filter((p) => {
+			if (statusFilter !== "ALL" && p.status !== statusFilter) return false;
+			if (siteFilter !== "ALL" && p.siteCode !== siteFilter) return false;
+			if (!q) return true;
+			return [
+				p.projectId,
+				p.mainProjectCode,
+				p.projectName,
+				p.siteCode,
+				p.siteName,
+				p.developer,
+				p.typeCode,
+				p.unitIdentifier
+			].join(" ").toLowerCase().includes(q);
+		});
 	}, [
-		selectedSiteCode,
-		selectedTypeCode,
-		normalizedUnitId
+		projects,
+		searchQuery,
+		statusFilter,
+		siteFilter
 	]);
-	const unitDuplicationCheck = (0, import_react.useMemo)(() => {
-		if (!normalizedUnitId) return {
-			isDuplicate: false,
-			reason: "",
-			matchedRecord: null
-		};
-		const existingByUnit = projects.find((p) => p.unitIdentifier.toUpperCase() === normalizedUnitId);
-		if (existingByUnit) return {
-			isDuplicate: true,
-			reason: `Duplicate Unit Identifier: "${normalizedUnitId}" is already registered under Main Project ${existingByUnit.mainProjectCode} (Project ID: ${existingByUnit.projectId}, Row #${existingByUnit.rowNumber}).`,
-			matchedRecord: existingByUnit
-		};
-		if (selectedSiteCode && selectedTypeCode) {
-			const fullCode = `${selectedSiteCode}-${selectedTypeCode}-${normalizedUnitId}`;
-			const existingByCode = projects.find((p) => p.mainProjectCode.toUpperCase() === fullCode);
-			if (existingByCode) return {
-				isDuplicate: true,
-				reason: `Duplicate Main Project Code: "${fullCode}" already exists (Project ID: ${existingByCode.projectId}, Row #${existingByCode.rowNumber}).`,
-				matchedRecord: existingByCode
-			};
-		}
-		return {
-			isDuplicate: false,
-			reason: "",
-			matchedRecord: null
-		};
-	}, [
-		normalizedUnitId,
-		selectedSiteCode,
-		selectedTypeCode,
-		projects
-	]);
-	const subDraftValidation = (0, import_react.useMemo)(() => {
-		const results = {};
-		const seenCodesInForm = /* @__PURE__ */ new Map();
-		const seenNamesInForm = /* @__PURE__ */ new Map();
-		subDrafts.forEach((draft, idx) => {
-			const cleanCode = draft.subProjectCode.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, "");
-			const cleanName = draft.subProjectName.trim().toLowerCase();
-			let codeError = null;
-			let nameError = null;
-			if (cleanCode) {
-				const dbMatchCode = subProjects.find((sp) => sp.subProjectCode.toUpperCase() === cleanCode);
-				if (dbMatchCode) codeError = `Duplicate Sub-Project Code "${cleanCode}" already exists in database (Linked to ${dbMatchCode.mainProjectCode}, Row #${dbMatchCode.rowNumber}).`;
-				else if (seenCodesInForm.has(cleanCode)) codeError = `Duplicate Sub-Project Code "${cleanCode}" entered multiple times in this form (Sub-Project #${(seenCodesInForm.get(cleanCode) || 0) + 1}).`;
-				else seenCodesInForm.set(cleanCode, idx);
-			}
-			if (cleanName) {
-				const dbMatchName = subProjects.find((sp) => sp.subProjectName.trim().toLowerCase() === cleanName && sp.subProjectCode.toUpperCase() === cleanCode);
-				if (dbMatchName && !codeError) nameError = `Sub-Project "${draft.subProjectName.trim()}" already exists in database (Row #${dbMatchName.rowNumber}).`;
-				else if (seenNamesInForm.has(cleanName)) nameError = `Duplicate Sub-Project Name "${draft.subProjectName.trim()}" entered in Sub-Project #${(seenNamesInForm.get(cleanName) || 0) + 1}.`;
-				else seenNamesInForm.set(cleanName, idx);
-			}
-			results[draft.id] = {
-				codeError,
-				nameError,
-				isValid: Boolean(cleanCode) && Boolean(draft.subProjectName.trim()) && !codeError && !nameError
-			};
-		});
-		return results;
-	}, [subDrafts, subProjects]);
-	const allSubDraftsValid = (0, import_react.useMemo)(() => {
-		if (subDrafts.length === 0) return false;
-		return subDrafts.every((d) => subDraftValidation[d.id]?.isValid);
-	}, [subDrafts, subDraftValidation]);
-	const canSubmitNewProject = Boolean(selectedSite) && Boolean(selectedType) && Boolean(normalizedUnitId) && !unitDuplicationCheck.isDuplicate && subDrafts.length >= 1 && allSubDraftsValid;
-	const handleAddSubDraftRow = () => {
-		setSubDrafts((prev) => [...prev, createInitialSubDraft(prev.length + 1)]);
+	const openedProject = (0, import_react.useMemo)(() => openedProjectId ? projects.find((p) => p.projectId === openedProjectId) || null : null, [projects, openedProjectId]);
+	const cycleProjectsList = (0, import_react.useMemo)(() => filteredProjects.length > 0 ? filteredProjects : projects, [filteredProjects, projects]);
+	const currentCycleIndex = (0, import_react.useMemo)(() => {
+		if (!openedProject) return -1;
+		return cycleProjectsList.findIndex((p) => p.projectId === openedProject.projectId);
+	}, [cycleProjectsList, openedProject]);
+	const handleCyclePrevProject = () => {
+		if (cycleProjectsList.length === 0) return;
+		const prevIdx = currentCycleIndex <= 0 ? cycleProjectsList.length - 1 : currentCycleIndex - 1;
+		setOpenedProjectId(cycleProjectsList[prevIdx].projectId);
+		setIsProjectDropdownOpen(false);
 	};
-	const handleRemoveSubDraftRow = (id) => {
-		if (subDrafts.length <= 1) return;
-		setSubDrafts((prev) => prev.filter((item) => item.id !== id));
+	const handleCycleNextProject = () => {
+		if (cycleProjectsList.length === 0) return;
+		const nextIdx = currentCycleIndex < 0 || currentCycleIndex >= cycleProjectsList.length - 1 ? 0 : currentCycleIndex + 1;
+		setOpenedProjectId(cycleProjectsList[nextIdx].projectId);
+		setIsProjectDropdownOpen(false);
 	};
-	const handleUpdateSubDraft = (id, field, value) => {
-		setSubDrafts((prev) => prev.map((item) => item.id === id ? {
-			...item,
-			[field]: value
-		} : item));
-	};
-	const handleCreateProjectSubmit = (e) => {
-		e.preventDefault();
-		if (!canSubmitNewProject || !selectedSite || !selectedType) return;
-		const finalMainCode = `${selectedSite.siteCode}-${selectedType.typeCode}-${normalizedUnitId}`;
-		const finalTitle = projectName.trim() || `${selectedSite.siteName} — ${selectedType.typeName} (${normalizedUnitId})`;
-		const preparedSubProjects = subDrafts.map((d, idx) => ({
-			subProjectId: `SUB-${String(nextSubProjectBaseNum + idx).padStart(4, "0")}`,
-			subProjectCode: d.subProjectCode.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, ""),
-			subProjectName: d.subProjectName.trim(),
-			status: AUTO_CREATION_STATUS,
-			progress: 0,
-			targetDate: d.targetDate.trim(),
-			remarks: d.remarks.trim()
-		}));
-		const createdProjId = nextProjectId;
-		requestConfirmation({
-			title: "Create Main Project & Linked Sub-Project(s)",
-			description: `This will write 1 Main Project record to "${SHEET_NAMES.PROJECTS}" and ${preparedSubProjects.length} linked Sub-Project record(s) to "${SHEET_NAMES.SUB_PROJECTS}" with automatic "${AUTO_CREATION_STATUS}" status.`,
-			sheetName: `${SHEET_NAMES.PROJECTS} & ${SHEET_NAMES.SUB_PROJECTS}`,
-			details: [
-				{
-					label: "Project ID",
-					value: createdProjId
-				},
-				{
-					label: "Main Project Code",
-					value: finalMainCode
-				},
-				{
-					label: "Site & Developer",
-					value: `${selectedSite.siteCode} · ${selectedSite.siteName} (${selectedSite.developer})`
-				},
-				{
-					label: "Project Type",
-					value: `${selectedType.typeCode} — ${selectedType.typeName}`
-				},
-				{
-					label: "Unique Unit Identifier",
-					value: normalizedUnitId
-				},
-				{
-					label: "Auto Status on Creation",
-					value: AUTO_CREATION_STATUS
-				},
-				{
-					label: `Linked Sub-Projects (${preparedSubProjects.length})`,
-					value: preparedSubProjects.map((sp) => `${sp.subProjectCode} (${sp.subProjectName})`).join(", ")
-				}
-			],
-			confirmLabel: "Confirm & Create Project",
-			onConfirm: async () => {
-				await onCreateProject({
-					projectId: createdProjId,
-					mainProjectCode: finalMainCode,
-					siteCode: selectedSite.siteCode,
-					siteName: selectedSite.siteName,
-					developer: selectedSite.developer,
-					typeCode: selectedType.typeCode,
-					typeName: selectedType.typeName,
-					unitIdentifier: normalizedUnitId,
-					projectName: finalTitle,
-					status: AUTO_CREATION_STATUS
-				}, preparedSubProjects);
-				setUnitIdentifier("");
-				setProjectName("");
-				setSubDrafts([createInitialSubDraft(1)]);
-				setIsCreateProjectModalOpen(false);
-				setSelectedMainProjectId(createdProjId);
-			}
-		});
-	};
-	const existingModalSubCheck = (0, import_react.useMemo)(() => {
-		const cleanCode = newSubDraft.subProjectCode.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, "");
-		if (!cleanCode) return {
-			isDuplicate: false,
-			message: ""
-		};
-		const matched = subProjects.find((sp) => sp.subProjectCode.toUpperCase() === cleanCode);
-		if (matched) return {
-			isDuplicate: true,
-			message: `Duplicate Sub-Project Code "${cleanCode}" already exists in database (Linked to ${matched.mainProjectCode}, Row #${matched.rowNumber}).`
-		};
-		return {
-			isDuplicate: false,
-			message: ""
-		};
-	}, [newSubDraft.subProjectCode, subProjects]);
-	const targetParentProject = (0, import_react.useMemo)(() => projects.find((p) => p.projectId === targetParentProjectId) || null, [projects, targetParentProjectId]);
-	const openAddSubProjectPopup = (project) => {
-		const chosenId = project?.projectId || selectedMainProjectId || projects[0]?.projectId || "";
-		setTargetParentProjectId(chosenId);
-		setNewSubDraft(createInitialSubDraft(99));
-		setIsAddSubModalOpen(true);
-	};
-	const handleAddSubToExistingSubmit = (e) => {
-		e.preventDefault();
-		if (!targetParentProject) return;
-		const cleanCode = newSubDraft.subProjectCode.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, "");
-		if (!cleanCode || !newSubDraft.subProjectName.trim() || existingModalSubCheck.isDuplicate) return;
-		const subId = `SUB-${String(nextSubProjectBaseNum).padStart(4, "0")}`;
-		requestConfirmation({
-			title: `Link New Sub-Project to ${targetParentProject.mainProjectCode}`,
-			description: `This will append a new Sub-Project linked to Project ID ${targetParentProject.projectId} in the "${SHEET_NAMES.SUB_PROJECTS}" sheet with automatic "${AUTO_CREATION_STATUS}" status.`,
-			sheetName: SHEET_NAMES.SUB_PROJECTS,
-			details: [
-				{
-					label: "Parent Project ID",
-					value: targetParentProject.projectId
-				},
-				{
-					label: "Main Project Code",
-					value: targetParentProject.mainProjectCode
-				},
-				{
-					label: "Sub-Project ID",
-					value: subId
-				},
-				{
-					label: "Sub-Project Code",
-					value: cleanCode
-				},
-				{
-					label: "Sub-Project Name",
-					value: newSubDraft.subProjectName.trim()
-				},
-				{
-					label: "Auto Status on Creation",
-					value: AUTO_CREATION_STATUS
-				}
-			],
-			confirmLabel: "Confirm & Link Sub-Project",
-			onConfirm: async () => {
-				await onAddSubProjectToExisting({
-					subProjectId: subId,
-					projectId: targetParentProject.projectId,
-					mainProjectCode: targetParentProject.mainProjectCode,
-					subProjectCode: cleanCode,
-					subProjectName: newSubDraft.subProjectName.trim(),
-					status: AUTO_CREATION_STATUS,
-					progress: 0,
-					targetDate: newSubDraft.targetDate.trim(),
-					remarks: newSubDraft.remarks.trim()
-				});
-				setIsAddSubModalOpen(false);
-				setNewSubDraft(createInitialSubDraft(99));
-				setSelectedMainProjectId(targetParentProject.projectId);
-			}
-		});
-	};
-	const subProjectsByProjectId = (0, import_react.useMemo)(() => {
+	const dropdownFilteredProjects = (0, import_react.useMemo)(() => {
+		const q = projectDropdownSearch.trim().toLowerCase();
+		if (!q) return projects;
+		return projects.filter((p) => [
+			p.projectId,
+			p.mainProjectCode,
+			p.projectName,
+			p.siteCode,
+			p.siteName,
+			p.developer,
+			p.typeCode,
+			p.unitIdentifier
+		].join(" ").toLowerCase().includes(q));
+	}, [projects, projectDropdownSearch]);
+	const subProjectsByProject = (0, import_react.useMemo)(() => {
 		const map = {};
 		for (const sp of subProjects) {
 			if (!map[sp.projectId]) map[sp.projectId] = [];
@@ -18993,228 +19484,392 @@ var ProjectCreationAndList = ({ sites, projectTypes, projects, subProjects, cont
 		}
 		return map;
 	}, [subProjects]);
-	const tcpBySubProjectId = (0, import_react.useMemo)(() => {
-		const map = {};
-		for (const c of contractsTCP) {
-			if (!map[c.subProjectId]) map[c.subProjectId] = {
-				netTCP: 0,
-				contracts: []
-			};
-			map[c.subProjectId].contracts.push(c);
-			if (c.contractStatus !== "CANCEL") map[c.subProjectId].netTCP += c.tcpAmount;
-		}
-		return map;
-	}, [contractsTCP]);
-	const tcpByProjectId = (0, import_react.useMemo)(() => {
+	const tcpStatsByProject = (0, import_react.useMemo)(() => {
 		const map = {};
 		for (const c of contractsTCP) {
 			if (c.contractStatus === "CANCEL") continue;
-			map[c.projectId] = (map[c.projectId] || 0) + c.tcpAmount;
+			if (!map[c.projectId]) map[c.projectId] = {
+				count: 0,
+				totalTcp: 0
+			};
+			map[c.projectId].count += 1;
+			map[c.projectId].totalTcp += Number(c.tcpAmount) || 0;
 		}
 		return map;
 	}, [contractsTCP]);
-	const totalActivePortfolioTCP = (0, import_react.useMemo)(() => {
-		return contractsTCP.filter((c) => c.contractStatus !== "CANCEL").reduce((acc, c) => acc + c.tcpAmount, 0);
+	const contractsBySubProject = (0, import_react.useMemo)(() => {
+		const map = {};
+		for (const c of contractsTCP) {
+			if (c.contractStatus === "CANCEL") continue;
+			if (!map[c.subProjectId]) map[c.subProjectId] = {
+				count: 0,
+				totalTcp: 0
+			};
+			map[c.subProjectId].count += 1;
+			map[c.subProjectId].totalTcp += Number(c.tcpAmount) || 0;
+		}
+		return map;
 	}, [contractsTCP]);
-	const filteredProjects = (0, import_react.useMemo)(() => {
-		const q = searchQuery.trim().toLowerCase();
-		return projects.filter((p) => {
-			if (statusFilter !== "ALL" && p.status !== statusFilter) return false;
-			if (siteFilter !== "ALL" && p.siteCode !== siteFilter) return false;
-			if (typeFilter !== "ALL" && p.typeCode !== typeFilter) return false;
-			if (!q) return true;
-			const linkedSubs = subProjectsByProjectId[p.projectId] || [];
-			const matchesMain = p.projectId.toLowerCase().includes(q) || p.mainProjectCode.toLowerCase().includes(q) || p.siteCode.toLowerCase().includes(q) || p.siteName.toLowerCase().includes(q) || p.developer.toLowerCase().includes(q) || p.typeCode.toLowerCase().includes(q) || p.unitIdentifier.toLowerCase().includes(q) || p.projectName.toLowerCase().includes(q);
-			const matchesSub = linkedSubs.some((sp) => sp.subProjectCode.toLowerCase().includes(q) || sp.subProjectName.toLowerCase().includes(q) || sp.subProjectId.toLowerCase().includes(q));
-			return matchesMain || matchesSub;
+	const contractRollups = (0, import_react.useMemo)(() => computeContractRollups(contractsTCP, contractPayments), [contractsTCP, contractPayments]);
+	const sortedProjects = (0, import_react.useMemo)(() => {
+		const dir = sortDir === "asc" ? 1 : -1;
+		return [...filteredProjects].sort((a, b) => {
+			if (sortBy === "code") return a.mainProjectCode.localeCompare(b.mainProjectCode) * dir;
+			if (sortBy === "name") return (a.projectName || "").localeCompare(b.projectName || "") * dir;
+			if (sortBy === "site") return a.siteCode.localeCompare(b.siteCode) * dir;
+			if (sortBy === "status") return a.status.localeCompare(b.status) * dir;
+			if (sortBy === "subs") return ((subProjectsByProject[a.projectId] || []).length - (subProjectsByProject[b.projectId] || []).length) * dir;
+			return ((tcpStatsByProject[a.projectId]?.totalTcp || 0) - (tcpStatsByProject[b.projectId]?.totalTcp || 0)) * dir;
 		});
 	}, [
-		projects,
-		subProjectsByProjectId,
-		searchQuery,
-		statusFilter,
-		siteFilter,
-		typeFilter
-	]);
-	(0, import_react.useEffect)(() => {
-		if (filteredProjects.length === 0) return;
-		const stillVisible = filteredProjects.some((p) => p.projectId === selectedMainProjectId);
-		if (!selectedMainProjectId || !stillVisible) setSelectedMainProjectId(filteredProjects[0].projectId);
-	}, [filteredProjects, selectedMainProjectId]);
-	const activeMainProject = (0, import_react.useMemo)(() => {
-		return filteredProjects.find((p) => p.projectId === selectedMainProjectId) || projects.find((p) => p.projectId === selectedMainProjectId) || filteredProjects[0] || null;
-	}, [
 		filteredProjects,
-		projects,
-		selectedMainProjectId
+		sortBy,
+		sortDir,
+		subProjectsByProject,
+		tcpStatsByProject
 	]);
-	const activeProjectSubProjects = (0, import_react.useMemo)(() => {
-		if (!activeMainProject) return [];
-		return subProjectsByProjectId[activeMainProject.projectId] || [];
-	}, [activeMainProject, subProjectsByProjectId]);
-	const handleQuickStatusChange = (project, newStatus) => {
-		if (!modulePermission.edit || newStatus === project.status) return;
+	const totalPages = Math.max(1, Math.ceil(sortedProjects.length / PAGE_SIZE));
+	const safePage = Math.min(page, totalPages);
+	const paginatedProjects = (0, import_react.useMemo)(() => {
+		const start = (safePage - 1) * PAGE_SIZE;
+		return sortedProjects.slice(start, start + PAGE_SIZE);
+	}, [sortedProjects, safePage]);
+	const toggleProjectSort = (col) => {
+		if (sortBy === col) setSortDir((prev) => prev === "asc" ? "desc" : "asc");
+		else {
+			setSortBy(col);
+			setSortDir("asc");
+		}
+		setPage(1);
+	};
+	const openedProjectContracts = (0, import_react.useMemo)(() => {
+		if (!openedProject) return [];
+		return contractsTCP.filter((c) => c.projectId === openedProject.projectId);
+	}, [openedProject, contractsTCP]);
+	const openedProjectPayments = (0, import_react.useMemo)(() => {
+		if (!openedProject) return [];
+		const contractIds = new Set(openedProjectContracts.map((c) => c.contractId));
+		return contractPayments.filter((p) => contractIds.has(p.contractId) || p.mainProjectCode === openedProject.mainProjectCode).sort((a, b) => {
+			const da = a.cvDate || a.rfpDate || a.updatedAt || "";
+			return (b.cvDate || b.rfpDate || b.updatedAt || "").localeCompare(da) || b.paymentId.localeCompare(a.paymentId);
+		});
+	}, [
+		openedProject,
+		openedProjectContracts,
+		contractPayments
+	]);
+	if (!modulePermission.view) return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ModuleViewRestrictedState, {
+		moduleTitle: "Projects",
+		activeUser,
+		onOpenProfileModal,
+		onOpenAdminAccounts
+	});
+	const normalizedUnitId = unitIdentifier.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, "");
+	const assembledMainCode = `${selectedSiteCode || "SITE"}-${selectedTypeCode || "TYPE"}-${normalizedUnitId || "UNIT"}`;
+	const duplicateMainProject = normalizedUnitId ? projects.find((p) => p.unitIdentifier.toUpperCase() === normalizedUnitId || selectedSiteCode && selectedTypeCode && p.mainProjectCode.toUpperCase() === assembledMainCode.toUpperCase()) : void 0;
+	const openCreateProjectDrawer = () => {
+		setSelectedSiteCode(sites[0]?.siteCode || "");
+		setSelectedTypeCode(activeProjectTypes[0]?.typeCode || "");
+		setUnitIdentifier("");
+		setProjectName("");
+		setSubDrafts([createInitialSubDraft(1)]);
+		setCreateFormError(null);
+		setIsCreateDrawerOpen(true);
+	};
+	const handleSubmitCreateProject = (e) => {
+		e.preventDefault();
+		setCreateFormError(null);
+		if (!modulePermission.add) {
+			setCreateFormError("Your active profile cannot create projects.");
+			return;
+		}
+		const site = sites.find((s) => s.siteCode === selectedSiteCode);
+		const pType = activeProjectTypes.find((t) => t.typeCode === selectedTypeCode);
+		if (!site) {
+			setCreateFormError("Please select a registered Site.");
+			return;
+		}
+		if (!pType) {
+			setCreateFormError("Please select an active Project Type.");
+			return;
+		}
+		if (!normalizedUnitId) {
+			setCreateFormError("Unit / Lot Identifier is required (e.g. 1601, B12L04).");
+			return;
+		}
+		if (duplicateMainProject) {
+			setCreateFormError(`Duplicate unit/project code: already registered under ${duplicateMainProject.mainProjectCode}.`);
+			return;
+		}
+		if (!projectName.trim()) {
+			setCreateFormError("Project Name / Description is required.");
+			return;
+		}
+		const preparedSubs = [];
+		const seenSubCodes = /* @__PURE__ */ new Set();
+		for (let i = 0; i < subDrafts.length; i++) {
+			const d = subDrafts[i];
+			if (!d.subProjectCode.trim() && !d.subProjectName.trim()) continue;
+			const cleanSubCode = d.subProjectCode.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, "");
+			if (!cleanSubCode || !d.subProjectName.trim()) {
+				setCreateFormError(`Sub-Project #${i + 1} requires both a Code and a Scope Name.`);
+				return;
+			}
+			const fullSubCode = cleanSubCode.startsWith(assembledMainCode) ? cleanSubCode : `${assembledMainCode}-${cleanSubCode}`;
+			if (seenSubCodes.has(fullSubCode) || subProjects.some((sp) => sp.subProjectCode.toUpperCase() === fullSubCode.toUpperCase())) {
+				setCreateFormError(`Sub-Project Code "${fullSubCode}" already exists.`);
+				return;
+			}
+			seenSubCodes.add(fullSubCode);
+			preparedSubs.push({
+				subProjectId: `SUB-${String(nextSubProjectBaseNum + preparedSubs.length).padStart(4, "0")}`,
+				subProjectCode: fullSubCode,
+				subProjectName: d.subProjectName.trim(),
+				status: AUTO_CREATION_STATUS,
+				progress: 0,
+				targetDate: d.targetDate,
+				remarks: d.remarks.trim()
+			});
+		}
+		const mainPayload = {
+			projectId: nextProjectId,
+			mainProjectCode: assembledMainCode,
+			siteCode: site.siteCode,
+			siteName: site.siteName,
+			developer: site.developer,
+			typeCode: pType.typeCode,
+			typeName: pType.typeName,
+			unitIdentifier: normalizedUnitId,
+			projectName: projectName.trim(),
+			status: AUTO_CREATION_STATUS
+		};
 		requestConfirmation({
-			title: `Update Project Status — ${project.mainProjectCode}`,
-			description: `This will update row ${project.rowNumber} in the "${SHEET_NAMES.PROJECTS}" sheet in real time.`,
-			sheetName: `${SHEET_NAMES.PROJECTS}!A${project.rowNumber}:L${project.rowNumber}`,
+			title: `Create Project — ${mainPayload.mainProjectCode}`,
+			description: `Create Main Project ${mainPayload.mainProjectCode} with ${preparedSubs.length} linked Sub-Project(s).`,
+			sheetName: preparedSubs.length > 0 ? `${SHEET_NAMES.PROJECTS}, ${SHEET_NAMES.SUB_PROJECTS}` : SHEET_NAMES.PROJECTS,
 			details: [
 				{
 					label: "Project ID",
-					value: project.projectId
+					value: mainPayload.projectId
 				},
 				{
 					label: "Main Project Code",
-					value: project.mainProjectCode
+					value: mainPayload.mainProjectCode
 				},
 				{
-					label: "Previous Status",
-					value: project.status
+					label: "Project Name",
+					value: mainPayload.projectName
 				},
 				{
-					label: "New Status",
-					value: newStatus
+					label: "Initial Sub-Projects",
+					value: String(preparedSubs.length)
 				}
 			],
-			confirmLabel: "Confirm Status Update",
+			confirmLabel: "Create Project",
 			onConfirm: async () => {
-				await onUpdateMainProjectStatus(project, newStatus);
+				await onCreateProject(mainPayload, preparedSubs);
+				setOpenedProjectId(mainPayload.projectId);
+				setIsCreateDrawerOpen(false);
 			}
 		});
 	};
-	const handleQuickSubStatusChange = (sp, newStatus) => {
-		if (!modulePermission.edit || newStatus === sp.status) return;
+	const openEditMainDrawer = (proj) => {
+		setEditingMainProject(proj);
+		setEditMainName(proj.projectName);
+		setEditMainStatus(proj.status);
+	};
+	const handleSubmitEditMain = (e) => {
+		e.preventDefault();
+		if (!editingMainProject) return;
+		const trimmedName = editMainName.trim() || editingMainProject.projectName;
 		requestConfirmation({
-			title: `Update Sub-Project Status — ${sp.subProjectCode}`,
-			description: `This will update row ${sp.rowNumber} in the "${SHEET_NAMES.SUB_PROJECTS}" sheet in real time.`,
-			sheetName: `${SHEET_NAMES.SUB_PROJECTS}!A${sp.rowNumber}:J${sp.rowNumber}`,
+			title: `Update Project — ${editingMainProject.mainProjectCode}`,
+			description: `Save updated project name and status for ${editingMainProject.mainProjectCode}.`,
+			sheetName: SHEET_NAMES.PROJECTS,
 			details: [
 				{
-					label: "Sub-Project Code",
-					value: sp.subProjectCode
+					label: "Project Code",
+					value: editingMainProject.mainProjectCode
 				},
 				{
-					label: "Parent Main Code",
-					value: sp.mainProjectCode
+					label: "Project Name",
+					value: trimmedName
 				},
 				{
-					label: "Previous Status",
-					value: sp.status
-				},
-				{
-					label: "New Status",
-					value: newStatus
+					label: "Status",
+					value: editMainStatus
 				}
 			],
-			confirmLabel: "Confirm Sub-Project Status",
+			confirmLabel: "Save Project Changes",
 			onConfirm: async () => {
-				await onUpdateSubProject(sp, {
-					status: newStatus,
-					progress: sp.progress || 0,
-					targetDate: sp.targetDate,
-					remarks: sp.remarks
-				});
+				await onUpdateMainProjectStatus(editingMainProject, editMainStatus, trimmedName);
+				setEditingMainProject(null);
 			}
 		});
 	};
-	const startEditSub = (sp) => {
-		if (!modulePermission.edit) return;
-		setEditingSubRow(sp.rowNumber);
-		setEditSubForm({
-			subProjectName: sp.subProjectName,
-			status: sp.status,
-			targetDate: sp.targetDate,
-			remarks: sp.remarks
-		});
-	};
-	const handleSaveSubUpdate = (sp) => {
-		if (!modulePermission.edit || !editSubForm || !editSubForm.subProjectName.trim()) return;
+	const handleRequestDeleteMainProject = (proj) => {
+		const subs = subProjectsByProject[proj.projectId] || [];
+		const contracts = tcpStatsByProject[proj.projectId]?.count || 0;
 		requestConfirmation({
-			title: `Update Sub-Project ${sp.subProjectCode}`,
-			description: `This will update row ${sp.rowNumber} in the "${SHEET_NAMES.SUB_PROJECTS}" sheet.`,
-			sheetName: `${SHEET_NAMES.SUB_PROJECTS}!A${sp.rowNumber}:J${sp.rowNumber}`,
-			details: [
-				{
-					label: "Sub-Project Code",
-					value: sp.subProjectCode
-				},
-				{
-					label: "Sub-Project Name",
-					value: editSubForm.subProjectName.trim()
-				},
-				{
-					label: "Parent Main Code",
-					value: sp.mainProjectCode
-				},
-				{
-					label: "New Status",
-					value: editSubForm.status
-				},
-				{
-					label: "Target Date",
-					value: editSubForm.targetDate || "—"
-				},
-				{
-					label: "Remarks",
-					value: editSubForm.remarks.trim() || "—"
-				}
-			],
-			confirmLabel: "Confirm Sub-Project Update",
-			onConfirm: async () => {
-				await onUpdateSubProject(sp, {
-					subProjectName: editSubForm.subProjectName.trim(),
-					status: editSubForm.status,
-					progress: sp.progress || 0,
-					targetDate: editSubForm.targetDate,
-					remarks: editSubForm.remarks.trim()
-				});
-				setEditingSubRow(null);
-				setEditSubForm(null);
-			}
-		});
-	};
-	const handleDeleteMainProject = (proj) => {
-		if (!modulePermission.edit) return;
-		const linkedSubsCount = (subProjectsByProjectId[proj.projectId] || []).length;
-		const linkedContractsCount = contractsTCP.filter((c) => c.projectId === proj.projectId).length;
-		requestConfirmation({
-			title: `Delete Main Project — ${proj.mainProjectCode}`,
-			description: `This will permanently delete "${proj.mainProjectCode}" (${proj.projectId}) from the "${SHEET_NAMES.PROJECTS}" sheet. Projects with linked Sub-Projects or Contracts cannot be deleted until child records are removed.`,
-			sheetName: `${SHEET_NAMES.PROJECTS}!A${proj.rowNumber}:L${proj.rowNumber}`,
-			isDestructive: true,
+			title: `Delete Project — ${proj.mainProjectCode}`,
+			description: subs.length > 0 || contracts > 0 ? `Project ${proj.mainProjectCode} still has ${subs.length} Sub-Project(s) and ${contracts} Contract(s). Delete child records first.` : `Permanently delete Main Project "${proj.projectName}" (${proj.mainProjectCode}) from the Projects worksheet.`,
+			sheetName: SHEET_NAMES.PROJECTS,
 			details: [
 				{
 					label: "Project ID",
 					value: proj.projectId
 				},
 				{
-					label: "Main Project Code",
+					label: "Project Code",
 					value: proj.mainProjectCode
 				},
 				{
 					label: "Linked Sub-Projects",
-					value: String(linkedSubsCount)
-				},
-				{
-					label: "Linked Contracts",
-					value: String(linkedContractsCount)
+					value: String(subs.length)
 				}
 			],
-			confirmLabel: "Confirm & Delete Main Project",
+			confirmLabel: "Delete Project",
 			onConfirm: async () => {
 				await onDeleteMainProject(proj);
-				if (selectedMainProjectId === proj.projectId) setSelectedMainProjectId(null);
+				if (openedProjectId === proj.projectId) setOpenedProjectId(null);
 			}
 		});
 	};
-	const handleDeleteSubProject = (sp) => {
-		if (!modulePermission.edit) return;
-		const linkedContractsCount = (tcpBySubProjectId[sp.subProjectId]?.contracts || []).length;
+	const openAddSubDrawer = (parent) => {
+		setEditingSubProject(null);
+		setSubParentProjectId(parent.projectId);
+		setSubCodeInput("");
+		setSubNameInput("");
+		setSubStatusInput(AUTO_CREATION_STATUS);
+		setSubProgressInput(0);
+		setSubTargetDateInput("");
+		setSubRemarksInput("");
+		setSubFormError(null);
+		setIsSubDrawerOpen(true);
+	};
+	const openEditSubDrawer = (sp) => {
+		setEditingSubProject(sp);
+		setSubParentProjectId(sp.projectId);
+		setSubCodeInput(sp.subProjectCode);
+		setSubNameInput(sp.subProjectName);
+		setSubStatusInput(sp.status);
+		setSubProgressInput(sp.progress);
+		setSubTargetDateInput(sp.targetDate || "");
+		setSubRemarksInput(sp.remarks || "");
+		setSubFormError(null);
+		setIsSubDrawerOpen(true);
+	};
+	const handleSubmitSubDrawer = (e) => {
+		e.preventDefault();
+		setSubFormError(null);
+		if (!subNameInput.trim()) {
+			setSubFormError("Sub-Project Scope Name is required.");
+			return;
+		}
+		if (editingSubProject) {
+			const clampedProgress = Math.max(0, Math.min(100, Number(subProgressInput) || 0));
+			requestConfirmation({
+				title: `Update Sub-Project — ${editingSubProject.subProjectCode}`,
+				description: `Save updates for ${editingSubProject.subProjectCode} (${subNameInput.trim()}).`,
+				sheetName: SHEET_NAMES.SUB_PROJECTS,
+				details: [
+					{
+						label: "Sub-Project Code",
+						value: editingSubProject.subProjectCode
+					},
+					{
+						label: "Scope Name",
+						value: subNameInput.trim()
+					},
+					{
+						label: "Status",
+						value: subStatusInput
+					},
+					{
+						label: "Progress",
+						value: `${clampedProgress}%`
+					},
+					{
+						label: "Target Date",
+						value: subTargetDateInput || "—"
+					}
+				],
+				confirmLabel: "Save Sub-Project",
+				onConfirm: async () => {
+					await onUpdateSubProject(editingSubProject, {
+						subProjectName: subNameInput.trim(),
+						status: subStatusInput,
+						progress: clampedProgress,
+						targetDate: subTargetDateInput,
+						remarks: subRemarksInput.trim()
+					});
+					setIsSubDrawerOpen(false);
+					setEditingSubProject(null);
+				}
+			});
+		} else {
+			const parent = projects.find((p) => p.projectId === subParentProjectId);
+			if (!parent) {
+				setSubFormError("Parent Main Project is required.");
+				return;
+			}
+			const cleanSuffix = subCodeInput.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, "");
+			if (!cleanSuffix) {
+				setSubFormError("Sub-Project Code / Suffix is required (e.g. LabMat, Civil, MEPF).");
+				return;
+			}
+			const fullSubCode = cleanSuffix.startsWith(parent.mainProjectCode) ? cleanSuffix : `${parent.mainProjectCode}-${cleanSuffix}`;
+			if (subProjects.some((sp) => sp.subProjectCode.toUpperCase() === fullSubCode.toUpperCase())) {
+				setSubFormError(`Sub-Project Code "${fullSubCode}" already exists in the ledger.`);
+				return;
+			}
+			const newSubPayload = {
+				subProjectId: `SUB-${String(nextSubProjectBaseNum).padStart(4, "0")}`,
+				projectId: parent.projectId,
+				mainProjectCode: parent.mainProjectCode,
+				subProjectCode: fullSubCode,
+				subProjectName: subNameInput.trim(),
+				status: AUTO_CREATION_STATUS,
+				progress: 0,
+				targetDate: subTargetDateInput,
+				remarks: subRemarksInput.trim()
+			};
+			requestConfirmation({
+				title: `Add Sub-Project — ${fullSubCode}`,
+				description: `Link new Sub-Project ${fullSubCode} under ${parent.mainProjectCode}.`,
+				sheetName: SHEET_NAMES.SUB_PROJECTS,
+				details: [
+					{
+						label: "Sub-Project ID",
+						value: newSubPayload.subProjectId
+					},
+					{
+						label: "Sub-Project Code",
+						value: newSubPayload.subProjectCode
+					},
+					{
+						label: "Scope Name",
+						value: newSubPayload.subProjectName
+					},
+					{
+						label: "Parent Project",
+						value: parent.mainProjectCode
+					}
+				],
+				confirmLabel: "Add Sub-Project",
+				onConfirm: async () => {
+					await onAddSubProjectToExisting(newSubPayload);
+					setIsSubDrawerOpen(false);
+				}
+			});
+		}
+	};
+	const handleRequestDeleteSubProject = (sp) => {
+		const linked = contractsBySubProject[sp.subProjectId]?.count || 0;
 		requestConfirmation({
 			title: `Delete Sub-Project — ${sp.subProjectCode}`,
-			description: `This will permanently delete "${sp.subProjectCode}" (${sp.subProjectId}) from the "${SHEET_NAMES.SUB_PROJECTS}" sheet. Sub-Projects with awarded Contract TCP records cannot be deleted.`,
-			sheetName: `${SHEET_NAMES.SUB_PROJECTS}!A${sp.rowNumber}:J${sp.rowNumber}`,
-			isDestructive: true,
+			description: linked > 0 ? `Sub-Project ${sp.subProjectCode} has ${linked} linked Contract(s) and cannot be deleted until those contracts are removed.` : `Permanently delete Sub-Project "${sp.subProjectName}" (${sp.subProjectCode}).`,
+			sheetName: SHEET_NAMES.SUB_PROJECTS,
 			details: [
 				{
 					label: "Sub-Project ID",
@@ -19225,2929 +19880,3239 @@ var ProjectCreationAndList = ({ sites, projectTypes, projects, subProjects, cont
 					value: sp.subProjectCode
 				},
 				{
-					label: "Parent Project",
-					value: sp.mainProjectCode
-				},
-				{
 					label: "Linked Contracts",
-					value: String(linkedContractsCount)
+					value: String(linked)
 				}
 			],
-			confirmLabel: "Confirm & Delete Sub-Project",
+			confirmLabel: "Delete Sub-Project",
 			onConfirm: async () => {
 				await onDeleteSubProject(sp);
-				if (editingSubRow === sp.rowNumber) {
-					setEditingSubRow(null);
-					setEditSubForm(null);
-				}
 			}
 		});
 	};
-	const statusTextColor = (status) => {
-		switch (status) {
-			case "Completed": return "text-emerald-700 font-semibold";
-			case "Started":
-			case "In Progress": return "text-blue-700 font-semibold";
-			case "Under Review": return "text-amber-700 font-semibold";
-			case "Delayed": return "text-red-700 font-semibold";
-			default: return "text-slate-600 font-medium";
-		}
+	const openedSubs = (0, import_react.useMemo)(() => {
+		if (!openedProject) return [];
+		const allSubs = subProjectsByProject[openedProject.projectId] || [];
+		const q = subSearchQuery.trim().toLowerCase();
+		if (!q) return allSubs;
+		return allSubs.filter((sp) => [
+			sp.subProjectCode,
+			sp.subProjectName,
+			sp.status,
+			sp.remarks
+		].join(" ").toLowerCase().includes(q));
+	}, [
+		openedProject,
+		subProjectsByProject,
+		subSearchQuery
+	]);
+	const openedProjectTotalSubsCount = openedProject ? (subProjectsByProject[openedProject.projectId] || []).length : 0;
+	const openedProjectTcp = openedProject ? tcpStatsByProject[openedProject.projectId] || {
+		count: 0,
+		totalTcp: 0
+	} : {
+		count: 0,
+		totalTcp: 0
 	};
-	if (!modulePermission.view) return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-		className: "space-y-6",
-		children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(ModulePermissionBanner, {
-			moduleKey: "projects",
-			moduleLabel: "Projects & Sub-Projects",
-			permission: modulePermission,
-			activeUser,
-			onOpenProfileModal,
-			onOpenAdminAccounts
-		}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ModuleViewRestrictedState, {
-			moduleLabel: "Projects & Sub-Projects",
-			activeUser,
-			onSwitchToAdmin: () => onSelectActiveUser("USR-0001"),
-			onOpenProfileModal
-		})]
-	});
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-		className: "space-y-6",
+		className: "space-y-5",
 		children: [
-			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(ModulePermissionBanner, {
-				moduleKey: "projects",
-				moduleLabel: "Projects & Sub-Projects",
-				permission: modulePermission,
-				activeUser,
-				onOpenProfileModal,
-				onOpenAdminAccounts
+			(!modulePermission.add || !modulePermission.edit) && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: "rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-900",
+				children: [
+					"Active profile ",
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: activeUser.fullName }),
+					" has limited write access on Projects (Add: ",
+					modulePermission.add ? "Yes" : "No",
+					" · Edit: ",
+					modulePermission.edit ? "Yes" : "No",
+					")."
+				]
 			}),
-			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				className: "flex flex-col lg:flex-row lg:items-center justify-between gap-4 rounded-lg border border-slate-200 bg-white p-5",
-				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h1", {
-					className: "text-lg font-bold tracking-tight text-slate-900",
-					children: "Projects & Linked Sub-Projects Workspace"
-				}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-					className: "mt-0.5 text-xs text-slate-500",
-					children: "Select any Main Project on the left panel to inspect and manage its linked Sub-Projects and TCP contracts on the right panel. (Project Progress % is currently disabled.)"
-				})] }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-					className: "flex flex-wrap items-center gap-2.5 shrink-0",
-					children: modulePermission.add ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-						type: "button",
-						onClick: () => setIsCreateProjectModalOpen(true),
-						className: "inline-flex items-center gap-2 rounded-md bg-slate-900 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-800 transition-colors whitespace-nowrap",
-						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Plus, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Create Main Project" })]
-					}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-						type: "button",
-						onClick: () => openAddSubProjectPopup(activeMainProject),
-						disabled: projects.length === 0,
-						className: "inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-50 transition-colors disabled:opacity-40 whitespace-nowrap",
-						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Layers, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { children: ["Add Sub-Project", activeMainProject ? ` (${activeMainProject.mainProjectCode})` : ""] })]
-					})] }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-						className: "rounded border border-amber-200 bg-amber-50/70 px-3 py-1.5 text-xs text-amber-900",
-						children: "Creating Projects & Sub-Projects Disabled for Profile"
-					})
+			!openedProject ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: "flex flex-col lg:flex-row lg:items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4",
+				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+					className: "flex flex-wrap flex-1 items-center gap-2.5",
+					children: [
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+							type: "button",
+							disabled: !modulePermission.add,
+							onClick: openCreateProjectDrawer,
+							className: "inline-flex items-center justify-center gap-1.5 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50 transition-colors shrink-0",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Plus, { className: "h-4 w-4" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "New Project" })]
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "relative flex-1 min-w-[220px] max-w-md",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Search, { className: "pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+								type: "text",
+								value: searchQuery,
+								onChange: (e) => setSearchQuery(e.target.value),
+								placeholder: "Search projects by code, name, site, or unit...",
+								className: "w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 py-2 text-sm text-slate-900 focus:border-slate-900 focus:outline-none"
+							})]
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("select", {
+							"aria-label": "Filter by site",
+							value: siteFilter,
+							onChange: (e) => setSiteFilter(e.target.value),
+							className: "rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("option", {
+								value: "ALL",
+								children: [
+									"All Sites (",
+									sites.length,
+									")"
+								]
+							}), sites.map((s) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("option", {
+								value: s.siteCode,
+								children: [
+									s.siteCode,
+									" — ",
+									s.siteName
+								]
+							}, s.siteCode))]
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("select", {
+							"aria-label": "Filter by status",
+							value: statusFilter,
+							onChange: (e) => setStatusFilter(e.target.value),
+							className: "rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
+								value: "ALL",
+								children: "All Statuses"
+							}), PROJECT_STATUS_OPTIONS.map((st) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
+								value: st,
+								children: st
+							}, st))]
+						})
+					]
+				}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+					className: "text-xs font-medium text-slate-500 shrink-0",
+					children: [
+						"Showing ",
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", {
+							className: "text-slate-900",
+							children: filteredProjects.length
+						}),
+						" of",
+						" ",
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", {
+							className: "text-slate-900",
+							children: projects.length
+						}),
+						" projects"
+					]
 				})]
-			}),
-			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				className: "grid grid-cols-2 lg:grid-cols-4 gap-4",
+			}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: "rounded-xl border border-slate-200 bg-white overflow-hidden",
+				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+					className: "overflow-x-auto",
+					children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("table", {
+						className: "w-full text-left text-sm border-collapse",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("thead", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", {
+							className: "border-b border-slate-300 bg-slate-100 text-xs font-semibold uppercase tracking-wide text-slate-700",
+							children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+									className: "px-4 py-3",
+									children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+										type: "button",
+										onClick: () => toggleProjectSort("code"),
+										className: "inline-flex items-center gap-1 hover:text-slate-900",
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Project Code" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ArrowUpDown, { className: "h-3 w-3 opacity-60" })]
+									})
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+									className: "px-4 py-3",
+									children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+										type: "button",
+										onClick: () => toggleProjectSort("name"),
+										className: "inline-flex items-center gap-1 hover:text-slate-900",
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Project Name / Unit" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ArrowUpDown, { className: "h-3 w-3 opacity-60" })]
+									})
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+									className: "px-4 py-3",
+									children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+										type: "button",
+										onClick: () => toggleProjectSort("site"),
+										className: "inline-flex items-center gap-1 hover:text-slate-900",
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Site & Developer" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ArrowUpDown, { className: "h-3 w-3 opacity-60" })]
+									})
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+									className: "px-4 py-3",
+									children: "Type"
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+									className: "px-4 py-3",
+									children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+										type: "button",
+										onClick: () => toggleProjectSort("status"),
+										className: "inline-flex items-center gap-1 hover:text-slate-900",
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Status" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ArrowUpDown, { className: "h-3 w-3 opacity-60" })]
+									})
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+									className: "px-4 py-3 text-center",
+									children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+										type: "button",
+										onClick: () => toggleProjectSort("subs"),
+										className: "inline-flex items-center gap-1 hover:text-slate-900",
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Sub-Projects" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ArrowUpDown, { className: "h-3 w-3 opacity-60" })]
+									})
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+									className: "px-4 py-3 text-right",
+									children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+										type: "button",
+										onClick: () => toggleProjectSort("tcp"),
+										className: "inline-flex items-center gap-1 hover:text-slate-900",
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Awarded TCP" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ArrowUpDown, { className: "h-3 w-3 opacity-60" })]
+									})
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+									className: "px-4 py-3 text-right",
+									children: "Actions"
+								})
+							]
+						}) }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tbody", { children: paginatedProjects.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tr", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
+							colSpan: 8,
+							className: "px-4 py-10 text-center text-sm text-slate-500",
+							children: [
+								"No projects match your filters. Click",
+								" ",
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "New Project" }),
+								" on the top left to create one."
+							]
+						}) }) : paginatedProjects.map((proj) => {
+							const subCount = (subProjectsByProject[proj.projectId] || []).length;
+							const tcpStat = tcpStatsByProject[proj.projectId];
+							return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
+									className: "px-4 py-3 whitespace-nowrap",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+										type: "button",
+										onClick: () => {
+											setOpenedProjectId(proj.projectId);
+											setSubSearchQuery("");
+										},
+										className: "font-mono text-xs font-bold text-blue-700 hover:underline text-left",
+										children: proj.mainProjectCode
+									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+										className: "font-mono text-[11px] text-slate-500",
+										children: proj.projectId
+									})]
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
+									className: "px-4 py-3",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+										className: "font-semibold text-slate-900",
+										children: proj.projectName || proj.unitIdentifier
+									}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+										className: "text-xs text-slate-500 font-mono",
+										children: ["Unit: ", proj.unitIdentifier]
+									})]
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
+									className: "px-4 py-3",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+										className: "font-medium text-slate-900",
+										children: [
+											proj.siteCode,
+											" — ",
+											proj.siteName
+										]
+									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+										className: "text-xs text-slate-500",
+										children: proj.developer || "—"
+									})]
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
+									className: "px-4 py-3 whitespace-nowrap",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+										className: "font-mono text-xs font-semibold text-slate-800",
+										children: proj.typeCode
+									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+										className: "text-xs text-slate-500",
+										children: proj.typeName
+									})]
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+									className: "px-4 py-3 whitespace-nowrap",
+									children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+										className: `inline-block rounded px-2 py-0.5 text-xs font-semibold ${getStatusBadgeClass(proj.status)}`,
+										children: proj.status
+									})
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+									className: "px-4 py-3 text-center whitespace-nowrap",
+									children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+										className: "inline-flex items-center justify-center rounded-md border border-slate-300 bg-slate-100 px-2.5 py-0.5 font-mono text-xs font-bold text-slate-800 tabular-nums",
+										children: subCount
+									})
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
+									className: "px-4 py-3 text-right font-mono text-xs tabular-nums whitespace-nowrap",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+										className: "font-bold text-slate-900",
+										children: formatCurrency(tcpStat?.totalTcp || 0)
+									}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+										className: "text-slate-500",
+										children: [
+											tcpStat?.count || 0,
+											" contract",
+											(tcpStat?.count || 0) === 1 ? "" : "s"
+										]
+									})]
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+									className: "px-4 py-3 text-right whitespace-nowrap",
+									children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+										className: "inline-flex items-center gap-1.5",
+										children: [
+											/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+												type: "button",
+												onClick: () => {
+													setOpenedProjectId(proj.projectId);
+													setSubSearchQuery("");
+												},
+												className: "inline-flex items-center gap-1.5 rounded-md bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800 transition-colors",
+												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(FolderOpen, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Open Project" })]
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+												type: "button",
+												disabled: !modulePermission.edit,
+												onClick: () => openEditMainDrawer(proj),
+												className: "inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-40",
+												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(PenLine, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Edit" })]
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+												type: "button",
+												disabled: !modulePermission.edit || subCount > 0 || (tcpStat?.count || 0) > 0,
+												onClick: () => handleRequestDeleteMainProject(proj),
+												title: subCount > 0 ? "Delete child sub-projects first" : "Delete project",
+												className: "inline-flex items-center rounded-md border border-slate-300 bg-white p-1.5 text-slate-500 hover:border-red-300 hover:bg-red-50 hover:text-red-600 disabled:opacity-35",
+												children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Trash2, { className: "h-3.5 w-3.5" })
+											})
+										]
+									})
+								})
+							] }, proj.projectId);
+						}) })]
+					})
+				}), sortedProjects.length > PAGE_SIZE && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+					className: "flex items-center justify-between border-t border-slate-200 bg-slate-50 px-4 py-2.5 text-xs text-slate-600",
+					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { children: [
+						"Page ",
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: safePage }),
+						" of",
+						" ",
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: totalPages }),
+						" (",
+						sortedProjects.length,
+						" projects)"
+					] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "flex items-center gap-1.5",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+							type: "button",
+							disabled: safePage <= 1,
+							onClick: () => setPage((p) => Math.max(1, p - 1)),
+							className: "rounded-md border border-slate-300 bg-white px-2.5 py-1 font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-40",
+							children: "Previous"
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+							type: "button",
+							disabled: safePage >= totalPages,
+							onClick: () => setPage((p) => Math.min(totalPages, p + 1)),
+							className: "rounded-md border border-slate-300 bg-white px-2.5 py-1 font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-40",
+							children: "Next"
+						})]
+					})]
+				})]
+			})] }) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: "space-y-4",
 				children: [
 					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "rounded-lg border border-slate-200 bg-white p-4",
-						children: [
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-								className: "text-xs text-slate-500",
-								children: "Total Main Projects"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-								className: "mt-1 text-2xl font-bold text-slate-900 font-mono tabular-nums",
-								children: projects.length
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								className: "mt-1 text-xs text-slate-500",
-								children: [
-									"Next ID:",
-									" ",
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-										className: "font-mono text-slate-800",
-										children: nextProjectId
-									})
-								]
+						className: "flex flex-col md:flex-row md:items-center justify-between gap-3 rounded-xl border border-slate-300 bg-white p-3.5 shadow-xs",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "flex items-center gap-2",
+							children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+									type: "button",
+									onClick: () => {
+										setOpenedProjectId(null);
+										setIsProjectDropdownOpen(false);
+									},
+									className: "inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-100 transition-colors shrink-0",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(ArrowLeft, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "All Projects" })]
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "h-5 w-px bg-slate-200 hidden sm:block" }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									ref: dropdownContainerRef,
+									className: "relative flex flex-1 sm:flex-initial items-center gap-1.5",
+									children: [
+										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+											type: "button",
+											onClick: handleCyclePrevProject,
+											disabled: cycleProjectsList.length <= 1,
+											title: "Previous Project",
+											className: "inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-40 transition-colors shrink-0",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(ChevronLeft, { className: "h-4 w-4" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+												className: "hidden sm:inline ml-0.5",
+												children: "Prev"
+											})]
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+											type: "button",
+											onClick: () => {
+												setIsProjectDropdownOpen((prev) => !prev);
+												setProjectDropdownSearch("");
+											},
+											className: "flex items-center justify-between gap-2 rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-left text-xs font-semibold text-slate-900 hover:bg-slate-100 min-w-[240px] sm:min-w-[340px] max-w-[460px]",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+												className: "truncate",
+												children: [
+													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+														className: "font-mono font-bold text-blue-700",
+														children: openedProject.mainProjectCode
+													}),
+													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+														className: "mx-1.5 text-slate-400",
+														children: "—"
+													}),
+													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+														className: "text-slate-800",
+														children: openedProject.projectName
+													})
+												]
+											}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+												className: "flex items-center gap-1.5 shrink-0",
+												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+													className: "rounded bg-slate-200 px-1.5 py-0.5 font-mono text-[10px] font-bold text-slate-700 tabular-nums",
+													children: [
+														currentCycleIndex >= 0 ? currentCycleIndex + 1 : 1,
+														"/",
+														cycleProjectsList.length
+													]
+												}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ChevronDown, { className: "h-4 w-4 text-slate-500" })]
+											})]
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+											type: "button",
+											onClick: handleCycleNextProject,
+											disabled: cycleProjectsList.length <= 1,
+											title: "Next Project",
+											className: "inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-40 transition-colors shrink-0",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+												className: "hidden sm:inline mr-0.5",
+												children: "Next"
+											}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ChevronRight, { className: "h-4 w-4" })]
+										}),
+										isProjectDropdownOpen && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+											className: "absolute left-0 top-full z-40 mt-1.5 w-full min-w-[320px] sm:min-w-[420px] rounded-xl border border-slate-300 bg-white shadow-xl overflow-hidden",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+												className: "border-b border-slate-200 bg-slate-50 p-2.5",
+												children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+													className: "relative",
+													children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Search, { className: "pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+														type: "text",
+														autoFocus: true,
+														value: projectDropdownSearch,
+														onChange: (e) => setProjectDropdownSearch(e.target.value),
+														placeholder: "Search project code, name, site, or unit...",
+														className: "w-full rounded-lg border border-slate-300 bg-white pl-8 pr-3 py-1.5 text-xs text-slate-900 focus:border-slate-900 focus:outline-none"
+													})]
+												})
+											}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+												className: "max-h-72 overflow-y-auto divide-y divide-slate-200",
+												children: dropdownFilteredProjects.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+													className: "px-4 py-6 text-center text-xs text-slate-500",
+													children: "No matching projects found."
+												}) : dropdownFilteredProjects.map((p) => {
+													const isCurrent = p.projectId === openedProject.projectId;
+													const sCount = (subProjectsByProject[p.projectId] || []).length;
+													return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+														type: "button",
+														onClick: () => {
+															setOpenedProjectId(p.projectId);
+															setIsProjectDropdownOpen(false);
+															setSubSearchQuery("");
+														},
+														className: `st-hover-row w-full flex items-center justify-between gap-3 px-3.5 py-2.5 text-left text-xs transition-colors ${isCurrent ? "bg-blue-50 font-semibold" : ""}`,
+														children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+															className: "min-w-0",
+															children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+																className: "flex items-center gap-2",
+																children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+																	className: "font-mono font-bold text-slate-900",
+																	children: p.mainProjectCode
+																}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+																	className: `rounded px-1.5 py-0.5 text-[10px] font-semibold ${getStatusBadgeClass(p.status)}`,
+																	children: p.status
+																})]
+															}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+																className: "mt-0.5 text-slate-700 truncate",
+																children: [
+																	p.projectName,
+																	" · ",
+																	p.siteCode,
+																	" (",
+																	sCount,
+																	" ",
+																	"sub-projects)"
+																]
+															})]
+														}), isCurrent && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Check, { className: "h-4 w-4 text-blue-600 shrink-0" })]
+													}, p.projectId);
+												})
+											})]
+										})
+									]
+								})
+							]
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+							className: "flex items-center justify-end gap-2",
+							children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+								type: "button",
+								onClick: () => {
+									setOpenedProjectId(null);
+									setIsProjectDropdownOpen(false);
+								},
+								className: "inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-red-50 hover:text-red-700 hover:border-red-300 transition-colors",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(X, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Close Project View" })]
 							})
-						]
+						})]
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "rounded-lg border border-slate-200 bg-white p-4",
-						children: [
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-								className: "text-xs text-slate-500",
-								children: "Linked Sub-Projects"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-								className: "mt-1 text-2xl font-bold text-slate-900 font-mono tabular-nums",
-								children: subProjects.length
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								className: "mt-1 text-xs text-slate-500",
+						className: "rounded-xl border border-slate-300 bg-white p-5",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "flex flex-col sm:flex-row sm:items-start justify-between gap-4",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "min-w-0",
 								children: [
-									"Auto-Status on Creation:",
-									" ",
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", {
-										className: "font-mono text-blue-700",
-										children: AUTO_CREATION_STATUS
+									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+										className: "flex flex-wrap items-center gap-2",
+										children: [
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+												className: "font-mono text-xs font-bold text-slate-600",
+												children: openedProject.projectId
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+												className: "text-slate-300",
+												children: "·"
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+												className: `rounded px-2 py-0.5 text-xs font-semibold ${getStatusBadgeClass(openedProject.status)}`,
+												children: openedProject.status
+											})
+										]
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("h2", {
+										className: "mt-1 text-lg font-bold text-slate-900",
+										children: [
+											openedProject.mainProjectCode,
+											" — ",
+											openedProject.projectName
+										]
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
+										className: "mt-1 text-xs text-slate-600",
+										children: [
+											"Site: ",
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: openedProject.siteName }),
+											" (",
+											openedProject.siteCode,
+											") · Developer:",
+											" ",
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: openedProject.developer || "—" }),
+											" · Type:",
+											" ",
+											/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("strong", { children: [
+												openedProject.typeCode,
+												" (",
+												openedProject.typeName,
+												")"
+											] }),
+											" ",
+											"· Unit: ",
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: openedProject.unitIdentifier })
+										]
 									})
 								]
-							})
-						]
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "flex flex-wrap items-center gap-2 shrink-0",
+								children: [
+									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+										type: "button",
+										onClick: () => printProjectDetailsAttachment({
+											project: openedProject,
+											subProjects: subProjectsByProject[openedProject.projectId] || [],
+											contracts: openedProjectContracts,
+											payments: openedProjectPayments,
+											preparedBy: activeUser.fullName
+										}),
+										className: "inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800 hover:bg-slate-100",
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Printer, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Print Project Summary" })]
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+										type: "button",
+										disabled: !modulePermission.edit,
+										onClick: () => openEditMainDrawer(openedProject),
+										className: "inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-40",
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(PenLine, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Edit Project" })]
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+										type: "button",
+										disabled: !modulePermission.edit || openedProjectTotalSubsCount > 0 || openedProjectTcp.count > 0,
+										onClick: () => handleRequestDeleteMainProject(openedProject),
+										title: openedProjectTotalSubsCount > 0 ? "Delete child sub-projects first" : "Delete project",
+										className: "inline-flex items-center rounded-lg border border-slate-300 bg-white p-1.5 text-slate-500 hover:border-red-300 hover:bg-red-50 hover:text-red-600 disabled:opacity-35",
+										children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Trash2, { className: "h-3.5 w-3.5" })
+									})
+								]
+							})]
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "mt-4 grid grid-cols-3 gap-4 border-t border-slate-200 pt-4",
+							children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+									className: "text-xs font-medium text-slate-500",
+									children: "Sub-Projects"
+								}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+									className: "mt-0.5 text-base font-bold text-slate-900 tabular-nums",
+									children: openedProjectTotalSubsCount
+								})] }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+									className: "text-xs font-medium text-slate-500",
+									children: "Active Contracts"
+								}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+									className: "mt-0.5 text-base font-bold text-slate-900 tabular-nums",
+									children: openedProjectTcp.count
+								})] }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+									className: "text-xs font-medium text-slate-500",
+									children: "Awarded TCP"
+								}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+									className: "mt-0.5 text-base font-bold text-slate-900 font-mono tabular-nums",
+									children: formatCurrency(openedProjectTcp.totalTcp)
+								})] })
+							]
+						})]
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "rounded-lg border border-slate-200 bg-white p-4",
+						className: "rounded-xl border border-slate-300 bg-white overflow-hidden",
 						children: [
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-								className: "text-xs text-slate-500",
-								children: "Active Awarded TCP"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-								className: "mt-1 text-lg font-bold text-slate-900 font-mono tabular-nums",
-								children: formatCurrency(totalActivePortfolioTCP)
-							}),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								className: "mt-1 text-xs text-slate-500",
-								children: [
-									"OPEN:",
-									" ",
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-										className: "font-mono font-semibold text-emerald-700 tabular-nums",
-										children: contractsTCP.filter((c) => c.contractStatus === "OPEN").length
-									}),
-									" ",
-									"· CLOSED:",
-									" ",
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-										className: "font-mono font-semibold text-slate-700 tabular-nums",
-										children: contractsTCP.filter((c) => c.contractStatus === "CLOSED").length
-									})
-								]
-							})
-						]
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "rounded-lg border border-slate-200 bg-white p-4",
-						children: [
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-								className: "text-xs text-slate-500",
-								children: "Active / Completed"
+								className: "flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "flex flex-wrap items-center gap-2.5",
+									children: [openedPanelTab === "subprojects" && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+										type: "button",
+										disabled: !modulePermission.add,
+										onClick: () => openAddSubDrawer(openedProject),
+										className: "inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-50 transition-colors",
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Plus, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Add Sub-Project" })]
+									}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+										className: "flex items-center gap-1 rounded-lg bg-slate-200/70 p-1",
+										children: [
+											/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+												type: "button",
+												onClick: () => setOpenedPanelTab("subprojects"),
+												className: `inline-flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-semibold transition-colors ${openedPanelTab === "subprojects" ? "bg-white text-slate-900 shadow-xs" : "text-slate-600 hover:text-slate-900"}`,
+												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Layers, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { children: [
+													"Sub-Projects (",
+													openedProjectTotalSubsCount,
+													")"
+												] })]
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+												type: "button",
+												onClick: () => setOpenedPanelTab("contracts"),
+												className: `inline-flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-semibold transition-colors ${openedPanelTab === "contracts" ? "bg-white text-slate-900 shadow-xs" : "text-slate-600 hover:text-slate-900"}`,
+												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(FileText, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { children: [
+													"Related Contracts (",
+													openedProjectContracts.length,
+													")"
+												] })]
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+												type: "button",
+												onClick: () => setOpenedPanelTab("payments"),
+												className: `inline-flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-semibold transition-colors ${openedPanelTab === "payments" ? "bg-white text-slate-900 shadow-xs" : "text-slate-600 hover:text-slate-900"}`,
+												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CreditCard, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { children: [
+													"Related Payments (",
+													openedProjectPayments.length,
+													")"
+												] })]
+											})
+										]
+									})]
+								}), openedPanelTab === "subprojects" ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "relative w-full md:w-64",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Search, { className: "pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+										type: "text",
+										value: subSearchQuery,
+										onChange: (e) => setSubSearchQuery(e.target.value),
+										placeholder: "Filter sub-projects...",
+										className: "w-full rounded-lg border border-slate-300 bg-white pl-8 pr-3 py-1.5 text-xs text-slate-900 focus:border-slate-900 focus:outline-none"
+									})]
+								}) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+									type: "button",
+									onClick: () => onNavigateTab("contracts"),
+									className: "inline-flex items-center gap-1 text-xs font-semibold text-blue-700 hover:underline self-start md:self-auto",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Open Full Contracts & Payments Module" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ArrowRight, { className: "h-3.5 w-3.5" })]
+								})]
 							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								className: "mt-1 text-2xl font-bold text-blue-700 font-mono tabular-nums",
-								children: [
-									projects.filter((p) => p.status === "Started" || p.status === "In Progress" || p.status === "Under Review").length,
-									" ",
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-										className: "text-sm font-normal text-slate-400",
-										children: "/"
-									}),
-									" ",
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-										className: "text-emerald-700",
-										children: projects.filter((p) => p.status === "Completed").length
-									})
-								]
+							openedPanelTab === "subprojects" && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+								className: "overflow-x-auto",
+								children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("table", {
+									className: "w-full text-left text-sm border-collapse",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("thead", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", {
+										className: "border-b border-slate-300 bg-slate-100 text-xs font-semibold uppercase tracking-wide text-slate-700",
+										children: [
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+												className: "px-4 py-2.5",
+												children: "Sub-Project Code & Scope"
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+												className: "px-4 py-2.5",
+												children: "Status / Progress"
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+												className: "px-4 py-2.5",
+												children: "Target Date"
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+												className: "px-4 py-2.5 text-right",
+												children: "Awarded TCP"
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+												className: "px-4 py-2.5 text-right",
+												children: "Actions"
+											})
+										]
+									}) }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tbody", { children: openedSubs.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tr", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
+										colSpan: 5,
+										className: "px-4 py-8 text-center text-xs text-slate-500",
+										children: [
+											"No sub-projects under",
+											" ",
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: openedProject.mainProjectCode }),
+											" yet. Click ",
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Add Sub-Project" }),
+											" on the top left to add a work package."
+										]
+									}) }) : openedSubs.map((sp) => {
+										const spTcp = contractsBySubProject[sp.subProjectId];
+										return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [
+											/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
+												className: "px-4 py-3",
+												children: [
+													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+														className: "font-mono text-xs font-bold text-slate-900",
+														children: sp.subProjectCode
+													}),
+													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+														className: "text-sm font-medium text-slate-800",
+														children: sp.subProjectName
+													}),
+													sp.remarks && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+														className: "text-xs text-slate-500 mt-0.5",
+														children: sp.remarks
+													})
+												]
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
+												className: "px-4 py-3 whitespace-nowrap",
+												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+													className: `inline-block rounded px-2 py-0.5 text-xs font-semibold ${getStatusBadgeClass(sp.status)}`,
+													children: sp.status
+												}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+													className: "mt-1.5 flex items-center gap-2",
+													children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+														className: "h-1.5 w-16 rounded-full bg-slate-200 overflow-hidden",
+														children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+															className: "h-full bg-blue-600",
+															style: { width: `${Math.min(100, Math.max(0, sp.progress))}%` }
+														})
+													}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+														className: "font-mono text-xs text-slate-600 tabular-nums",
+														children: [sp.progress, "%"]
+													})]
+												})]
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+												className: "px-4 py-3 text-xs text-slate-600 whitespace-nowrap",
+												children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+													className: "inline-flex items-center gap-1",
+													children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Calendar, { className: "h-3.5 w-3.5 text-slate-400" }), formatDisplayDate(sp.targetDate)]
+												})
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
+												className: "px-4 py-3 text-right font-mono text-xs tabular-nums whitespace-nowrap",
+												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+													className: "font-semibold text-slate-900",
+													children: formatCurrency(spTcp?.totalTcp || 0)
+												}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+													className: "text-slate-500",
+													children: [
+														spTcp?.count || 0,
+														" contract",
+														(spTcp?.count || 0) === 1 ? "" : "s"
+													]
+												})]
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+												className: "px-4 py-3 text-right whitespace-nowrap",
+												children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+													className: "inline-flex items-center gap-1.5",
+													children: [
+														/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+															type: "button",
+															onClick: () => {
+																const spContracts = contractsTCP.filter((c) => c.subProjectId === sp.subProjectId);
+																const spContractIds = new Set(spContracts.map((c) => c.contractId));
+																const spPayments = contractPayments.filter((p) => p.subProjectId === sp.subProjectId || spContractIds.has(p.contractId));
+																printSubProjectDetailsAttachment({
+																	project: openedProject,
+																	subProject: sp,
+																	contracts: spContracts,
+																	payments: spPayments,
+																	preparedBy: activeUser.fullName
+																});
+															},
+															title: "Print Sub-Project Attachment",
+															className: "inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100",
+															children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Printer, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Print" })]
+														}),
+														/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+															type: "button",
+															disabled: !canAwardContracts,
+															onClick: () => onOpenAwardTCPForSubProject(sp.subProjectId),
+															className: "inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-800 hover:bg-slate-100 disabled:opacity-40",
+															children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Award TCP" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ArrowRight, { className: "h-3 w-3" })]
+														}),
+														/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+															type: "button",
+															disabled: !modulePermission.edit,
+															onClick: () => openEditSubDrawer(sp),
+															className: "inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-40",
+															children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(PenLine, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Edit" })]
+														}),
+														/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+															type: "button",
+															disabled: !modulePermission.edit || (spTcp?.count || 0) > 0,
+															onClick: () => handleRequestDeleteSubProject(sp),
+															title: (spTcp?.count || 0) > 0 ? "Has linked contracts" : "Delete sub-project",
+															className: "inline-flex items-center rounded-md border border-slate-300 bg-white p-1.5 text-slate-500 hover:border-red-300 hover:bg-red-50 hover:text-red-600 disabled:opacity-35",
+															children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Trash2, { className: "h-3.5 w-3.5" })
+														})
+													]
+												})
+											})
+										] }, sp.subProjectId);
+									}) })]
+								})
 							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								className: "mt-1 text-xs text-slate-500",
-								children: [
-									"Sites: ",
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-										className: "font-mono",
-										children: sites.length
-									}),
-									" · Active Types: ",
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-										className: "font-mono",
-										children: activeProjectTypes.length
-									})
-								]
+							openedPanelTab === "contracts" && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+								className: "overflow-x-auto",
+								children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("table", {
+									className: "w-full text-left text-xs border-collapse",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("thead", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", {
+										className: "border-b border-slate-300 bg-slate-100 uppercase tracking-wide text-slate-700",
+										children: [
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+												className: "px-4 py-2.5",
+												children: "Sub-Project & Scope"
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+												className: "px-4 py-2.5",
+												children: "Contractor"
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+												className: "px-4 py-2.5",
+												children: "Type / Status"
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+												className: "px-4 py-2.5 text-right",
+												children: "Contract TCP"
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+												className: "px-4 py-2.5 text-right",
+												children: "Gross Paid"
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+												className: "px-4 py-2.5 text-right",
+												children: "Ret. Held"
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+												className: "px-4 py-2.5 text-right",
+												children: "Balance"
+											})
+										]
+									}) }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tbody", { children: openedProjectContracts.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tr", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
+										colSpan: 7,
+										className: "px-4 py-8 text-center text-slate-500",
+										children: [
+											"No contracts awarded under",
+											" ",
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: openedProject.mainProjectCode }),
+											" yet."
+										]
+									}) }) : openedProjectContracts.map((c) => {
+										const r = contractRollups[c.contractId];
+										return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [
+											/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
+												className: "px-4 py-3",
+												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+													className: "font-mono font-bold text-slate-900",
+													children: c.subProjectCode
+												}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+													className: "text-slate-600",
+													children: c.remarks || c.subProjectName
+												})]
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+												className: "px-4 py-3 font-medium text-slate-800",
+												children: c.contractorName
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
+												className: "px-4 py-3 whitespace-nowrap",
+												children: [
+													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+														className: "font-semibold text-slate-800",
+														children: c.tcpType
+													}),
+													" ",
+													"·",
+													" ",
+													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+														className: "font-mono font-semibold text-slate-600",
+														children: c.contractStatus
+													})
+												]
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+												className: "px-4 py-3 text-right font-mono font-semibold text-slate-900 tabular-nums whitespace-nowrap",
+												children: formatCurrency(c.tcpAmount)
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+												className: "px-4 py-3 text-right font-mono font-semibold text-emerald-700 tabular-nums whitespace-nowrap",
+												children: formatCurrency(r?.receivedGrossDeducted || 0)
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+												className: "px-4 py-3 text-right font-mono text-amber-700 tabular-nums whitespace-nowrap",
+												children: formatCurrency(r?.unreleasedRetentionHoldback || 0)
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+												className: "px-4 py-3 text-right font-mono font-bold text-slate-900 tabular-nums whitespace-nowrap",
+												children: formatCurrency(r?.remainingTCPAfterReceived ?? c.tcpAmount)
+											})
+										] }, c.contractId);
+									}) })]
+								})
+							}),
+							openedPanelTab === "payments" && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+								className: "overflow-x-auto",
+								children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("table", {
+									className: "w-full text-left text-xs border-collapse",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("thead", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", {
+										className: "border-b border-slate-300 bg-slate-100 uppercase tracking-wide text-slate-700",
+										children: [
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+												className: "px-4 py-2.5",
+												children: "Date"
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+												className: "px-4 py-2.5",
+												children: "RFP / CV #"
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+												className: "px-4 py-2.5",
+												children: "Sub-Project & Payee"
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+												className: "px-4 py-2.5 text-right",
+												children: "RFP Gross"
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+												className: "px-4 py-2.5 text-right",
+												children: "WHT 2307"
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+												className: "px-4 py-2.5 text-right",
+												children: "Net Cheque"
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+												className: "px-4 py-2.5",
+												children: "Receipt / Status"
+											})
+										]
+									}) }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tbody", { children: openedProjectPayments.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tr", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
+										colSpan: 7,
+										className: "px-4 py-8 text-center text-slate-500",
+										children: [
+											"No payment records recorded for",
+											" ",
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: openedProject.mainProjectCode }),
+											" yet."
+										]
+									}) }) : openedProjectPayments.map((p) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", {
+										className: p.paymentStatus === "CANCELLED" ? "opacity-55" : "",
+										children: [
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+												className: "px-4 py-2.5 font-mono whitespace-nowrap",
+												children: formatDisplayDate(p.cvDate || p.rfpDate)
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
+												className: "px-4 py-2.5 font-mono whitespace-nowrap",
+												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+													className: "font-bold text-slate-900",
+													children: ["RFP ", p.rfpNumber || p.paymentId]
+												}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+													className: "text-slate-500",
+													children: ["CV: ", p.cvNumber || "Pending"]
+												})]
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
+												className: "px-4 py-2.5",
+												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+													className: "font-mono font-semibold text-slate-800",
+													children: p.subProjectCode
+												}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+													className: "text-slate-600",
+													children: [
+														p.rfpPayee || p.contractorName,
+														" · ",
+														p.billingType
+													]
+												})]
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+												className: "px-4 py-2.5 text-right font-mono tabular-nums whitespace-nowrap",
+												children: formatCurrency(p.rfpAmount)
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+												className: "px-4 py-2.5 text-right font-mono text-slate-600 tabular-nums whitespace-nowrap",
+												children: formatCurrency(p.withheldAmount)
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+												className: "px-4 py-2.5 text-right font-mono font-bold text-blue-700 tabular-nums whitespace-nowrap",
+												children: formatCurrency(p.chequeAmount)
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
+												className: "px-4 py-2.5 whitespace-nowrap",
+												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+													className: "font-semibold text-slate-800",
+													children: PAYMENT_STAGE_STATUS_LABELS[p.paymentStatus]
+												}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+													className: "font-mono text-slate-500",
+													children: p.receiptNumber ? `${p.receiptType || "OR"} #${p.receiptNumber}` : "No receipt yet"
+												})]
+											})
+										]
+									}, p.paymentId)) })]
+								})
 							})
 						]
 					})
 				]
 			}),
-			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-				className: "rounded-lg border border-slate-200 bg-white p-4 space-y-3",
-				children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-					className: "flex flex-col lg:flex-row lg:items-center justify-between gap-3",
-					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "relative flex-1",
-						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Search, { className: "pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-							type: "text",
-							value: searchQuery,
-							onChange: (e) => setSearchQuery(e.target.value),
-							placeholder: "Search Main Project Code (SITE-TYPE-ID), Project ID, Developer, or Sub-Project Code...",
-							className: "w-full rounded-md border border-slate-300 bg-slate-50/50 pl-9 pr-3 py-1.5 text-xs text-slate-900 focus:border-slate-900 focus:bg-white focus:outline-none"
-						})]
-					}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "flex flex-wrap items-center gap-2",
-						children: [
-							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("select", {
-								value: siteFilter,
-								onChange: (e) => setSiteFilter(e.target.value),
-								className: "rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-700 focus:border-slate-900 focus:outline-none",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("option", {
-									value: "ALL",
-									children: [
-										"All Sites (",
-										sites.length,
-										")"
-									]
-								}), sites.map((s) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("option", {
-									value: s.siteCode,
-									children: [
-										s.siteCode,
-										" — ",
-										s.siteName
-									]
-								}, s.siteCode))]
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("select", {
-								value: typeFilter,
-								onChange: (e) => setTypeFilter(e.target.value),
-								className: "rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-700 focus:border-slate-900 focus:outline-none",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("option", {
-									value: "ALL",
-									children: [
-										"All Project Types (",
-										projectTypes.length,
-										")"
-									]
-								}), projectTypes.map((pt) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("option", {
-									value: pt.typeCode,
-									children: [
-										pt.typeCode,
-										" — ",
-										pt.typeName
-									]
-								}, pt.typeCode))]
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("select", {
-								value: statusFilter,
-								onChange: (e) => setStatusFilter(e.target.value),
-								className: "rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-700 focus:border-slate-900 focus:outline-none",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
-									value: "ALL",
-									children: "All Statuses"
-								}), PROJECT_STATUS_OPTIONS.map((st) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
-									value: st,
-									children: st
-								}, st))]
-							})
-						]
-					})]
-				})
-			}),
-			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				className: "grid grid-cols-1 lg:grid-cols-12 gap-6 items-start",
-				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-					className: "lg:col-span-7 rounded-lg border border-slate-200 bg-white",
-					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "flex items-center justify-between border-b border-slate-200 px-5 py-3.5",
-						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("h2", {
-							className: "text-sm font-bold text-slate-900",
-							children: [
-								"1. Main Projects List (",
-								filteredProjects.length,
-								")"
-							]
-						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-							className: "text-xs text-slate-500",
-							children: "Click any Main Project row to view its linked Sub-Projects in the right panel."
-						})] }), modulePermission.add && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-							type: "button",
-							onClick: () => setIsCreateProjectModalOpen(true),
-							className: "inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-800 hover:bg-slate-50 whitespace-nowrap",
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Plus, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "New Project" })]
-						})]
-					}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-						className: "overflow-x-auto",
-						children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("table", {
-							className: "w-full text-left border-collapse",
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("thead", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", {
-								className: "border-b border-slate-200 bg-slate-50/80 text-xs font-semibold text-slate-500",
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(FormDrawerModal, {
+				isOpen: isCreateDrawerOpen,
+				title: `New Main Project (${nextProjectId})`,
+				subtitle: "Step 1: Define Site, Type, and Unit Identifier. Step 2: Add optional initial work packages (Sub-Projects).",
+				size: "xl",
+				onClose: () => setIsCreateDrawerOpen(false),
+				children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("form", {
+					onSubmit: handleSubmitCreateProject,
+					className: "space-y-6",
+					children: [
+						createFormError && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-xs text-red-800",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CircleAlert, { className: "h-4 w-4 text-red-600 shrink-0 mt-0.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: createFormError })]
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 flex flex-wrap items-center justify-between gap-2",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+								className: "text-[11px] font-semibold uppercase tracking-wide text-slate-500",
+								children: "Generated Main Project Code"
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+								className: "mt-0.5 font-mono text-base font-bold text-slate-900",
+								children: assembledMainCode
+							})] }), duplicateMainProject && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+								className: "text-xs font-semibold text-red-600",
 								children: [
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-										className: "py-2.5 px-3 font-mono",
-										children: "Project ID"
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-										className: "py-2.5 px-3",
-										children: "Main Project Code"
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-										className: "py-2.5 px-3",
-										children: "Site & Developer"
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-										className: "py-2.5 px-3 text-center",
-										children: "Sub-Projects"
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-										className: "py-2.5 px-3 text-right",
-										children: "Net TCP"
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-										className: "py-2.5 px-3",
-										children: "Status"
-									})
+									"Already exists (",
+									duplicateMainProject.projectId,
+									")"
 								]
-							}) }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tbody", {
-								className: "divide-y divide-slate-200 text-xs",
-								children: filteredProjects.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tr", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
-									colSpan: 6,
-									className: "py-12 px-6 text-center text-slate-500 space-y-3",
-									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-										className: "font-medium text-slate-800",
-										children: "No Main Projects match your filter"
-									}), modulePermission.add && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-										type: "button",
-										onClick: () => setIsCreateProjectModalOpen(true),
-										className: "inline-flex items-center gap-1.5 rounded-md bg-slate-900 px-3.5 py-2 text-xs font-semibold text-white hover:bg-slate-800",
-										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Plus, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Create Main Project" })]
-									})]
-								}) }) : filteredProjects.map((project) => {
-									const linkedSubs = subProjectsByProjectId[project.projectId] || [];
-									const projectNetTCP = tcpByProjectId[project.projectId] || 0;
-									const isSelected = activeMainProject?.projectId === project.projectId;
-									return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", {
-										onClick: () => setSelectedMainProjectId(project.projectId),
-										className: `cursor-pointer transition-colors ${isSelected ? "bg-slate-100/90 border-l-4 border-l-slate-900" : "hover:bg-slate-50/80"}`,
-										children: [
-											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-												className: "py-3 px-3 font-mono font-semibold text-slate-700 tabular-nums whitespace-nowrap",
-												children: project.projectId
-											}),
-											/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
-												className: "py-3 px-3",
-												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-													className: "font-mono font-bold text-slate-900 whitespace-nowrap",
-													children: project.mainProjectCode
-												}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-													className: "text-xs text-slate-500 truncate max-w-[200px]",
-													children: project.projectName || `${project.typeCode} · ${project.unitIdentifier}`
-												})]
-											}),
-											/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
-												className: "py-3 px-3",
-												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-													className: "font-medium text-slate-900",
-													children: [
-														/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-															className: "font-mono text-slate-700",
-															children: project.siteCode
-														}),
-														" ",
-														"· ",
-														project.siteName
-													]
-												}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-													className: "text-xs text-slate-500",
-													children: project.developer
-												})]
-											}),
-											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-												className: "py-3 px-3 text-center font-mono font-semibold text-slate-800 tabular-nums whitespace-nowrap",
-												children: linkedSubs.length
-											}),
-											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-												className: "py-3 px-3 text-right font-mono font-semibold text-slate-900 tabular-nums whitespace-nowrap",
-												children: formatCurrency(projectNetTCP)
-											}),
-											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-												className: "py-3 px-3 whitespace-nowrap",
-												onClick: (e) => e.stopPropagation(),
-												children: modulePermission.edit ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("select", {
-													value: project.status,
-													onChange: (e) => handleQuickStatusChange(project, e.target.value),
-													"aria-label": `Change status for ${project.mainProjectCode}`,
-													className: `rounded border border-slate-200 bg-white px-2 py-1 text-xs focus:border-slate-900 focus:outline-none ${statusTextColor(project.status)}`,
-													children: PROJECT_STATUS_OPTIONS.map((st) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
-														value: st,
-														className: "text-slate-900 font-normal",
-														children: st
-													}, st))
-												}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-													className: statusTextColor(project.status),
-													children: project.status
-												})
-											})
-										]
-									}, `${project.projectId}-${project.rowNumber}`);
-								})
 							})]
-						})
-					})]
-				}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-					className: "lg:col-span-5 rounded-lg border border-slate-200 bg-white",
-					children: !activeMainProject ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "p-10 text-center space-y-2 text-xs text-slate-500",
-						children: [
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Layers, { className: "mx-auto h-6 w-6 text-slate-400" }),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-								className: "font-semibold text-slate-800",
-								children: "No Main Project Selected"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { children: "Select a Main Project from the left list or create a new Main Project to view its linked Sub-Projects here." })
-						]
-					}) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "border-b border-slate-200 bg-slate-50/70 px-5 py-4 space-y-3",
-						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-							className: "flex items-start justify-between gap-3",
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-									className: "text-xs font-medium text-slate-500",
-									children: "2. Linked Sub-Projects for Selected Main Project"
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-									className: "mt-0.5 flex flex-wrap items-center gap-2",
-									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-										className: "font-mono text-base font-bold text-slate-900",
-										children: activeMainProject.mainProjectCode
-									}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-										className: "font-mono text-xs text-slate-500",
-										children: [
-											"(",
-											activeMainProject.projectId,
-											")"
-										]
-									})]
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-									className: "mt-0.5 text-xs text-slate-600",
-									children: activeMainProject.projectName
-								})
-							] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								className: "flex flex-wrap items-center gap-1.5 shrink-0",
-								children: [modulePermission.add && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-									type: "button",
-									onClick: () => openAddSubProjectPopup(activeMainProject),
-									className: "inline-flex items-center gap-1.5 rounded-md bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800 whitespace-nowrap",
-									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Plus, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Add Sub-Project" })]
-								}), modulePermission.edit && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-									type: "button",
-									onClick: () => handleDeleteMainProject(activeMainProject),
-									disabled: activeProjectSubProjects.length > 0 || contractsTCP.some((c) => c.projectId === activeMainProject.projectId),
-									title: activeProjectSubProjects.length > 0 ? "Delete linked Sub-Projects first before deleting this Main Project" : `Delete Main Project ${activeMainProject.mainProjectCode}`,
-									className: "inline-flex items-center gap-1 rounded-md border border-red-200 bg-red-50/70 px-2.5 py-1.5 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-35 disabled:cursor-not-allowed whitespace-nowrap",
-									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Trash2, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Delete Project" })]
-								})]
-							})]
-						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-							className: "grid grid-cols-3 gap-2 rounded border border-slate-200 bg-white p-2.5 text-xs",
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "grid grid-cols-1 sm:grid-cols-3 gap-3.5",
 							children: [
-								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-									className: "text-slate-500",
-									children: "Site & Type"
-								}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-									className: "font-mono font-semibold text-slate-900",
-									children: [
-										activeMainProject.siteCode,
-										" · ",
-										activeMainProject.typeCode
-									]
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
+									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
+										className: "block text-xs font-semibold text-slate-700 mb-1",
+										children: ["Site ", /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+											className: "text-red-500",
+											children: "*"
+										})]
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("select", {
+										value: selectedSiteCode,
+										onChange: (e) => setSelectedSiteCode(e.target.value),
+										className: "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900",
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
+											value: "",
+											children: "Select Site..."
+										}), sites.map((s) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("option", {
+											value: s.siteCode,
+											children: [
+												s.siteCode,
+												" — ",
+												s.siteName
+											]
+										}, s.siteCode))]
+									}),
+									sites.length === 0 && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+										type: "button",
+										onClick: () => {
+											setIsCreateDrawerOpen(false);
+											onNavigateTab("sites");
+										},
+										className: "mt-1 text-xs font-medium text-blue-700 hover:underline",
+										children: "+ Register a Site first"
+									})
+								] }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
+									className: "block text-xs font-semibold text-slate-700 mb-1",
+									children: ["Project Type ", /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+										className: "text-red-500",
+										children: "*"
+									})]
+								}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("select", {
+									value: selectedTypeCode,
+									onChange: (e) => setSelectedTypeCode(e.target.value),
+									className: "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
+										value: "",
+										children: "Select Type..."
+									}), activeProjectTypes.map((t) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("option", {
+										value: t.typeCode,
+										children: [
+											t.typeCode,
+											" — ",
+											t.typeName
+										]
+									}, t.typeCode))]
 								})] }),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-									className: "text-slate-500",
-									children: "Sub-Projects"
-								}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-									className: "font-mono font-semibold text-slate-900 tabular-nums",
-									children: [activeProjectSubProjects.length, " Linked"]
-								})] }),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-									className: "text-slate-500",
-									children: "Project Net TCP"
-								}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-									className: "font-mono font-semibold text-slate-900 tabular-nums",
-									children: formatCurrency(tcpByProjectId[activeMainProject.projectId] || 0)
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
+									className: "block text-xs font-semibold text-slate-700 mb-1",
+									children: ["Unit / Lot ID ", /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+										className: "text-red-500",
+										children: "*"
+									})]
+								}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+									type: "text",
+									value: unitIdentifier,
+									onChange: (e) => setUnitIdentifier(e.target.value),
+									placeholder: "e.g. B05L12 or 101",
+									className: "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 font-mono text-sm text-slate-900"
 								})] })
 							]
-						})]
-					}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-						className: "divide-y divide-slate-200",
-						children: activeProjectSubProjects.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-							className: "p-8 text-center space-y-3 text-xs text-slate-500",
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
-								"No linked sub-projects found for",
-								" ",
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", {
-									className: "font-mono text-slate-800",
-									children: activeMainProject.mainProjectCode
-								}),
-								"."
-							] }), modulePermission.add && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-								type: "button",
-								onClick: () => openAddSubProjectPopup(activeMainProject),
-								className: "inline-flex items-center gap-1.5 rounded-md bg-slate-900 px-3.5 py-2 text-xs font-semibold text-white hover:bg-slate-800",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Plus, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Add Sub-Project" })]
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
+							className: "block text-xs font-semibold text-slate-700 mb-1",
+							children: ["Project Name / Description ", /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+								className: "text-red-500",
+								children: "*"
 							})]
-						}) : activeProjectSubProjects.map((sp) => {
-							const isEditingSub = editingSubRow === sp.rowNumber && editSubForm !== null;
-							const subTCPInfo = tcpBySubProjectId[sp.subProjectId] || {
-								netTCP: 0,
-								contracts: []
-							};
-							return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								className: "p-4 space-y-3 hover:bg-slate-50/50 transition-colors",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-									className: "flex items-start justify-between gap-3",
-									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-										className: "flex flex-wrap items-center gap-2",
-										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-											className: "font-mono text-sm font-bold text-slate-900",
-											children: sp.subProjectCode
-										}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-											className: "font-mono text-xs text-slate-500 tabular-nums",
-											children: [
-												"(",
-												sp.subProjectId,
-												")"
-											]
-										})]
-									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-										className: "mt-0.5 text-xs font-medium text-slate-800",
-										children: sp.subProjectName
-									})] }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-										className: "flex items-center gap-2 shrink-0",
-										children: modulePermission.edit ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("select", {
-											value: sp.status,
-											onChange: (e) => handleQuickSubStatusChange(sp, e.target.value),
-											className: `rounded border border-slate-200 bg-white px-2 py-1 text-xs focus:border-slate-900 focus:outline-none ${statusTextColor(sp.status)}`,
-											children: PROJECT_STATUS_OPTIONS.map((st) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
-												value: st,
-												className: "text-slate-900 font-normal",
-												children: st
-											}, st))
-										}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-											className: `text-xs ${statusTextColor(sp.status)}`,
-											children: sp.status
-										})
-									})]
-								}), isEditingSub && editSubForm ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-									className: "rounded border border-slate-200 bg-slate-50 p-3 space-y-3 text-xs",
-									children: [
-										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
-											className: "block text-xs font-medium text-slate-700",
-											children: ["Sub-Project Name ", /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-												className: "text-red-600",
-												children: "*"
-											})]
-										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-											type: "text",
-											value: editSubForm.subProjectName,
-											onChange: (e) => setEditSubForm({
-												...editSubForm,
-												subProjectName: e.target.value
-											}),
-											placeholder: "Sub-project scope name...",
-											className: "mt-1 w-full rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs"
-										})] }),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-											className: "grid grid-cols-1 sm:grid-cols-2 gap-3",
-											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", {
-												className: "block text-xs font-medium text-slate-700",
-												children: "Target Date"
-											}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-												type: "date",
-												value: editSubForm.targetDate,
-												onChange: (e) => setEditSubForm({
-													...editSubForm,
-													targetDate: e.target.value
-												}),
-												className: "mt-1 w-full rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-mono"
-											})] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", {
-												className: "block text-xs font-medium text-slate-700",
-												children: "Scope / Remarks"
-											}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-												type: "text",
-												value: editSubForm.remarks,
-												onChange: (e) => setEditSubForm({
-													...editSubForm,
-													remarks: e.target.value
-												}),
-												placeholder: "Notes...",
-												className: "mt-1 w-full rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs"
-											})] })]
-										}),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-											className: "flex items-center justify-end gap-2",
-											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-												type: "button",
-												onClick: () => {
-													setEditingSubRow(null);
-													setEditSubForm(null);
-												},
-												className: "rounded border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700",
-												children: "Cancel"
-											}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-												type: "button",
-												onClick: () => handleSaveSubUpdate(sp),
-												disabled: !editSubForm.subProjectName.trim(),
-												className: "rounded bg-slate-900 px-3 py-1 text-xs font-semibold text-white disabled:opacity-40",
-												children: "Save Sub-Project"
-											})]
-										})
-									]
-								}) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-									className: "rounded border border-slate-200 bg-slate-50/60 p-2.5 space-y-2 text-xs",
-									children: [
-										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-											className: "flex items-center justify-between",
-											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-												className: "text-slate-500",
-												children: "Net Awarded TCP:"
-											}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", {
-												className: "font-mono text-slate-900 tabular-nums",
-												children: formatCurrency(subTCPInfo.netTCP)
-											})]
-										}),
-										subTCPInfo.contracts.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-											className: "border-t border-slate-200/80 pt-2 space-y-1",
-											children: subTCPInfo.contracts.map((c) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-												className: "flex flex-wrap items-center justify-between gap-1 text-xs",
-												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-													className: "font-mono text-slate-700",
-													children: [
-														/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: c.contractId }),
-														c.tcpId ? ` (${c.tcpId})` : "",
-														" ·",
-														" ",
-														c.contractorCode,
-														" · ",
-														c.tcpType,
-														c.parentContractId ? ` → Ref: ${c.parentContractId}` : ""
-													]
-												}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-													className: "font-mono tabular-nums font-semibold text-slate-900",
-													children: [
-														formatCurrency(c.tcpAmount),
-														" (",
-														c.contractStatus,
-														")"
-													]
-												})]
-											}, c.contractId))
-										}),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-											className: "flex flex-wrap items-center justify-between gap-2 border-t border-slate-200/80 pt-2 text-xs text-slate-500",
-											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-												className: "flex items-center gap-2",
-												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Calendar, { className: "h-3.5 w-3.5 text-slate-400" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-													className: "font-mono",
-													children: ["Target: ", sp.targetDate || "—"]
-												})]
-											}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-												className: "flex items-center gap-1.5",
-												children: [canAwardContracts && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-													type: "button",
-													onClick: () => onOpenAwardTCPForSubProject(sp.subProjectId),
-													className: "inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-800 hover:bg-slate-100",
-													children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(FileText, { className: "h-3 w-3" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Award TCP" })]
-												}), modulePermission.edit && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-													type: "button",
-													onClick: () => startEditSub(sp),
-													className: "inline-flex items-center gap-1 rounded border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100",
-													children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(PenLine, { className: "h-3 w-3" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Edit" })]
-												}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-													type: "button",
-													onClick: () => handleDeleteSubProject(sp),
-													disabled: subTCPInfo.contracts.length > 0,
-													title: subTCPInfo.contracts.length > 0 ? `Cannot delete: ${subTCPInfo.contracts.length} Contract TCP record(s) linked` : `Delete Sub-Project ${sp.subProjectCode}`,
-													className: "inline-flex items-center gap-1 rounded border border-red-200 bg-red-50/60 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-35 disabled:cursor-not-allowed",
-													children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Trash2, { className: "h-3 w-3" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Delete" })]
-												})] })]
-											})]
-										})
-									]
-								})]
-							}, `${sp.subProjectId}-${sp.rowNumber}`);
-						})
-					})] })
-				})]
-			}),
-			isCreateProjectModalOpen && modulePermission.add && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-				className: "fixed inset-0 z-40 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-[1px]",
-				role: "dialog",
-				"aria-modal": "true",
-				children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-					className: "w-full max-w-4xl rounded-lg border border-slate-200 bg-white shadow-xl max-h-[90vh] flex flex-col",
-					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "flex items-center justify-between border-b border-slate-200 px-6 py-4",
-						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-							className: "flex items-center gap-2.5",
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(FolderGit2, { className: "h-4 w-4 text-slate-800" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", {
-								className: "text-base font-bold text-slate-900",
-								children: "Create New Main Project & Linked Sub-Project(s)"
-							}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
-								className: "text-xs text-slate-500",
-								children: [
-									"Auto-generates Main Project Code (",
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-										className: "font-mono",
-										children: "SITECODE-TYPE-UNIQUEID"
-									}),
-									") and automatically sets initial status to",
-									" ",
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", {
-										className: "font-mono text-blue-700",
-										children: AUTO_CREATION_STATUS
-									}),
-									"."
-								]
-							})] })]
-						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-							type: "button",
-							onClick: () => setIsCreateProjectModalOpen(false),
-							className: "rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600",
-							children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(X, { className: "h-4 w-4" })
-						})]
-					}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("form", {
-						onSubmit: handleCreateProjectSubmit,
-						className: "overflow-y-auto p-6 space-y-6",
-						children: [
-							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								className: "rounded-md border border-slate-200 bg-slate-50 p-4 flex flex-col md:flex-row md:items-center justify-between gap-4",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-									className: "space-y-1",
-									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-										className: "text-xs font-medium text-slate-500",
-										children: [
-											"Auto-Generated Main Project Code (",
-											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-												className: "font-mono",
-												children: "SITECODE-TYPE-UNIQUEID"
-											}),
-											")"
-										]
-									}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-										className: "flex flex-wrap items-center gap-2",
-										children: [
-											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-												className: "font-mono text-xl font-bold tracking-tight text-slate-900 tabular-nums",
-												children: assembledMainProjectCode
-											}),
-											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-												className: "text-slate-400",
-												children: "·"
-											}),
-											/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-												className: "text-xs text-slate-600",
-												children: [
-													"Project ID:",
-													" ",
-													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", {
-														className: "font-mono font-semibold text-slate-900",
-														children: nextProjectId
-													})
-												]
-											}),
-											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-												className: "text-slate-400",
-												children: "·"
-											}),
-											/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-												className: "text-xs text-slate-600",
-												children: [
-													"Auto Status:",
-													" ",
-													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", {
-														className: "font-mono font-semibold text-blue-700",
-														children: AUTO_CREATION_STATUS
-													})
-												]
-											})
-										]
-									})]
-								}), selectedSite && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-									className: "text-xs text-slate-600 md:text-right space-y-0.5",
-									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
-										"Site:",
-										" ",
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", {
-											className: "font-medium text-slate-900",
-											children: selectedSite.siteName
-										}),
-										" ",
-										"(",
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-											className: "font-mono",
-											children: selectedSite.siteCode
-										}),
-										")"
-									] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
-										"Developer:",
-										" ",
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", {
-											className: "font-medium text-slate-900",
-											children: selectedSite.developer
-										})
-									] })]
-								})]
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								className: "grid grid-cols-1 md:grid-cols-12 gap-4",
-								children: [
-									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-										className: "md:col-span-4",
-										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
-											className: "block text-xs font-medium text-slate-700",
-											children: ["1. Select Site ", /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-												className: "text-red-600",
-												children: "*"
-											})]
-										}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("select", {
-											value: selectedSiteCode,
-											onChange: (e) => setSelectedSiteCode(e.target.value),
-											required: true,
-											className: "mt-1.5 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 focus:border-slate-900 focus:outline-none",
-											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
-												value: "",
-												children: "— Choose Site —"
-											}), sites.map((s) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("option", {
-												value: s.siteCode,
-												children: [
-													s.siteCode,
-													" — ",
-													s.siteName,
-													" (",
-													s.developer,
-													")"
-												]
-											}, s.siteCode))]
-										})]
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-										className: "md:col-span-4",
-										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
-											className: "block text-xs font-medium text-slate-700",
-											children: ["2. Project Type ", /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-												className: "text-red-600",
-												children: "*"
-											})]
-										}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("select", {
-											value: selectedTypeCode,
-											onChange: (e) => setSelectedTypeCode(e.target.value),
-											required: true,
-											className: "mt-1.5 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 focus:border-slate-900 focus:outline-none",
-											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
-												value: "",
-												children: "— Choose Type Option —"
-											}), activeProjectTypes.map((pt) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("option", {
-												value: pt.typeCode,
-												children: [
-													pt.typeCode,
-													" — ",
-													pt.typeName
-												]
-											}, pt.typeCode))]
-										})]
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-										className: "md:col-span-4",
-										children: [
-											/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
-												className: "block text-xs font-medium text-slate-700",
-												children: [
-													"3. Unit / Unique Identifier",
-													" ",
-													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-														className: "text-red-600",
-														children: "*"
-													})
-												]
-											}),
-											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-												type: "text",
-												value: unitIdentifier,
-												onChange: (e) => setUnitIdentifier(e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, "")),
-												placeholder: "e.g. U101, BLK2L5, TWR1",
-												required: true,
-												className: `mt-1.5 w-full rounded-md border px-3 py-2 text-xs font-mono uppercase focus:outline-none ${unitDuplicationCheck.isDuplicate ? "border-red-500 bg-red-50/40 text-red-900" : "border-slate-300 bg-white text-slate-900 focus:border-slate-900"}`
-											}),
-											normalizedUnitId && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-												className: "mt-1 flex items-start gap-1 text-xs",
-												children: unitDuplicationCheck.isDuplicate ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CircleAlert, { className: "h-3.5 w-3.5 text-red-600 shrink-0 mt-0.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-													className: "text-red-600",
-													children: unitDuplicationCheck.reason
-												})] }) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CircleCheck, { className: "h-3.5 w-3.5 text-emerald-600 shrink-0 mt-0.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-													className: "text-emerald-700",
-													children: "Unique identifier verified"
-												})] })
-											})
-										]
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-										className: "md:col-span-9",
-										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", {
-											className: "block text-xs font-medium text-slate-700",
-											children: "Project Title / Description (Optional — auto-filled if left blank)"
-										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-											type: "text",
-											value: projectName,
-											onChange: (e) => setProjectName(e.target.value),
-											placeholder: selectedSite && selectedType && normalizedUnitId ? `${selectedSite.siteName} — ${selectedType.typeName} (${normalizedUnitId})` : "e.g. Tower 1 Residential Handover Package",
-											className: "mt-1.5 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 focus:border-slate-900 focus:outline-none"
-										})]
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-										className: "md:col-span-3",
-										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", {
-											className: "block text-xs font-medium text-slate-700",
-											children: "Initial Status (Auto-Set)"
-										}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-											className: "mt-1.5 rounded-md border border-slate-200 bg-slate-100 px-3 py-2 text-xs font-mono font-semibold text-blue-700",
-											children: [AUTO_CREATION_STATUS, " (Automatic)"]
-										})]
-									})
-								]
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								className: "border-t border-slate-200 pt-5 space-y-4",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-									className: "flex flex-col sm:flex-row sm:items-center justify-between gap-3",
-									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("h3", {
-										className: "text-xs font-bold text-slate-900",
-										children: ["Mandatory Linked Sub-Project(s) for ", nextProjectId]
-									}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
-										className: "text-xs text-slate-500",
-										children: [
-											"Every Main Project requires at least one Sub-Project. Initial status is automatically set to",
-											" ",
-											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-												className: "font-mono font-semibold",
-												children: AUTO_CREATION_STATUS
-											}),
-											"."
-										]
-									})] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+							type: "text",
+							value: projectName,
+							onChange: (e) => setProjectName(e.target.value),
+							placeholder: "e.g. Block 5 Lot 12 Electrical & Utility Fit-Out",
+							className: "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+						})] }),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "space-y-3 border-t border-slate-200 pt-4",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+								className: "flex items-center justify-between",
+								children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "flex items-center gap-3",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
 										type: "button",
-										onClick: handleAddSubDraftRow,
-										className: "inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-800 hover:bg-slate-50",
-										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Plus, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Add Another Sub-Project Row" })]
-									})]
-								}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-									className: "space-y-3",
-									children: subDrafts.map((draft, idx) => {
-										const validation = subDraftValidation[draft.id];
-										const assignedSubId = `SUB-${String(nextSubProjectBaseNum + idx).padStart(4, "0")}`;
-										return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-											className: "rounded-md border border-slate-200 bg-slate-50/60 p-4 space-y-3",
-											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-												className: "flex items-center justify-between border-b border-slate-200/80 pb-2 text-xs",
-												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-													className: "flex items-center gap-2",
-													children: [
-														/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-															className: "font-semibold text-slate-900",
-															children: ["Sub-Project #", idx + 1]
-														}),
-														/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-															className: "text-slate-400",
-															children: "·"
-														}),
-														/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-															className: "font-mono text-slate-600",
-															children: ["ID: ", assignedSubId]
-														}),
-														/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-															className: "text-slate-400",
-															children: "·"
-														}),
-														/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-															className: "font-mono text-blue-700",
-															children: ["Auto Status: ", AUTO_CREATION_STATUS]
-														})
-													]
-												}), subDrafts.length > 1 && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-													type: "button",
-													onClick: () => handleRemoveSubDraftRow(draft.id),
-													className: "inline-flex items-center gap-1 text-xs font-medium text-red-600 hover:text-red-700",
-													children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Trash2, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Remove" })]
-												})]
-											}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-												className: "grid grid-cols-1 md:grid-cols-12 gap-3",
-												children: [
-													/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-														className: "md:col-span-4",
-														children: [
-															/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
-																className: "block text-xs font-medium text-slate-700",
-																children: [
-																	"Sub-Project Code",
-																	" ",
-																	/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-																		className: "text-red-600",
-																		children: "*"
-																	})
-																]
-															}),
-															/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-																type: "text",
-																value: draft.subProjectCode,
-																onChange: (e) => handleUpdateSubDraft(draft.id, "subProjectCode", e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, "")),
-																placeholder: "e.g. SP-CIVIL-01",
-																required: true,
-																className: `mt-1 w-full rounded-md border px-2.5 py-1.5 text-xs font-mono uppercase focus:outline-none ${validation?.codeError ? "border-red-500 bg-red-50/50 text-red-900" : "border-slate-300 bg-white text-slate-900 focus:border-slate-900"}`
-															}),
-															draft.subProjectCode && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-																className: "mt-1 flex items-start gap-1 text-xs",
-																children: validation?.codeError ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-																	className: "text-red-600",
-																	children: validation.codeError
-																}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-																	className: "text-emerald-700",
-																	children: "Unique code"
-																})
-															})
-														]
-													}),
-													/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-														className: "md:col-span-5",
-														children: [
-															/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
-																className: "block text-xs font-medium text-slate-700",
-																children: [
-																	"Sub-Project Name / Scope",
-																	" ",
-																	/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-																		className: "text-red-600",
-																		children: "*"
-																	})
-																]
-															}),
-															/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-																type: "text",
-																value: draft.subProjectName,
-																onChange: (e) => handleUpdateSubDraft(draft.id, "subProjectName", e.target.value),
-																placeholder: "e.g. Structural & Foundation Works",
-																required: true,
-																className: "mt-1 w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-900 focus:border-slate-900 focus:outline-none"
-															}),
-															validation?.nameError && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-																className: "mt-1 text-xs text-red-600",
-																children: validation.nameError
-															})
-														]
-													}),
-													/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-														className: "md:col-span-3",
-														children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", {
-															className: "block text-xs font-medium text-slate-700",
-															children: "Target Date"
-														}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-															type: "date",
-															value: draft.targetDate,
-															onChange: (e) => handleUpdateSubDraft(draft.id, "targetDate", e.target.value),
-															className: "mt-1 w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-mono text-slate-900 focus:border-slate-900 focus:outline-none"
-														})]
-													})
-												]
+										onClick: () => setSubDrafts((prev) => [...prev, createInitialSubDraft(prev.length + 1)]),
+										className: "inline-flex items-center gap-1 rounded-md bg-slate-900 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-slate-800",
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Plus, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Add Row" })]
+									}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h3", {
+										className: "text-sm font-semibold text-slate-900",
+										children: "Initial Sub-Projects (Work Packages)"
+									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+										className: "text-xs text-slate-500",
+										children: "Add one or more sub-projects now, or leave blank and add them later."
+									})] })]
+								})
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+								className: "space-y-3",
+								children: subDrafts.map((draft, idx) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "rounded-lg border border-slate-200 bg-slate-50/70 p-3.5 space-y-2.5",
+									children: [
+										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+											className: "flex items-center justify-between text-xs font-semibold text-slate-600",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { children: ["Sub-Project #", idx + 1] }), subDrafts.length > 1 && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+												type: "button",
+												onClick: () => setSubDrafts((prev) => prev.filter((d) => d.id !== draft.id)),
+												className: "text-red-600 hover:underline",
+												children: "Remove"
 											})]
-										}, draft.id);
-									})
-								})]
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								className: "flex items-center justify-end gap-3 border-t border-slate-200 pt-4",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-									type: "button",
-									onClick: () => setIsCreateProjectModalOpen(false),
-									className: "rounded-md border border-slate-300 bg-white px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50",
-									children: "Cancel"
-								}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-									type: "submit",
-									disabled: !canSubmitNewProject,
-									className: "inline-flex items-center gap-2 rounded-md bg-slate-900 px-5 py-2 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-40",
-									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Create Project & Link Sub-Project(s)" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ArrowRight, { className: "h-3.5 w-3.5" })]
-								})]
-							})
-						]
-					})]
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+											className: "grid grid-cols-1 sm:grid-cols-3 gap-2.5",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+												type: "text",
+												value: draft.subProjectCode,
+												onChange: (e) => setSubDrafts((prev) => prev.map((d) => d.id === draft.id ? {
+													...d,
+													subProjectCode: e.target.value
+												} : d)),
+												placeholder: "Suffix e.g. LabMat",
+												className: "rounded-md border border-slate-300 bg-white px-2.5 py-1.5 font-mono text-xs text-slate-900"
+											}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+												type: "text",
+												value: draft.subProjectName,
+												onChange: (e) => setSubDrafts((prev) => prev.map((d) => d.id === draft.id ? {
+													...d,
+													subProjectName: e.target.value
+												} : d)),
+												placeholder: "Scope Name e.g. Labor & Materials",
+												className: "rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-900 sm:col-span-2"
+											})]
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+											className: "grid grid-cols-1 sm:grid-cols-3 gap-2.5",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+												type: "date",
+												value: draft.targetDate,
+												onChange: (e) => setSubDrafts((prev) => prev.map((d) => d.id === draft.id ? {
+													...d,
+													targetDate: e.target.value
+												} : d)),
+												className: "rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-900"
+											}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+												type: "text",
+												value: draft.remarks,
+												onChange: (e) => setSubDrafts((prev) => prev.map((d) => d.id === draft.id ? {
+													...d,
+													remarks: e.target.value
+												} : d)),
+												placeholder: "Optional remarks",
+												className: "rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-900 sm:col-span-2"
+											})]
+										})
+									]
+								}, draft.id))
+							})]
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "flex items-center justify-end gap-2 pt-4 border-t border-slate-200",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+								type: "button",
+								onClick: () => setIsCreateDrawerOpen(false),
+								className: "rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50",
+								children: "Cancel"
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+								type: "submit",
+								disabled: Boolean(duplicateMainProject),
+								className: "rounded-lg bg-slate-900 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-50",
+								children: "Review & Create Project"
+							})]
+						})
+					]
 				})
 			}),
-			isAddSubModalOpen && modulePermission.add && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-				className: "fixed inset-0 z-40 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-[1px]",
-				role: "dialog",
-				"aria-modal": "true",
-				children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-					className: "w-full max-w-lg rounded-lg border border-slate-200 bg-white shadow-xl",
-					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "flex items-center justify-between border-b border-slate-200 px-6 py-4",
-						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h3", {
-							className: "text-sm font-bold text-slate-900",
-							children: "Add Linked Sub-Project"
-						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
-							className: "text-xs text-slate-500",
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(FormDrawerModal, {
+				isOpen: Boolean(editingMainProject),
+				title: editingMainProject ? `Edit Project — ${editingMainProject.mainProjectCode}` : "Edit Project",
+				subtitle: "Update the project name or lifecycle status.",
+				size: "md",
+				onClose: () => setEditingMainProject(null),
+				children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("form", {
+					onSubmit: handleSubmitEditMain,
+					className: "space-y-4",
+					children: [
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", {
+							className: "block text-xs font-semibold text-slate-700 mb-1",
+							children: "Project Name / Description"
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+							type: "text",
+							value: editMainName,
+							onChange: (e) => setEditMainName(e.target.value),
+							className: "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+						})] }),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", {
+							className: "block text-xs font-semibold text-slate-700 mb-1",
+							children: "Project Status"
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("select", {
+							value: editMainStatus,
+							onChange: (e) => setEditMainStatus(e.target.value),
+							className: "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900",
+							children: PROJECT_STATUS_OPTIONS.map((st) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
+								value: st,
+								children: st
+							}, st))
+						})] }),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "flex items-center justify-end gap-2 pt-4 border-t border-slate-200",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+								type: "button",
+								onClick: () => setEditingMainProject(null),
+								className: "rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50",
+								children: "Cancel"
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+								type: "submit",
+								className: "rounded-lg bg-slate-900 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-800",
+								children: "Review & Save Changes"
+							})]
+						})
+					]
+				})
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(FormDrawerModal, {
+				isOpen: isSubDrawerOpen,
+				title: editingSubProject ? `Edit Sub-Project — ${editingSubProject.subProjectCode}` : "Add Sub-Project Work Package",
+				subtitle: editingSubProject ? "Update scope name, progress percentage, status, target date, or remarks." : "Link a new work package under the selected Main Project.",
+				size: "md",
+				onClose: () => {
+					setIsSubDrawerOpen(false);
+					setEditingSubProject(null);
+				},
+				children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("form", {
+					onSubmit: handleSubmitSubDrawer,
+					className: "space-y-4",
+					children: [
+						subFormError && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-xs text-red-800",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CircleAlert, { className: "h-4 w-4 text-red-600 shrink-0 mt-0.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: subFormError })]
+						}),
+						!editingSubProject && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
+							className: "block text-xs font-semibold text-slate-700 mb-1",
 							children: [
-								"Initial status is automatically set to",
+								"Sub-Project Suffix / Code",
 								" ",
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", {
-									className: "font-mono text-blue-700",
-									children: AUTO_CREATION_STATUS
-								}),
-								"."
-							]
-						})] }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-							type: "button",
-							onClick: () => setIsAddSubModalOpen(false),
-							className: "rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600",
-							children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(X, { className: "h-4 w-4" })
-						})]
-					}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("form", {
-						onSubmit: handleAddSubToExistingSubmit,
-						className: "p-6 space-y-4",
-						children: [
-							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
-								className: "block text-xs font-medium text-slate-700",
-								children: ["Parent Main Project ", /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-									className: "text-red-600",
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+									className: "text-red-500",
 									children: "*"
-								})]
-							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("select", {
-								value: targetParentProjectId,
-								onChange: (e) => setTargetParentProjectId(e.target.value),
-								required: true,
-								className: "mt-1.5 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 focus:border-slate-900 focus:outline-none",
-								children: projects.map((p) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("option", {
-									value: p.projectId,
-									children: [
-										p.mainProjectCode,
-										" — ",
-										p.projectName,
-										" (",
-										p.projectId,
-										")"
-									]
-								}, p.projectId))
-							})] }),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
-								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
-									className: "block text-xs font-medium text-slate-700",
-									children: [
-										"Sub-Project Code (Manual Input)",
-										" ",
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-											className: "text-red-600",
-											children: "*"
-										})
-									]
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-									type: "text",
-									value: newSubDraft.subProjectCode,
-									onChange: (e) => setNewSubDraft({
-										...newSubDraft,
-										subProjectCode: e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, "")
-									}),
-									placeholder: "e.g. SP-MEPFS-02",
-									required: true,
-									className: `mt-1.5 w-full rounded-md border px-3 py-2 text-xs font-mono uppercase focus:outline-none ${existingModalSubCheck.isDuplicate ? "border-red-500 bg-red-50/50 text-red-900" : "border-slate-300 bg-white text-slate-900 focus:border-slate-900"}`
-								}),
-								newSubDraft.subProjectCode && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-									className: "mt-1.5 flex items-start gap-1.5 text-xs",
-									children: existingModalSubCheck.isDuplicate ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CircleAlert, { className: "h-3.5 w-3.5 text-red-600 shrink-0 mt-0.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-										className: "text-red-600",
-										children: existingModalSubCheck.message
-									})] }) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CircleCheck, { className: "h-3.5 w-3.5 text-emerald-600 shrink-0 mt-0.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-										className: "text-emerald-700",
-										children: "Sub-Project code is unique across the database."
-									})] })
 								})
-							] }),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
-								className: "block text-xs font-medium text-slate-700",
-								children: [
-									"Sub-Project Name / Scope",
-									" ",
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-										className: "text-red-600",
-										children: "*"
-									})
-								]
+							]
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+							type: "text",
+							value: subCodeInput,
+							onChange: (e) => setSubCodeInput(e.target.value),
+							placeholder: "e.g. LabMat, Civil, MEPF, SD",
+							className: "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 font-mono text-sm text-slate-900"
+						})] }),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
+							className: "block text-xs font-semibold text-slate-700 mb-1",
+							children: ["Scope Name ", /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+								className: "text-red-500",
+								children: "*"
+							})]
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+							type: "text",
+							value: subNameInput,
+							onChange: (e) => setSubNameInput(e.target.value),
+							placeholder: "e.g. Meter Base Installation",
+							className: "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+						})] }),
+						editingSubProject && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "grid grid-cols-2 gap-3",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", {
+								className: "block text-xs font-semibold text-slate-700 mb-1",
+								children: "Status"
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("select", {
+								value: subStatusInput,
+								onChange: (e) => setSubStatusInput(e.target.value),
+								className: "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900",
+								children: PROJECT_STATUS_OPTIONS.map((st) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
+									value: st,
+									children: st
+								}, st))
+							})] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", {
+								className: "block text-xs font-semibold text-slate-700 mb-1",
+								children: "Progress (%)"
 							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-								type: "text",
-								value: newSubDraft.subProjectName,
-								onChange: (e) => setNewSubDraft({
-									...newSubDraft,
-									subProjectName: e.target.value
-								}),
-								placeholder: "e.g. MEPFS & Fire Protection Package",
-								required: true,
-								className: "mt-1.5 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 focus:border-slate-900 focus:outline-none"
-							})] }),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								className: "grid grid-cols-2 gap-4",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", {
-									className: "block text-xs font-medium text-slate-700",
-									children: "Initial Status (Auto)"
-								}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-									className: "mt-1.5 rounded-md border border-slate-200 bg-slate-100 px-3 py-2 text-xs font-mono font-semibold text-blue-700",
-									children: AUTO_CREATION_STATUS
-								})] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", {
-									className: "block text-xs font-medium text-slate-700",
-									children: "Target Date"
-								}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-									type: "date",
-									value: newSubDraft.targetDate,
-									onChange: (e) => setNewSubDraft({
-										...newSubDraft,
-										targetDate: e.target.value
-									}),
-									className: "mt-1.5 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-xs font-mono text-slate-900 focus:border-slate-900 focus:outline-none"
-								})] })]
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", {
-								className: "block text-xs font-medium text-slate-700",
-								children: "Remarks (Optional)"
-							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-								type: "text",
-								value: newSubDraft.remarks,
-								onChange: (e) => setNewSubDraft({
-									...newSubDraft,
-									remarks: e.target.value
-								}),
-								placeholder: "Additional notes...",
-								className: "mt-1.5 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 focus:border-slate-900 focus:outline-none"
-							})] }),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								className: "flex items-center justify-end gap-3 pt-4 border-t border-slate-200",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-									type: "button",
-									onClick: () => setIsAddSubModalOpen(false),
-									className: "rounded-md border border-slate-300 bg-white px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50",
-									children: "Cancel"
-								}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-									type: "submit",
-									disabled: !targetParentProject || !newSubDraft.subProjectCode.trim() || !newSubDraft.subProjectName.trim() || existingModalSubCheck.isDuplicate,
-									className: "rounded-md bg-slate-900 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-40",
-									children: "Add & Link Sub-Project"
-								})]
-							})
-						]
-					})]
+								type: "number",
+								min: 0,
+								max: 100,
+								value: subProgressInput,
+								onChange: (e) => setSubProgressInput(Number(e.target.value) || 0),
+								className: "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 font-mono text-sm text-slate-900"
+							})] })]
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", {
+							className: "block text-xs font-semibold text-slate-700 mb-1",
+							children: "Target Completion Date"
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+							type: "date",
+							value: subTargetDateInput,
+							onChange: (e) => setSubTargetDateInput(e.target.value),
+							className: "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+						})] }),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", {
+							className: "block text-xs font-semibold text-slate-700 mb-1",
+							children: "Remarks"
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("textarea", {
+							rows: 3,
+							value: subRemarksInput,
+							onChange: (e) => setSubRemarksInput(e.target.value),
+							placeholder: "Optional scope notes or site milestones",
+							className: "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+						})] }),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "flex items-center justify-end gap-2 pt-4 border-t border-slate-200",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+								type: "button",
+								onClick: () => {
+									setIsSubDrawerOpen(false);
+									setEditingSubProject(null);
+								},
+								className: "rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50",
+								children: "Cancel"
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+								type: "submit",
+								className: "rounded-lg bg-slate-900 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-800",
+								children: editingSubProject ? "Review & Save Sub-Project" : "Review & Add Sub-Project"
+							})]
+						})
+					]
 				})
 			})
 		]
 	});
 };
 // src/components/PrintableDashboardView.tsx
-var formatNum = (val) => {
-	return new Intl.NumberFormat("en-PH", {
-		minimumFractionDigits: 2,
-		maximumFractionDigits: 2
-	}).format(Number(val) || 0);
-};
-var formatDisplayDate = (dateStr) => {
-	if (!dateStr || !dateStr.trim()) return "";
-	const trimmed = dateStr.trim();
-	const parsed = new Date(trimmed);
-	if (!isNaN(parsed.getTime()) && /^\d{4}-\d{2}-\d{2}/.test(trimmed)) return parsed.toLocaleDateString("en-US", {
-		month: "long",
-		day: "numeric",
-		year: "numeric"
-	});
-	return trimmed;
-};
-var getTaxRegimeShortLabel = (contract, taxInfo) => {
-	if (!taxInfo) {
-		if (!contract.hasWithholdingTax) return "No WHT";
-		return `WHT ${Number(contract.withholdingTaxPercent || 2)}%`;
-	}
-	switch (taxInfo.taxMode) {
-		case "VAT_LUMP_SUM_2PCT": return "VAT 12% · 2% Svc";
-		case "VAT_SEPARATED_LABOR_MAT": return "VAT 12% · 2% Lab / 1% Mat";
-		case "NON_VAT_LUMP_OR_SEP": return "Non-VAT · EWT";
-		case "GOVT_VAT_5PCT_EWT_2PCT": return "Gov't 5% FV · 2% EWT";
-		case "CUSTOM_MANUAL": return "Custom / Overwritten";
-		default: return "Standard";
+var PAPER_DIMENSIONS = {
+	a4: {
+		label: "A4 (210 × 297 mm)",
+		cssSize: "A4",
+		widthMm: 210,
+		heightMm: 297
+	},
+	letter: {
+		label: "US Letter (8.5 × 11 in)",
+		cssSize: "letter",
+		widthMm: 215.9,
+		heightMm: 279.4
+	},
+	legal: {
+		label: "US Legal (8.5 × 14 in)",
+		cssSize: "legal",
+		widthMm: 215.9,
+		heightMm: 355.6
 	}
 };
-var PrintableDashboardView = ({ projects, subProjects, contractsTCP, contractPayments, activeUser, onNavigateTab }) => {
-	const [selectedMainProjectCode, setSelectedMainProjectCode] = (0, import_react.useState)("");
-	const [isProjectComboOpen, setIsProjectComboOpen] = (0, import_react.useState)(false);
-	const [projectSearchQuery, setProjectSearchQuery] = (0, import_react.useState)("");
-	const comboContainerRef = (0, import_react.useRef)(null);
-	const searchInputRef = (0, import_react.useRef)(null);
-	const [customRemarksOverride, setCustomRemarksOverride] = (0, import_react.useState)("");
-	const [presentationMode, setPresentationMode] = (0, import_react.useState)("classic-stacked");
-	const [showSectionTotalsRow, setShowSectionTotalsRow] = (0, import_react.useState)(true);
-	const [isPrintPreviewOpen, setIsPrintPreviewOpen] = (0, import_react.useState)(false);
-	const [printOrientation, setPrintOrientation] = (0, import_react.useState)("portrait");
-	const [printPaperSize, setPrintPaperSize] = (0, import_react.useState)("A4");
-	const [printCompactScale, setPrintCompactScale] = (0, import_react.useState)("auto");
-	const [reportDocumentTitle, setReportDocumentTitle] = (0, import_react.useState)("PROJECT FINANCIAL & CONTRACT MONITORING STATEMENT");
-	const [preparedBy, setPreparedBy] = (0, import_react.useState)(activeUser.fullName);
-	const [sectionsVisibility, setSectionsVisibility] = (0, import_react.useState)({
-		contracts: true,
-		tcps: true,
-		rfps: true,
-		payments: true,
-		taxes: true,
-		preparedByFooter: false
-	});
-	(0, import_react.useEffect)(() => {
-		const handleClickOutside = (event) => {
-			if (comboContainerRef.current && !comboContainerRef.current.contains(event.target)) setIsProjectComboOpen(false);
-		};
-		document.addEventListener("mousedown", handleClickOutside);
-		return () => document.removeEventListener("mousedown", handleClickOutside);
-	}, []);
-	(0, import_react.useEffect)(() => {
-		if (projects.length > 0) {
-			const exists = projects.some((p) => p.mainProjectCode === selectedMainProjectCode);
-			if (!selectedMainProjectCode || !exists) setSelectedMainProjectCode(projects[0].mainProjectCode);
-		} else setSelectedMainProjectCode("");
-	}, [projects, selectedMainProjectCode]);
-	const matchingProjects = (0, import_react.useMemo)(() => {
-		const q = projectSearchQuery.trim().toLowerCase();
-		if (!q) return projects;
-		return projects.filter((p) => p.mainProjectCode.toLowerCase().includes(q) || p.projectName.toLowerCase().includes(q) || p.siteCode.toLowerCase().includes(q) || p.siteName.toLowerCase().includes(q) || p.developer.toLowerCase().includes(q) || p.typeCode.toLowerCase().includes(q) || p.unitIdentifier.toLowerCase().includes(q));
-	}, [projects, projectSearchQuery]);
-	const handleSelectProject = (code) => {
-		setSelectedMainProjectCode(code);
-		setCustomRemarksOverride("");
-		setIsProjectComboOpen(false);
-		setProjectSearchQuery("");
+function getDensityMetrics(mode, totalRows, orientation) {
+	if (mode === "standard") return {
+		fontSizePx: orientation === "landscape" ? 9.5 : 8.5,
+		cellPyPx: 3.5,
+		cellPxPx: 4,
+		label: "Standard"
 	};
-	const selectedProject = (0, import_react.useMemo)(() => {
-		if (!selectedMainProjectCode) return null;
-		return projects.find((p) => p.mainProjectCode === selectedMainProjectCode) || null;
-	}, [projects, selectedMainProjectCode]);
-	const projectSubProjects = (0, import_react.useMemo)(() => {
-		if (!selectedProject) return [];
-		return subProjects.filter((sp) => sp.mainProjectCode === selectedProject.mainProjectCode || sp.projectId === selectedProject.projectId);
-	}, [subProjects, selectedProject]);
-	const projectContracts = (0, import_react.useMemo)(() => {
-		if (!selectedProject) return [];
-		const subIds = new Set(projectSubProjects.map((s) => s.subProjectId));
-		const subCodes = new Set(projectSubProjects.map((s) => s.subProjectCode));
-		return contractsTCP.filter((c) => c.mainProjectCode === selectedProject.mainProjectCode || c.projectId === selectedProject.projectId || subIds.has(c.subProjectId) || subCodes.has(c.subProjectCode));
-	}, [
-		contractsTCP,
-		selectedProject,
-		projectSubProjects
-	]);
-	const projectPayments = (0, import_react.useMemo)(() => {
-		if (!selectedProject) return [];
-		const allowedContractIds = new Set(projectContracts.map((c) => c.contractId));
-		return contractPayments.filter((p) => allowedContractIds.has(p.contractId) || p.mainProjectCode === selectedProject.mainProjectCode);
-	}, [
-		contractPayments,
-		selectedProject,
-		projectContracts
-	]);
-	const totalLedgerEntryCount = (0, import_react.useMemo)(() => {
-		let count = 0;
-		if (sectionsVisibility.contracts) count += projectContracts.length;
-		if (sectionsVisibility.tcps) count += projectContracts.length;
-		if (sectionsVisibility.rfps) count += projectPayments.length;
-		if (sectionsVisibility.payments) count += projectPayments.length;
-		if (sectionsVisibility.taxes) count += projectContracts.length;
-		return count;
-	}, [
-		sectionsVisibility,
-		projectContracts.length,
-		projectPayments.length
-	]);
-	const resolvedPrintTier = (0, import_react.useMemo)(() => {
-		if (printCompactScale !== "auto") return printCompactScale;
-		if (totalLedgerEntryCount <= 10) return "standard";
-		if (totalLedgerEntryCount <= 22) return "compact";
-		return "ultra-compact";
-	}, [printCompactScale, totalLedgerEntryCount]);
-	const projectSummaryMetrics = (0, import_react.useMemo)(() => {
-		const activeContracts = projectContracts.filter((c) => c.contractStatus !== "CANCEL");
-		const totalTCP = activeContracts.reduce((sum, c) => sum + (Number(c.tcpAmount) || 0), 0);
-		const originalTCP = activeContracts.filter((c) => c.tcpType === "Original").reduce((sum, c) => sum + (Number(c.tcpAmount) || 0), 0);
-		const conAddContracts = activeContracts.filter((c) => c.tcpType !== "Original");
-		const totalConAdd = conAddContracts.reduce((sum, c) => sum + (Number(c.tcpAmount) || 0), 0);
-		const noConAdd = conAddContracts.length;
-		const paidByContractId = /* @__PURE__ */ new Map();
-		const retentionReleasedByContractId = /* @__PURE__ */ new Map();
-		const withheldByContractId = /* @__PURE__ */ new Map();
-		const withheldBySubProjectCode = /* @__PURE__ */ new Map();
-		let totalRfpAmount = 0;
-		let totalCheckAmount = 0;
-		let total2307Withheld = 0;
-		let totalSettledPayments = 0;
-		projectPayments.forEach((p) => {
-			if (p.paymentStatus === "CANCELLED") return;
-			const rfpAmt = Number(p.rfpAmount) || 0;
-			const checkAmt = Number(p.chequeAmount) || 0;
-			const whtAmt = Number(p.withheldAmount) || 0;
-			totalRfpAmount += rfpAmt;
-			totalCheckAmount += checkAmt;
-			total2307Withheld += whtAmt;
-			const isPaidOrReleased = p.paymentStatus === "CHEQUE_RELEASED" || p.paymentStatus === "RECEIVED";
-			const settledGross = isPaidOrReleased ? checkAmt + whtAmt : 0;
-			const settledAmount = settledGross > 0 ? settledGross : isPaidOrReleased ? rfpAmt : 0;
-			totalSettledPayments += checkAmt + whtAmt > 0 ? checkAmt + whtAmt : rfpAmt;
-			if (p.contractId) {
-				paidByContractId.set(p.contractId, (paidByContractId.get(p.contractId) || 0) + settledAmount);
-				withheldByContractId.set(p.contractId, (withheldByContractId.get(p.contractId) || 0) + whtAmt);
-				if (p.billingType === "Retention Release") {
-					const retReleasedAmt = settledAmount > 0 ? settledAmount : rfpAmt;
-					retentionReleasedByContractId.set(p.contractId, (retentionReleasedByContractId.get(p.contractId) || 0) + retReleasedAmt);
-				}
-			}
-			if (p.subProjectCode) withheldBySubProjectCode.set(p.subProjectCode, (withheldBySubProjectCode.get(p.subProjectCode) || 0) + whtAmt);
-		});
-		let totalPaid = 0;
-		let totalRetentionHoldback = 0;
-		let totalUnreleasedRetention = 0;
-		let totalSafeReleasableBalance = 0;
-		activeContracts.forEach((c) => {
-			const tcp = Number(c.tcpAmount) || 0;
-			const paid = paidByContractId.get(c.contractId) || 0;
-			const balance = Math.max(0, tcp - paid);
-			const retPct = Number(c.retentionPercent) || 0;
-			const retTarget = Number((tcp * retPct / 100).toFixed(2));
-			const retReleased = retentionReleasedByContractId.get(c.contractId) || 0;
-			const unreleasedRet = Math.max(0, Number((retTarget - retReleased).toFixed(2)));
-			const safeReleasable = Math.max(0, Number((balance - unreleasedRet).toFixed(2)));
-			totalPaid += paid;
-			totalRetentionHoldback += retTarget;
-			totalUnreleasedRetention += unreleasedRet;
-			totalSafeReleasableBalance += safeReleasable;
-		});
-		const totalBalance = Math.max(0, totalTCP - totalPaid);
-		const hasOpenContract = activeContracts.some((c) => c.contractStatus === "OPEN");
-		const displayStatus = activeContracts.length > 0 ? hasOpenContract ? "OPEN" : "CLOSED" : selectedProject?.status ? selectedProject.status.toUpperCase() : "OPEN";
-		const autoRemarks = projectSubProjects.map((sp) => sp.remarks).filter(Boolean).join(" | ");
+	if (mode === "compact") return {
+		fontSizePx: orientation === "landscape" ? 8.5 : 7.8,
+		cellPyPx: 2.5,
+		cellPxPx: 3,
+		label: "Compact"
+	};
+	if (mode === "dense") return {
+		fontSizePx: 7.2,
+		cellPyPx: 2,
+		cellPxPx: 2.5,
+		label: "Dense"
+	};
+	if (totalRows > 28) return {
+		fontSizePx: orientation === "landscape" ? 8 : 7.3,
+		cellPyPx: 2,
+		cellPxPx: 2.5,
+		label: "Auto (Dense)"
+	};
+	if (totalRows > 14) return {
+		fontSizePx: orientation === "landscape" ? 8.8 : 8,
+		cellPyPx: 2.5,
+		cellPxPx: 3,
+		label: "Auto (Compact)"
+	};
+	return {
+		fontSizePx: orientation === "landscape" ? 9.2 : 8.4,
+		cellPyPx: 3,
+		cellPxPx: 3.5,
+		label: "Auto (Balanced)"
+	};
+}
+function buildStandalonePrintCss(params) {
+	const { cssPaperSize, orientation, fontSizePx, cellPyPx, cellPxPx } = params;
+	return `
+    @page {
+      size: ${cssPaperSize} ${orientation};
+      margin: 10mm 10mm 12mm 10mm;
+      @bottom-right {
+        content: "Page " counter(page) " of " counter(pages);
+        font-family: 'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif;
+        font-size: 7.5pt;
+        color: #64748B;
+      }
+    }
+    *, *::before, *::after {
+      box-sizing: border-box;
+      letter-spacing: 0 !important;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: #FFFFFF !important;
+      color: #0F172A !important;
+      font-family: 'Plus Jakarta Sans', 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Arial, sans-serif;
+      font-variant-numeric: tabular-nums;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+      width: 100%;
+    }
+    .st-print-doc {
+      width: 100%;
+      max-width: 100%;
+      background: #FFFFFF;
+      color: #0F172A;
+      overflow: hidden;
+    }
+    .st-print-doc-banner {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      border-bottom: 2px solid #0F172A;
+      padding-bottom: 5px;
+      margin-bottom: 8px;
+      gap: 8px;
+    }
+    .st-print-doc-brand {
+      font-size: ${Math.min(13, fontSizePx + 3)}px;
+      font-weight: 800;
+      color: #0F172A;
+      line-height: 1.15;
+    }
+    .st-print-doc-subtitle {
+      font-size: ${Math.max(7.2, fontSizePx - .8)}px;
+      font-weight: 600;
+      text-transform: uppercase;
+      color: #475569;
+    }
+    .st-print-doc-meta {
+      text-align: right;
+      font-size: ${Math.max(7.2, fontSizePx - .8)}px;
+      color: #334155;
+      line-height: 1.3;
+    }
+    .st-print-section {
+      margin-top: 9px;
+    }
+    .st-print-section:first-child {
+      margin-top: 0;
+    }
+    .st-print-section-head {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 6px;
+      margin-bottom: 3px;
+      break-after: avoid;
+      page-break-after: avoid;
+    }
+    .st-print-section-title {
+      font-size: ${Math.min(11.5, fontSizePx + 1.5)}px;
+      font-weight: 700;
+      color: #0F172A;
+      margin: 0;
+    }
+    .st-print-section-note {
+      font-size: ${Math.max(7, fontSizePx - 1)}px;
+      color: #475569;
+      margin: 0;
+    }
+    table.st-ledger-table {
+      width: 100%;
+      max-width: 100%;
+      table-layout: fixed;
+      border-collapse: collapse;
+      border-spacing: 0;
+      background: #FFFFFF;
+    }
+    table.st-ledger-table thead {
+      display: table-header-group;
+    }
+    table.st-ledger-table tr {
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+    table.st-ledger-table th,
+    table.st-ledger-table td {
+      border: 1px solid #334155;
+      padding: ${cellPyPx}px ${cellPxPx}px;
+      font-size: ${fontSizePx}px;
+      line-height: 1.22;
+      vertical-align: middle;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+    table.st-ledger-table th {
+      background-color: #1E293B !important;
+      color: #FFFFFF !important;
+      font-weight: 700;
+      text-align: left;
+    }
+    table.st-ledger-table td {
+      background-color: #FFFFFF;
+      color: #0F172A;
+    }
+    table.st-ledger-table tbody tr:nth-child(even) td {
+      background-color: #F8FAFC !important;
+    }
+    table.st-ledger-table tfoot td {
+      background-color: #E2E8F0 !important;
+      color: #0F172A !important;
+      font-weight: 700;
+    }
+    .st-col-num {
+      font-family: 'IBM Plex Mono', Consolas, 'Liberation Mono', Menlo, monospace;
+      font-variant-numeric: tabular-nums;
+      text-align: right !important;
+    }
+    .st-col-center {
+      text-align: center !important;
+    }
+    .st-col-code {
+      font-family: 'IBM Plex Mono', Consolas, 'Liberation Mono', Menlo, monospace;
+      font-weight: 600;
+    }
+    .st-col-muted {
+      color: #64748B;
+      font-size: ${Math.max(6.8, fontSizePx - 1)}px;
+    }
+    .st-paired-landscape {
+      display: grid;
+      grid-template-columns: minmax(0, 62%) minmax(0, 36.8%);
+      gap: 1.2%;
+      align-items: start;
+      width: 100%;
+    }
+    .st-paired-landscape > * {
+      min-width: 0;
+      max-width: 100%;
+      overflow: hidden;
+    }
+    .st-print-footer {
+      margin-top: 9px;
+      padding-top: 4px;
+      border-top: 1px solid #CBD5E1;
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 7.5px;
+      color: #64748B;
+    }
+  `;
+}
+var PrintableDashboardView = ({ projects, subProjects, contractsTCP, contractPayments, contractors, sites, activeUser, onNavigateTab }) => {
+	const [searchQuery, setSearchQuery] = (0, import_react.useState)("");
+	const [selectedProjectId, setSelectedProjectId] = (0, import_react.useState)("");
+	const [isPrintModalOpen, setIsPrintModalOpen] = (0, import_react.useState)(false);
+	const [paperSize, setPaperSize] = (0, import_react.useState)("a4");
+	const [orientation, setOrientation] = (0, import_react.useState)("landscape");
+	const [densityMode, setDensityMode] = (0, import_react.useState)("auto");
+	const [layoutStyle, setLayoutStyle] = (0, import_react.useState)("stacked");
+	const [showTotals, setShowTotals] = (0, import_react.useState)(true);
+	const [showContracts, setShowContracts] = (0, import_react.useState)(true);
+	const [showTcps, setShowTcps] = (0, import_react.useState)(true);
+	const [showRfps, setShowRfps] = (0, import_react.useState)(true);
+	const [showPayments, setShowPayments] = (0, import_react.useState)(true);
+	const [showTaxes, setShowTaxes] = (0, import_react.useState)(true);
+	const contractRollups = (0, import_react.useMemo)(() => computeContractRollups(contractsTCP, contractPayments), [contractsTCP, contractPayments]);
+	const portfolioSummary = (0, import_react.useMemo)(() => computePortfolioSummary(contractsTCP, contractRollups), [contractsTCP, contractRollups]);
+	const operationalMetrics = (0, import_react.useMemo)(() => {
+		let activeProjects = 0;
+		let completedProjects = 0;
+		let delayedProjects = 0;
+		for (const p of projects) if (p.status === "Completed") completedProjects += 1;
+		else if (p.status === "Delayed") delayedProjects += 1;
+		else activeProjects += 1;
+		const todayMs = (/* @__PURE__ */ new Date((/* @__PURE__ */ new Date()).toISOString().slice(0, 10) + "T00:00:00")).getTime();
+		const upcomingTargets = subProjects.filter((sp) => sp.status !== "Completed" && Boolean(sp.targetDate?.trim())).map((sp) => {
+			const parsed = (/* @__PURE__ */ new Date(`${sp.targetDate.slice(0, 10)}T00:00:00`)).getTime();
+			return {
+				subProject: sp,
+				daysDiff: Number.isNaN(parsed) ? 9999 : Math.round((parsed - todayMs) / 864e5)
+			};
+		}).sort((a, b) => a.daysDiff - b.daysDiff).slice(0, 6);
+		const recentUpdates = [...projects.map((p) => ({
+			id: p.projectId,
+			code: p.mainProjectCode,
+			title: p.projectName,
+			kind: "Project",
+			status: p.status,
+			date: p.updatedAt || p.createdAt || "",
+			projectId: p.projectId
+		})), ...subProjects.map((sp) => ({
+			id: sp.subProjectId,
+			code: sp.subProjectCode,
+			title: sp.subProjectName,
+			kind: "Sub-Project",
+			status: `${sp.status} (${sp.progress}%)`,
+			date: sp.updatedAt || sp.targetDate || "",
+			projectId: sp.projectId
+		}))].sort((a, b) => (b.date || "").localeCompare(a.date || "")).slice(0, 6);
+		const recentPayments = contractPayments.filter((p) => p.paymentStatus !== "CANCELLED").sort((a, b) => {
+			const da = a.cvDate || a.rfpDate || a.updatedAt || "";
+			return (b.cvDate || b.rfpDate || b.updatedAt || "").localeCompare(da) || b.paymentId.localeCompare(a.paymentId);
+		}).slice(0, 6);
 		return {
-			totalTCP,
-			originalTCP,
-			totalConAdd,
-			noConAdd,
-			totalPaid,
-			totalBalance,
-			totalRetentionHoldback,
-			totalUnreleasedRetention,
-			totalSafeReleasableBalance,
-			totalRfpAmount,
-			totalCheckAmount,
-			total2307Withheld,
-			totalSettledPayments,
-			displayStatus,
-			paidByContractId,
-			retentionReleasedByContractId,
-			withheldByContractId,
-			withheldBySubProjectCode,
-			autoRemarks
+			totalProjects: projects.length,
+			activeProjects,
+			completedProjects,
+			delayedProjects,
+			upcomingTargets,
+			recentUpdates,
+			recentPayments
 		};
 	}, [
-		projectContracts,
-		projectPayments,
-		selectedProject,
-		projectSubProjects
+		projects,
+		subProjects,
+		contractPayments
 	]);
-	/**
-	* Computes rich BIR Tax row details for each Contract / Sub-Project,
-	* incorporating both the Contract's BIRTaxBreakdown (VAT, 2% Service/Labor, 1% Material)
-	* AND actual 2307 Withheld Amounts recorded on Cheque Vouchers (CVs) in the Payments table.
-	*/
-	const computedTaxRows = (0, import_react.useMemo)(() => {
-		return projectContracts.map((contract) => {
-			const tcp = Number(contract.tcpAmount) || 0;
-			const taxInfo = contract.birTaxInfo;
-			const hasWht = Boolean(contract.hasWithholdingTax);
-			const deductedByContract = projectSummaryMetrics.withheldByContractId.get(contract.contractId) || 0;
-			const deductedBySubCode = projectSummaryMetrics.withheldBySubProjectCode.get(contract.subProjectCode) || 0;
-			const whDeducted = deductedByContract > 0 ? deductedByContract : deductedBySubCode;
-			const isVatInc = taxInfo ? Boolean(taxInfo.isVatInclusive) : hasWht;
-			const vatRate = taxInfo ? Number(taxInfo.vatRatePercent) || 12 : 12;
-			const netTaxBase = isVatInc && vatRate > 0 ? tcp / (1 + vatRate / 100) : tcp;
-			const vatAmount = taxInfo ? Number(taxInfo.computedVatAmount) || (isVatInc ? tcp - netTaxBase : 0) : isVatInc ? tcp - netTaxBase : 0;
-			let labor2PctEwt = 0;
-			let material1PctEwt = 0;
-			let whTotal = 0;
-			if (taxInfo) {
-				labor2PctEwt = Number(taxInfo.computedLaborEwt) || 0;
-				material1PctEwt = Number(taxInfo.computedMaterialEwt) || 0;
-				whTotal = Number(taxInfo.totalWithholdingAmount) || labor2PctEwt + material1PctEwt;
-			} else if (hasWht) {
-				labor2PctEwt = netTaxBase * ((Number(contract.withholdingTaxPercent) || 2) / 100);
-				whTotal = labor2PctEwt;
+	const filteredProjects = (0, import_react.useMemo)(() => {
+		const q = searchQuery.trim().toLowerCase();
+		if (!q) return projects;
+		return projects.filter((p) => [
+			p.mainProjectCode,
+			p.projectName,
+			p.siteCode,
+			p.siteName,
+			p.developer,
+			p.typeCode,
+			p.typeName,
+			p.unitIdentifier,
+			p.status
+		].join(" ").toLowerCase().includes(q));
+	}, [projects, searchQuery]);
+	const selectedProject = (0, import_react.useMemo)(() => {
+		if (selectedProjectId) {
+			const exact = projects.find((p) => p.projectId === selectedProjectId);
+			if (exact) return exact;
+		}
+		return filteredProjects[0] || projects[0] || null;
+	}, [
+		projects,
+		filteredProjects,
+		selectedProjectId
+	]);
+	const reportData = (0, import_react.useMemo)(() => {
+		if (!selectedProject) return null;
+		const projSubs = subProjects.filter((s) => s.projectId === selectedProject.projectId);
+		const projContracts = contractsTCP.filter((c) => c.projectId === selectedProject.projectId && c.contractStatus !== "CANCEL");
+		const activeContractIds = new Set(projContracts.map((c) => c.contractId));
+		const projPayments = contractPayments.filter((p) => activeContractIds.has(p.contractId) && p.paymentStatus !== "CANCELLED");
+		const contractorNameMap = new Map(contractors.map((c) => [c.contractorCode.toUpperCase(), c.contractorName]));
+		let totalTCP = 0;
+		let originalTCP = 0;
+		let totalConAdd = 0;
+		let countConAdd = 0;
+		let totalPaidGross = 0;
+		let totalCheques = 0;
+		let totalWithheld = 0;
+		let totalRetentionHeld = 0;
+		let totalSafeRelease = 0;
+		let totalBalance = 0;
+		const contractRows = projContracts.map((c) => {
+			const r = contractRollups[c.contractId];
+			const tcpAmt = r ? r.tcpAmount : roundCurrency(Number(c.tcpAmount) || 0);
+			const paidGross = r ? r.receivedGrossDeducted : 0;
+			const retHeld = r ? r.unreleasedRetentionHoldback : 0;
+			const safeRel = r ? r.safeRemainingProgressBillable : 0;
+			const bal = r ? r.remainingTCPAfterReceived : tcpAmt;
+			const cheques = r ? r.receivedChequePaid : 0;
+			const withheld = r ? r.withholdingAlreadyDeducted : 0;
+			totalTCP = roundCurrency(totalTCP + tcpAmt);
+			if (c.tcpType === "Original") originalTCP = roundCurrency(originalTCP + tcpAmt);
+			else {
+				totalConAdd = roundCurrency(totalConAdd + tcpAmt);
+				countConAdd += 1;
 			}
-			const has2PctFlag = labor2PctEwt > 0 || hasWht && Number(contract.withholdingTaxPercent) > 0;
-			const has1PctFlag = material1PctEwt > 0;
-			const effectiveWhTotal = whTotal;
-			const whDue = effectiveWhTotal > 0 ? Math.max(0, effectiveWhTotal - whDeducted) : 0;
-			const retPct = Number(contract.retentionPercent) || 0;
-			const retTargetAmt = contract.contractStatus === "CANCEL" ? 0 : Number((tcp * retPct / 100).toFixed(2));
-			const retReleasedAmt = projectSummaryMetrics.retentionReleasedByContractId.get(contract.contractId) || 0;
+			totalPaidGross = roundCurrency(totalPaidGross + paidGross);
+			totalCheques = roundCurrency(totalCheques + cheques);
+			totalWithheld = roundCurrency(totalWithheld + withheld);
+			totalRetentionHeld = roundCurrency(totalRetentionHeld + retHeld);
+			totalSafeRelease = roundCurrency(totalSafeRelease + safeRel);
+			totalBalance = roundCurrency(totalBalance + bal);
 			return {
-				contract,
-				tcp,
-				retPct,
-				unreleasedRetAmt: contract.contractStatus === "CANCEL" ? 0 : Math.max(0, Number((retTargetAmt - retReleasedAmt).toFixed(2))),
-				isVatInc,
-				netTaxBase,
-				vatAmount,
-				has2PctFlag,
-				has1PctFlag,
-				labor2PctEwt,
-				material1PctEwt,
-				whTotal: effectiveWhTotal,
-				whDue,
-				whDeducted,
-				regimeLabel: getTaxRegimeShortLabel(contract, taxInfo),
-				isManualOverride: Boolean(taxInfo?.isManualOverride)
+				contract: c,
+				contractorDisplay: c.contractorName || contractorNameMap.get(c.contractorCode.toUpperCase()) || c.contractorCode,
+				tcpAmt,
+				paidGross,
+				retHeld,
+				retTarget: r ? r.retentionTargetAmount : 0,
+				safeRel,
+				bal,
+				withheld,
+				withholdingTarget: r ? r.withholdingTargetAmount : 0
 			};
 		});
-	}, [projectContracts, projectSummaryMetrics]);
-	const taxTotals = (0, import_react.useMemo)(() => {
-		return computedTaxRows.reduce((acc, r) => ({
-			tcp: acc.tcp + r.tcp,
-			unreleasedRet: acc.unreleasedRet + r.unreleasedRetAmt,
-			vat: acc.vat + r.vatAmount,
-			labor2Pct: acc.labor2Pct + r.labor2PctEwt,
-			mat1Pct: acc.mat1Pct + r.material1PctEwt,
-			whTotal: acc.whTotal + r.whTotal,
-			whDue: acc.whDue + r.whDue,
-			whDeducted: acc.whDeducted + r.whDeducted
-		}), {
-			tcp: 0,
-			unreleasedRet: 0,
-			vat: 0,
-			labor2Pct: 0,
-			mat1Pct: 0,
-			whTotal: 0,
-			whDue: 0,
-			whDeducted: 0
+		const contractById = new Map(projContracts.map((c) => [c.contractId, c]));
+		const rfpRows = [...projPayments].sort((a, b) => {
+			const da = a.rfpDate || a.updatedAt || "";
+			const db = b.rfpDate || b.updatedAt || "";
+			return da.localeCompare(db) || a.paymentId.localeCompare(b.paymentId);
+		}).map((p) => {
+			const parentContract = contractById.get(p.contractId);
+			return {
+				payment: p,
+				payee: parentContract?.contractorName || (parentContract ? contractorNameMap.get(parentContract.contractorCode.toUpperCase()) : "") || p.contractorName || "—"
+			};
 		});
-	}, [computedTaxRows]);
+		const releasedPayments = projPayments.filter((p) => p.paymentStatus === "CHEQUE_RELEASED" || p.paymentStatus === "RECEIVED" || Boolean(p.cvNumber?.trim())).sort((a, b) => {
+			const da = a.cvDate || a.rfpDate || a.updatedAt || "";
+			const db = b.cvDate || b.rfpDate || b.updatedAt || "";
+			return da.localeCompare(db) || a.paymentId.localeCompare(b.paymentId);
+		});
+		const taxRows = contractRows.filter((cr) => cr.contract.hasWithholdingTax || cr.withheld > 0 || cr.withholdingTarget > 0).map((cr) => {
+			const bir = cr.contract.birTaxInfo;
+			const modeShort = bir?.taxMode === "VAT_LUMP_SUM_2PCT" ? "VAT 2%" : bir?.taxMode === "VAT_SEPARATED_LABOR_MAT" ? "VAT L/M" : bir?.taxMode === "NON_VAT_LUMP_OR_SEP" ? "Non-VAT" : bir?.taxMode === "GOVT_VAT_5PCT_EWT_2PCT" ? "Govt 5+2%" : bir?.taxMode === "CUSTOM_MANUAL" ? "Manual" : `${cr.contract.withholdingTaxPercent}%`;
+			const ewtLabel = bir?.taxMode === "VAT_SEPARATED_LABOR_MAT" ? `${bir.laborEwtPercent}%/${bir.materialEwtPercent}%` : `${bir?.laborEwtPercent ?? cr.contract.withholdingTaxPercent}%`;
+			return {
+				contract: cr.contract,
+				contractorDisplay: cr.contractorDisplay,
+				tcpAmt: cr.tcpAmt,
+				modeShort,
+				vatAmt: bir?.computedVatAmount ?? 0,
+				laborAmt: bir?.laborGrossAmount ?? cr.tcpAmt,
+				matAmt: bir?.materialGrossAmount ?? 0,
+				ewtLabel,
+				targetWht: cr.withholdingTarget,
+				actualWht: cr.withheld
+			};
+		});
+		const remarksSummary = projSubs.map((s) => s.subProjectName).filter(Boolean).join(" · ");
+		const totalRowCount = contractRows.length + rfpRows.length + releasedPayments.length + taxRows.length;
+		return {
+			project: selectedProject,
+			subProjects: projSubs,
+			contractRows,
+			rfpRows,
+			releasedPayments,
+			taxRows,
+			remarksSummary,
+			totalRowCount,
+			totals: {
+				totalTCP,
+				originalTCP,
+				totalConAdd,
+				countConAdd,
+				totalPaidGross,
+				totalCheques,
+				totalWithheld,
+				totalRetentionHeld,
+				totalSafeRelease,
+				totalBalance,
+				totalRfpAmount: roundCurrency(rfpRows.reduce((acc, r) => acc + (Number(r.payment.rfpAmount) || 0), 0)),
+				totalReleasedCheque: roundCurrency(releasedPayments.reduce((acc, p) => acc + (Number(p.chequeAmount) || 0), 0)),
+				totalReleasedTax: roundCurrency(releasedPayments.reduce((acc, p) => acc + (Number(p.withheldAmount) || 0), 0)),
+				totalTaxVat: roundCurrency(taxRows.reduce((acc, t) => acc + t.vatAmt, 0)),
+				totalTaxTargetWht: roundCurrency(taxRows.reduce((acc, t) => acc + t.targetWht, 0)),
+				totalTaxActualWht: roundCurrency(taxRows.reduce((acc, t) => acc + t.actualWht, 0))
+			}
+		};
+	}, [
+		selectedProject,
+		subProjects,
+		contractsTCP,
+		contractPayments,
+		contractors,
+		contractRollups
+	]);
+	const effectivePairedLayout = layoutStyle === "paired" && orientation === "landscape";
+	const densityMetrics = (0, import_react.useMemo)(() => getDensityMetrics(densityMode, reportData?.totalRowCount ?? 0, orientation), [
+		densityMode,
+		reportData?.totalRowCount,
+		orientation
+	]);
+	const paperSpec = PAPER_DIMENSIONS[paperSize];
+	const previewPaperWidthMm = orientation === "landscape" ? paperSpec.heightMm : paperSpec.widthMm;
+	const previewPaperHeightMm = orientation === "landscape" ? paperSpec.widthMm : paperSpec.heightMm;
+	const handleSelectLayoutStyle = (next) => {
+		setLayoutStyle(next);
+		if (next === "paired" && orientation === "portrait") setOrientation("landscape");
+	};
 	const handleExecutePrint = () => {
-		const printableElement = document.getElementById("sitetrack-printable-ledger-content");
-		if (!printableElement) {
+		const sourceEl = document.getElementById("sitetrack-print-source");
+		if (!sourceEl) {
 			window.print();
 			return;
 		}
-		const existingIframe = document.getElementById("sitetrack-print-iframe");
-		if (existingIframe && existingIframe.parentNode) existingIframe.parentNode.removeChild(existingIframe);
 		const iframe = document.createElement("iframe");
-		iframe.id = "sitetrack-print-iframe";
 		iframe.style.position = "fixed";
 		iframe.style.right = "0";
 		iframe.style.bottom = "0";
 		iframe.style.width = "0";
 		iframe.style.height = "0";
 		iframe.style.border = "0";
+		iframe.setAttribute("aria-hidden", "true");
 		document.body.appendChild(iframe);
 		const doc = iframe.contentWindow?.document;
 		if (!doc) {
+			document.body.removeChild(iframe);
 			window.print();
 			return;
 		}
-		const fontSizePx = resolvedPrintTier === "ultra-compact" ? "8.8px" : resolvedPrintTier === "compact" ? "9.8px" : "10.8px";
-		const cellPad = resolvedPrintTier === "ultra-compact" ? "1.5px 4px" : resolvedPrintTier === "compact" ? "2.5px 5px" : "4px 6px";
-		const htmlContent = `<!doctype html>
-<html>
+		const printCss = buildStandalonePrintCss({
+			cssPaperSize: paperSpec.cssSize,
+			orientation,
+			fontSizePx: densityMetrics.fontSizePx,
+			cellPyPx: densityMetrics.cellPyPx,
+			cellPxPx: densityMetrics.cellPxPx
+		});
+		const docTitle = selectedProject ? `SiteTrack Pro — ${selectedProject.mainProjectCode} Financial Ledger` : "SiteTrack Pro — Financial Ledger";
+		doc.open();
+		doc.write(`<!doctype html>
+<html lang="en">
   <head>
-    <meta charset="utf-8" />
-    <title>${selectedProject?.mainProjectCode || "Project"} - ${reportDocumentTitle}</title>
-    <link rel="stylesheet" href="./fonts.css" />
-    <style>
-      @page {
-        size: ${printPaperSize} ${printOrientation};
-        margin: 7mm 8mm;
-      }
-      * {
-        box-sizing: border-box;
-        -webkit-print-color-adjust: exact !important;
-        print-color-adjust: exact !important;
-      }
-      html, body {
-        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-        font-variant-numeric: tabular-nums;
-        font-feature-settings: "tnum" 1, "cv01" 1, "cv02" 1, "cv03" 1, "cv04" 1, "cv09" 1, "zero" 0;
-        color: #000000 !important;
-        background: #FFFFFF !important;
-        margin: 0;
-        padding: 0;
-        font-size: ${fontSizePx};
-        line-height: 1.18;
-      }
-      .no-print {
-        display: none !important;
-      }
-      .print-only-inline {
-        display: inline !important;
-      }
-      table {
-        width: 100%;
-        table-layout: fixed;
-        border-collapse: collapse;
-        margin-bottom: 5px;
-      }
-      th, .printable-ledger-th {
-        background-color: #333740 !important;
-        color: #FFFFFF !important;
-        border: 1px solid #000000 !important;
-        padding: ${cellPad};
-        font-size: ${fontSizePx};
-        font-weight: 700;
-        text-align: center;
-        line-height: 1.15;
-        overflow-wrap: break-word;
-        word-break: break-word;
-      }
-      td, .printable-ledger-td {
-        background-color: #FFFFFF !important;
-        color: #000000 !important;
-        border: 1px solid #000000 !important;
-        padding: ${cellPad};
-        font-size: ${fontSizePx};
-        line-height: 1.15;
-        overflow-wrap: break-word;
-        word-break: break-word;
-      }
-      .printable-ledger-tfoot-td {
-        background-color: #F1F5F9 !important;
-        color: #000000 !important;
-        border: 1px solid #000000 !important;
-        padding: ${cellPad};
-        font-size: ${fontSizePx};
-        font-weight: 700 !important;
-        line-height: 1.15;
-        overflow-wrap: break-word;
-        word-break: break-word;
-      }
-      .section-title-bar {
-        display: flex;
-        align-items: baseline;
-        justify-content: space-between;
-        gap: 6px;
-        margin: 4px 0 2px 0;
-        min-height: 14px;
-      }
-      .section-title {
-        font-size: ${fontSizePx};
-        font-weight: 700;
-        margin: 0;
-        color: #000000 !important;
-        white-space: nowrap;
-      }
-      .section-subtitle {
-        font-size: 8.5px;
-        color: #334155 !important;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-      }
-      .paired-grid {
-        display: grid;
-        grid-template-columns: minmax(0, 58%) minmax(0, 41%);
-        gap: 1%;
-        align-items: start;
-        width: 100%;
-      }
-      .paired-grid > * {
-        min-width: 0;
-        max-width: 100%;
-        overflow: hidden;
-      }
-      .text-right { text-align: right; }
-      .text-center { text-align: center; }
-      .text-left { text-align: left; }
-      .font-mono {
-        font-family: 'IBM Plex Mono', monospace;
-        font-variant-numeric: tabular-nums;
-        letter-spacing: 0.02em;
-      }
-      .font-bold { font-weight: 700; }
-      .font-semibold { font-weight: 600; }
-      .printable-section-block {
-        break-inside: avoid;
-        page-break-inside: avoid;
-      }
-      .prepared-by-footer {
-        margin-top: 6px;
-        padding-top: 4px;
-        border-top: 1px solid #000000;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        font-size: 9px;
-      }
-    </style>
+    <meta charset="UTF-8" />
+    <title>${docTitle}</title>
+    <style>${printCss}</style>
   </head>
   <body>
-    ${printableElement.innerHTML}
+    ${sourceEl.outerHTML}
   </body>
-</html>`;
-		doc.open();
-		doc.write(htmlContent);
+</html>`);
 		doc.close();
 		window.setTimeout(() => {
-			iframe.contentWindow?.focus();
-			iframe.contentWindow?.print();
-		}, 300);
+			try {
+				iframe.contentWindow?.focus();
+				iframe.contentWindow?.print();
+			} finally {
+				window.setTimeout(() => {
+					if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+				}, 1200);
+			}
+		}, 180);
 	};
-	const toggleSection = (key) => {
-		setSectionsVisibility((prev) => ({
-			...prev,
-			[key]: !prev[key]
-		}));
-	};
-	const renderContractsTable = () => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-		className: "printable-section-block min-w-0",
-		children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-			className: "section-title-bar flex items-baseline justify-between gap-2 mb-1 min-h-[18px]",
-			children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-				className: "section-title text-xs font-bold text-slate-900 shrink-0",
-				children: "Contracts"
-			}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-				className: "section-subtitle text-[10px] font-mono text-slate-600 truncate",
-				children: "Safe Rel. = Balance − Ret. Held (Subj. to WHT on Release)"
-			})]
-		}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("table", {
-			className: "w-full table-fixed border-collapse",
-			children: [
-				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("thead", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-						className: "printable-ledger-th w-[7%]",
-						children: "Type"
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-						className: "printable-ledger-th w-[19%]",
-						children: "Remarks"
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-						className: "printable-ledger-th w-[12%]",
-						children: "TCP"
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-						className: "printable-ledger-th w-[8%]",
-						children: "DP"
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-						className: "printable-ledger-th w-[12%]",
-						title: "Retention Holdback (% and PHP amount held from TCP; subject to BIR WHT upon release)",
-						children: "Retention"
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-						className: "printable-ledger-th w-[14%]",
-						children: "Contractor"
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-						className: "printable-ledger-th w-[10%]",
-						children: "Paid"
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-						className: "printable-ledger-th w-[9%]",
-						title: "Maximum amount that can be released on progress billings without eating into the Retention Holdback",
-						children: "Safe Rel."
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-						className: "printable-ledger-th w-[9%]",
-						children: "Balance"
-					})
-				] }) }),
-				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("tbody", { children: projectContracts.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tr", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-					colSpan: 9,
-					className: "printable-ledger-td text-center text-slate-500 py-3",
-					children: "No awarded contracts found for this project."
-				}) }) : projectContracts.map((contract) => {
-					const paid = projectSummaryMetrics.paidByContractId.get(contract.contractId) || 0;
-					const tcp = Number(contract.tcpAmount) || 0;
-					const isCancelled = contract.contractStatus === "CANCEL";
-					const balance = isCancelled ? 0 : Math.max(0, tcp - paid);
-					const retPct = Number(contract.retentionPercent) || 0;
-					const retTargetAmt = isCancelled ? 0 : Number((tcp * retPct / 100).toFixed(2));
-					const retReleasedAmt = projectSummaryMetrics.retentionReleasedByContractId.get(contract.contractId) || 0;
-					const unreleasedRetAmt = isCancelled ? 0 : Math.max(0, Number((retTargetAmt - retReleasedAmt).toFixed(2)));
-					const safeReleaseExclRet = isCancelled ? 0 : Math.max(0, Number((balance - unreleasedRetAmt).toFixed(2)));
-					const isEatingIntoRetention = !isCancelled && unreleasedRetAmt > 0 && balance + .009 < unreleasedRetAmt;
-					const dpDisplay = Number(contract.dpPercent) > 0 ? `${Number(contract.dpPercent).toFixed(2)}%` : "NA";
-					const retDisplay = retPct > 0 ? `${retPct}% (${formatNum(unreleasedRetAmt)})` : "NA";
-					return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-							className: "printable-ledger-td text-center font-mono",
-							children: selectedProject?.typeCode || contract.tcpType
+	const renderLedgerDocument = (containerId, usePaired, customVars) => {
+		if (!reportData) return null;
+		const { project, contractRows, rfpRows, releasedPayments, taxRows, totals } = reportData;
+		const contractsTableEl = showContracts ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+			className: "st-print-section",
+			children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: "st-print-section-head",
+				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h3", {
+					className: "st-print-section-title",
+					children: "Contracts Summary"
+				}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+					className: "st-print-section-note",
+					children: "Retention is held TCP money (subject to WHT on release) · Safe Release = Balance − Unreleased Retention"
+				})]
+			}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("table", {
+				className: "st-ledger-table",
+				children: [
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("colgroup", { children: [
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("col", { style: { width: "7%" } }),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("col", { style: { width: "16%" } }),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("col", { style: { width: "11%" } }),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("col", { style: { width: "7%" } }),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("col", { style: { width: "11%" } }),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("col", { style: { width: "15%" } }),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("col", { style: { width: "11%" } }),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("col", { style: { width: "11%" } }),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("col", { style: { width: "11%" } })
+					] }),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("thead", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", { children: "Type" }),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", { children: "Scope / Remarks" }),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+							className: "st-col-num",
+							children: "TCP"
 						}),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-							className: "printable-ledger-td text-center",
-							children: contract.remarks || contract.subProjectName || "-"
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+							className: "st-col-center",
+							children: "DP"
 						}),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-							className: "printable-ledger-td text-center font-mono tabular-nums",
-							children: formatNum(tcp)
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+							className: "st-col-num",
+							children: "Ret. Held"
 						}),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-							className: "printable-ledger-td text-center font-mono tabular-nums",
-							children: dpDisplay
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", { children: "Contractor" }),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+							className: "st-col-num",
+							children: "Paid Gross"
 						}),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-							className: "printable-ledger-td text-center font-mono font-semibold tabular-nums",
-							title: retPct > 0 ? `Total Retention: ${formatNum(retTargetAmt)} (${retPct}% of TCP) | Unreleased Holdback: ${formatNum(unreleasedRetAmt)} (Subject to WHT on release)` : "No Retention Holdback configured on this contract",
-							children: retDisplay
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+							className: "st-col-num",
+							children: "Safe Rel."
 						}),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-							className: "printable-ledger-td text-center font-medium",
-							children: contract.contractorName || contract.contractorCode
-						}),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-							className: "printable-ledger-td text-center font-mono tabular-nums",
-							children: formatNum(paid)
-						}),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
-							className: "printable-ledger-td text-center font-mono font-bold tabular-nums",
-							title: `Max safe amount to release without eating into the ${formatNum(unreleasedRetAmt)} retention holdback`,
-							children: [formatNum(safeReleaseExclRet), isEatingIntoRetention ? " (!)" : ""]
-						}),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-							className: "printable-ledger-td text-center font-mono font-semibold tabular-nums",
-							children: formatNum(balance)
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+							className: "st-col-num",
+							children: "Balance"
 						})
-					] }, contract.contractId);
-				}) }),
-				showSectionTotalsRow && projectContracts.length > 1 && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tfoot", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [
-					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
-						colSpan: 2,
-						className: "printable-ledger-tfoot-td text-right font-bold",
-						children: [
-							"Total (",
-							projectContracts.length,
-							")"
-						]
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-						className: "printable-ledger-tfoot-td text-center font-mono tabular-nums",
-						children: formatNum(projectSummaryMetrics.totalTCP)
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-						className: "printable-ledger-tfoot-td text-center font-mono",
-						children: "—"
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-						className: "printable-ledger-tfoot-td text-center font-mono tabular-nums",
-						children: formatNum(projectSummaryMetrics.totalUnreleasedRetention)
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", { className: "printable-ledger-tfoot-td" }),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-						className: "printable-ledger-tfoot-td text-center font-mono tabular-nums",
-						children: formatNum(projectSummaryMetrics.totalPaid)
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-						className: "printable-ledger-tfoot-td text-center font-mono tabular-nums",
-						children: formatNum(projectSummaryMetrics.totalSafeReleasableBalance)
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-						className: "printable-ledger-tfoot-td text-center font-mono tabular-nums",
-						children: formatNum(projectSummaryMetrics.totalBalance)
-					})
-				] }) })
-			]
-		})]
-	});
-	const renderTcpsTable = () => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-		className: "printable-section-block min-w-0",
-		children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-			className: "section-title-bar flex items-baseline justify-between gap-2 mb-1 min-h-[18px]",
-			children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-				className: "section-title text-xs font-bold text-slate-900 shrink-0",
-				children: "TCPs"
-			})
-		}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("table", {
-			className: "w-full table-fixed border-collapse",
-			children: [
-				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("thead", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-						className: "printable-ledger-th w-[29%]",
-						children: "Project SubCode"
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-						className: "printable-ledger-th w-[13%]",
-						children: "Type"
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-						className: "printable-ledger-th w-[24%]",
-						children: "Remarks"
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-						className: "printable-ledger-th w-[16%]",
-						children: "Amount"
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-						className: "printable-ledger-th w-[18%]",
-						children: "Date"
-					})
-				] }) }),
-				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("tbody", { children: projectContracts.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tr", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-					colSpan: 5,
-					className: "printable-ledger-td text-center text-slate-500 py-3",
-					children: "No TCP items recorded for this project."
-				}) }) : projectContracts.map((tcp) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [
-					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
-						className: "printable-ledger-td text-center font-mono",
-						children: [tcp.subProjectCode, tcp.parentContractId ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-							className: "ml-1 text-[10px] text-slate-500",
+					] }) }),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("tbody", { children: contractRows.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tr", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+						colSpan: 9,
+						className: "st-col-center st-col-muted",
+						children: "No active contracts recorded for this project."
+					}) }) : contractRows.map((row) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+							className: "st-col-code",
+							children: project.typeCode
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", { children: row.contract.remarks || row.contract.subProjectName || "—" }),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+							className: "st-col-num",
+							children: formatNum(row.tcpAmt)
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+							className: "st-col-center",
+							children: row.contract.dpPercent > 0 ? `${row.contract.dpPercent}%` : "—"
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+							className: "st-col-num",
+							children: row.contract.retentionPercent > 0 ? `${row.contract.retentionPercent}% (${formatNum(row.retHeld)})` : "0%"
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", { children: row.contractorDisplay }),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+							className: "st-col-num",
+							children: formatNum(row.paidGross)
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+							className: "st-col-num",
+							children: formatNum(row.safeRel)
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+							className: "st-col-num",
+							children: formatNum(row.bal)
+						})
+					] }, row.contract.contractId)) }),
+					showTotals && contractRows.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tfoot", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
+							colSpan: 2,
 							children: [
-								"(Ref: ",
-								tcp.parentContractId,
+								"Total (",
+								contractRows.length,
+								" Contract",
+								contractRows.length === 1 ? "" : "s",
 								")"
 							]
-						}) : null]
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-						className: "printable-ledger-td text-center",
-						children: tcp.tcpType
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-						className: "printable-ledger-td text-center",
-						children: tcp.remarks || tcp.subProjectName || "-"
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-						className: "printable-ledger-td text-center font-mono tabular-nums",
-						children: formatNum(tcp.tcpAmount)
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-						className: "printable-ledger-td text-center font-mono",
-						children: formatDisplayDate(tcp.awardDate)
-					})
-				] }, `${tcp.contractId}-${tcp.tcpId || "tcp"}`)) }),
-				showSectionTotalsRow && projectContracts.length > 1 && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tfoot", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-						colSpan: 3,
-						className: "printable-ledger-tfoot-td text-right font-bold",
-						children: "Total TCP Amount"
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-						className: "printable-ledger-tfoot-td text-center font-mono tabular-nums",
-						children: formatNum(projectSummaryMetrics.totalTCP)
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", { className: "printable-ledger-tfoot-td" })
-				] }) })
-			]
-		})]
-	});
-	/**
-	* Renders the ledger tables:
-	* - On screen (`isPreviewMode = false`): Comfortable, roomy spacing (`space-y-4`, `p-6`, `12px` cells)
-	* - In Print Preview & Printout (`isPreviewMode = true`): Adaptive compact spacing (`space-y-2`) that scales based on row count
-	*/
-	const renderLedgerTables = (isPreviewMode) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-		className: isPreviewMode ? "space-y-2" : "space-y-4",
-		children: [
-			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-				className: "printable-section-block",
-				children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("table", {
-					className: "w-full table-fixed border-collapse",
-					children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tbody", { children: [
-						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-							className: "printable-ledger-th w-[11%]",
-							children: "Project"
-						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
-							colSpan: 7,
-							className: "printable-ledger-td w-[89%] text-center font-mono font-bold",
-							children: [!isPreviewMode ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								ref: comboContainerRef,
-								className: "no-print relative mx-auto max-w-2xl",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-									type: "button",
-									onClick: () => {
-										setIsProjectComboOpen((prev) => !prev);
-										setTimeout(() => {
-											searchInputRef.current?.focus();
-										}, 50);
-									},
-									className: "flex w-full items-center justify-between gap-2 rounded-full border border-slate-300 bg-slate-100 px-4 py-1 text-xs font-mono font-bold text-slate-900 hover:border-slate-400 focus:outline-none",
-									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-										className: "truncate mx-auto",
-										children: selectedProject ? `${selectedProject.mainProjectCode} — ${selectedProject.projectName} (${selectedProject.siteCode} · ${selectedProject.developer})` : "Select or search a project..."
-									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ChevronDown, { className: "h-3.5 w-3.5 shrink-0 text-slate-600" })]
-								}), isProjectComboOpen && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-									className: "absolute left-0 right-0 top-full z-40 mt-1 rounded-lg border border-slate-300 bg-white shadow-xl overflow-hidden text-left font-sans font-normal",
-									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-										className: "flex items-center gap-2 border-b border-slate-200 bg-slate-50 px-3 py-2",
-										children: [
-											/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Search, { className: "h-3.5 w-3.5 text-slate-500 shrink-0" }),
-											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-												ref: searchInputRef,
-												type: "text",
-												value: projectSearchQuery,
-												onChange: (e) => setProjectSearchQuery(e.target.value),
-												placeholder: "Search by Project Code (e.g. CRC3-ST7-1601), Site, Developer, Type, or Description...",
-												className: "w-full bg-transparent text-xs text-slate-900 focus:outline-none"
-											}),
-											projectSearchQuery && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-												type: "button",
-												onClick: () => setProjectSearchQuery(""),
-												className: "text-slate-400 hover:text-slate-700",
-												children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(X, { className: "h-3.5 w-3.5" })
-											})
-										]
-									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-										className: "max-h-60 overflow-y-auto divide-y divide-slate-100",
-										children: matchingProjects.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-											className: "px-4 py-3 text-center text-xs text-slate-500",
-											children: [
-												"No projects matching “",
-												projectSearchQuery,
-												"”"
-											]
-										}) : matchingProjects.map((proj) => {
-											const isSelected = proj.mainProjectCode === selectedMainProjectCode;
-											return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-												type: "button",
-												onClick: () => handleSelectProject(proj.mainProjectCode),
-												className: `flex w-full items-center justify-between gap-3 px-3.5 py-2 text-left text-xs transition-colors ${isSelected ? "bg-slate-100 font-semibold text-slate-900" : "hover:bg-slate-50 text-slate-700"}`,
-												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-													className: "min-w-0",
-													children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-														className: "font-mono font-bold text-slate-900",
-														children: proj.mainProjectCode
-													}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-														className: "truncate text-[11px] text-slate-500",
-														children: [
-															proj.projectName,
-															" · Site: ",
-															proj.siteCode,
-															" ",
-															"(",
-															proj.developer,
-															") · Type: ",
-															proj.typeCode
-														]
-													})]
-												}), isSelected && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Check, { className: "h-4 w-4 text-slate-900 shrink-0" })]
-											}, proj.projectId);
-										})
-									})]
-								})]
-							}) : null, /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-								className: isPreviewMode ? "font-mono font-bold" : "hidden print:inline print-only-inline font-mono font-bold",
-								children: selectedProject?.mainProjectCode
-							})]
-						})] }),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-								className: "printable-ledger-th w-[11%]",
-								children: "Site"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-								className: "printable-ledger-td w-[14%] text-center font-mono font-semibold",
-								children: selectedProject?.siteCode || "-"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-								className: "printable-ledger-th w-[11%]",
-								children: "Developer"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-								className: "printable-ledger-td w-[14%] text-center font-medium",
-								children: selectedProject?.developer || "-"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-								className: "printable-ledger-th w-[11%]",
-								children: "TCP"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-								className: "printable-ledger-td w-[14%] text-center font-mono font-semibold tabular-nums",
-								children: formatNum(projectSummaryMetrics.totalTCP)
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-								className: "printable-ledger-th w-[11%]",
-								children: "Original TCP"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-								className: "printable-ledger-td w-[14%] text-center font-mono font-semibold tabular-nums",
-								children: formatNum(projectSummaryMetrics.originalTCP)
-							})
-						] }),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-								className: "printable-ledger-th",
-								children: "Status"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-								className: "printable-ledger-td text-center font-mono font-bold",
-								children: projectSummaryMetrics.displayStatus
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-								className: "printable-ledger-th",
-								children: "Type"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-								className: "printable-ledger-td text-center font-mono font-semibold",
-								children: selectedProject?.typeCode || "-"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-								className: "printable-ledger-th",
-								children: "Paid"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-								className: "printable-ledger-td text-center font-mono font-semibold tabular-nums",
-								children: formatNum(projectSummaryMetrics.totalPaid)
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-								className: "printable-ledger-th",
-								children: "Total ConAdd"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-								className: "printable-ledger-td text-center font-mono font-semibold tabular-nums",
-								children: formatNum(projectSummaryMetrics.totalConAdd)
-							})
-						] }),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-								className: "printable-ledger-th",
-								children: "Description"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-								colSpan: 3,
-								className: "printable-ledger-td text-center font-medium",
-								children: selectedProject ? `${selectedProject.projectName}${selectedProject.unitIdentifier ? ` (${selectedProject.unitIdentifier})` : ""}` : "-"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-								className: "printable-ledger-th",
-								title: "Total Remaining TCP Balance (includes Protected Retention Holdback shown in Row 5)",
-								children: "Balance"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-								className: "printable-ledger-td text-center font-mono font-bold tabular-nums",
-								children: formatNum(projectSummaryMetrics.totalBalance)
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-								className: "printable-ledger-th",
-								children: "No. ConAdd"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-								className: "printable-ledger-td text-center font-mono font-semibold tabular-nums",
-								children: projectSummaryMetrics.noConAdd
-							})
-						] }),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-								className: "printable-ledger-th",
-								title: "Protected Retention Holdback (Not a Tax; held from TCP and subject to WHT upon release)",
-								children: "Retention Held"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-								className: "printable-ledger-td text-center font-mono font-semibold tabular-nums",
-								children: formatNum(projectSummaryMetrics.totalUnreleasedRetention)
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-								className: "printable-ledger-th",
-								title: "Maximum safe amount that can be released on regular progress billings without eating into Retention",
-								children: "Safe Release"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-								className: "printable-ledger-td text-center font-mono font-bold tabular-nums",
-								children: formatNum(projectSummaryMetrics.totalSafeReleasableBalance)
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-								className: "printable-ledger-th",
-								children: "Check Disbursed"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-								className: "printable-ledger-td text-center font-mono font-semibold tabular-nums",
-								children: formatNum(projectSummaryMetrics.totalCheckAmount)
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-								className: "printable-ledger-th",
-								children: "2307 Withheld"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-								className: "printable-ledger-td text-center font-mono font-semibold tabular-nums",
-								children: formatNum(projectSummaryMetrics.total2307Withheld)
-							})
-						] }),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-							className: "printable-ledger-th",
-							children: "Remarks"
-						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
-							colSpan: 7,
-							className: "printable-ledger-td",
-							children: [!isPreviewMode ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-								type: "text",
-								"aria-label": "Report Remarks",
-								value: customRemarksOverride || projectSummaryMetrics.autoRemarks,
-								onChange: (e) => setCustomRemarksOverride(e.target.value),
-								placeholder: "Click to enter project remarks or print notes...",
-								className: "no-print w-full bg-transparent text-xs text-slate-800 focus:outline-none"
-							}) : null, /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-								className: isPreviewMode ? "inline" : "hidden print:inline print-only-inline",
-								children: customRemarksOverride || projectSummaryMetrics.autoRemarks || ""
-							})]
-						})] })
-					] })
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+							className: "st-col-num",
+							children: formatNum(totals.totalTCP)
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+							className: "st-col-center",
+							children: "—"
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+							className: "st-col-num",
+							children: formatNum(totals.totalRetentionHeld)
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", { children: "—" }),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+							className: "st-col-num",
+							children: formatNum(totals.totalPaidGross)
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+							className: "st-col-num",
+							children: formatNum(totals.totalSafeRelease)
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+							className: "st-col-num",
+							children: formatNum(totals.totalBalance)
+						})
+					] }) })
+				]
+			})]
+		}) : null;
+		const tcpsTableEl = showTcps ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+			className: "st-print-section",
+			children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+				className: "st-print-section-head",
+				children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h3", {
+					className: "st-print-section-title",
+					children: "TCPs Breakdown"
 				})
-			}),
-			presentationMode === "executive-paired" && sectionsVisibility.contracts && sectionsVisibility.tcps ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				className: "paired-grid grid grid-cols-1 lg:grid-cols-12 gap-3 items-start",
-				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-					className: "min-w-0 overflow-hidden lg:col-span-7",
-					children: renderContractsTable()
-				}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-					className: "min-w-0 overflow-hidden lg:col-span-5",
-					children: renderTcpsTable()
-				})]
-			}) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [sectionsVisibility.contracts && renderContractsTable(), sectionsVisibility.tcps && renderTcpsTable()] }),
-			sectionsVisibility.rfps && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				className: "printable-section-block min-w-0",
-				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-					className: "section-title-bar flex items-baseline justify-between gap-2 mb-1 min-h-[18px]",
-					children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-						className: "section-title text-xs font-bold text-slate-900",
-						children: "RFPs"
-					})
-				}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("table", {
-					className: "w-full table-fixed border-collapse",
-					children: [
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("thead", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-								className: "printable-ledger-th w-[14%]",
-								children: "RFP"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-								className: "printable-ledger-th w-[18%]",
-								children: "Project SubCode"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-								className: "printable-ledger-th w-[12%]",
-								children: "RFP Amount"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-								className: "printable-ledger-th w-[13%]",
-								children: "RFP Date"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-								className: "printable-ledger-th w-[13%]",
-								children: "Date Submitted"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-								className: "printable-ledger-th w-[15%]",
-								children: "Payee"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-								className: "printable-ledger-th w-[15%]",
-								children: "Remarks"
-							})
-						] }) }),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("tbody", { children: projectPayments.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tr", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-							colSpan: 7,
-							className: "printable-ledger-td text-center text-slate-500 py-3",
-							children: "No Requests for Payment (RFP) recorded for this project."
-						}) }) : projectPayments.map((rfp) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-								className: "printable-ledger-td text-center font-mono",
-								children: rfp.rfpNumber
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-								className: "printable-ledger-td text-center font-mono",
-								children: rfp.subProjectCode || "-"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-								className: "printable-ledger-td text-center font-mono tabular-nums",
-								children: formatNum(rfp.rfpAmount)
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-								className: "printable-ledger-td text-center font-mono",
-								children: formatDisplayDate(rfp.rfpDate)
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-								className: "printable-ledger-td text-center font-mono",
-								children: formatDisplayDate(rfp.updatedAt || rfp.rfpDate)
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-								className: "printable-ledger-td text-center font-medium",
-								children: rfp.rfpPayee || rfp.contractorName
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
-								className: "printable-ledger-td text-center",
-								children: [rfp.rfpRemarks || rfp.billingType, rfp.paymentStatus === "CANCELLED" ? " (CANCELLED)" : ""]
-							})
-						] }, `rfp-${rfp.paymentId}`)) }),
-						showSectionTotalsRow && projectPayments.length > 1 && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tfoot", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [
-							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
-								colSpan: 2,
-								className: "printable-ledger-tfoot-td text-right font-bold",
-								children: [
-									"Total RFPs (",
-									projectPayments.length,
-									")"
-								]
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-								className: "printable-ledger-tfoot-td text-center font-mono tabular-nums",
-								children: formatNum(projectSummaryMetrics.totalRfpAmount)
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-								colSpan: 4,
-								className: "printable-ledger-tfoot-td"
-							})
-						] }) })
-					]
-				})]
-			}),
-			sectionsVisibility.payments && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				className: "printable-section-block min-w-0",
-				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-					className: "section-title-bar flex items-baseline justify-between gap-2 mb-1 min-h-[18px]",
-					children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-						className: "section-title text-xs font-bold text-slate-900",
-						children: "Payments"
-					})
-				}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("table", {
-					className: "w-full table-fixed border-collapse",
-					children: [
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("thead", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-								className: "printable-ledger-th w-[14%]",
-								children: "RFP"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-								className: "printable-ledger-th w-[11%]",
-								children: "Voucher No."
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-								className: "printable-ledger-th w-[19%]",
-								children: "Payee"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-								className: "printable-ledger-th w-[13%]",
-								children: "Check Amount"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-								className: "printable-ledger-th w-[11%]",
-								children: "2307 Amount"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-								className: "printable-ledger-th w-[13%]",
-								children: "Total Amount"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-								className: "printable-ledger-th w-[9%]",
-								children: "OR No"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-								className: "printable-ledger-th w-[10%]",
-								children: "OR Date"
-							})
-						] }) }),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("tbody", { children: projectPayments.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tr", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-							colSpan: 8,
-							className: "printable-ledger-td text-center text-slate-500 py-3",
-							children: "No cheque vouchers or contractor receipts recorded for this project."
-						}) }) : projectPayments.map((pay) => {
-							const checkAmt = Number(pay.chequeAmount) || 0;
-							const wht2307Amt = Number(pay.withheldAmount) || 0;
-							const totalAmt = checkAmt + wht2307Amt > 0 ? checkAmt + wht2307Amt : Number(pay.rfpAmount) || 0;
-							return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-									className: "printable-ledger-td text-center font-mono",
-									children: pay.rfpNumber
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-									className: "printable-ledger-td text-center font-mono",
-									children: pay.cvNumber || "-"
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-									className: "printable-ledger-td text-center font-medium",
-									children: pay.rfpPayee || pay.contractorName
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-									className: "printable-ledger-td text-center font-mono tabular-nums",
-									children: formatNum(checkAmt)
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-									className: "printable-ledger-td text-center font-mono tabular-nums",
-									children: formatNum(wht2307Amt)
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-									className: "printable-ledger-td text-center font-mono font-semibold tabular-nums",
-									children: formatNum(totalAmt)
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-									className: "printable-ledger-td text-center font-mono",
-									children: pay.receiptNumber || ""
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-									className: "printable-ledger-td text-center font-mono",
-									children: formatDisplayDate(pay.receiptDate || pay.cvDate || "")
-								})
-							] }, `pay-${pay.paymentId}`);
-						}) }),
-						showSectionTotalsRow && projectPayments.length > 1 && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tfoot", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-								colSpan: 3,
-								className: "printable-ledger-tfoot-td text-right font-bold",
-								children: "Total Payments & 2307 Withheld"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-								className: "printable-ledger-tfoot-td text-center font-mono tabular-nums",
-								children: formatNum(projectSummaryMetrics.totalCheckAmount)
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-								className: "printable-ledger-tfoot-td text-center font-mono tabular-nums",
-								children: formatNum(projectSummaryMetrics.total2307Withheld)
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-								className: "printable-ledger-tfoot-td text-center font-mono tabular-nums",
-								children: formatNum(projectSummaryMetrics.totalSettledPayments)
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-								colSpan: 2,
-								className: "printable-ledger-tfoot-td"
-							})
-						] }) })
-					]
-				})]
-			}),
-			sectionsVisibility.taxes && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				className: "printable-section-block min-w-0",
-				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-					className: "section-title-bar flex items-baseline justify-between gap-2 mb-1 min-h-[18px]",
-					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-						className: "section-title text-xs font-bold text-slate-900 shrink-0",
-						children: "Taxes"
+			}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("table", {
+				className: "st-ledger-table",
+				children: [
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("colgroup", { children: [
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("col", { style: { width: "27%" } }),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("col", { style: { width: "13%" } }),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("col", { style: { width: "26%" } }),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("col", { style: { width: "18%" } }),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("col", { style: { width: "16%" } })
+					] }),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("thead", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", { children: "Sub-Project Code" }),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", { children: "Type" }),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", { children: "Remarks" }),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+							className: "st-col-num",
+							children: "Amount"
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+							className: "st-col-center",
+							children: "Award Date"
+						})
+					] }) }),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("tbody", { children: contractRows.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tr", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+						colSpan: 5,
+						className: "st-col-center st-col-muted",
+						children: "No TCP awards recorded."
+					}) }) : contractRows.map((row) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+							className: "st-col-code",
+							children: row.contract.subProjectCode || row.contract.contractId
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", { children: row.contract.tcpType }),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", { children: row.contract.remarks || row.contract.subProjectName || "—" }),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+							className: "st-col-num",
+							children: formatNum(row.tcpAmt)
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+							className: "st-col-center",
+							children: formatShortDate(row.contract.awardDate)
+						})
+					] }, `tcp-${row.contract.contractId}`)) }),
+					showTotals && contractRows.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tfoot", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+							colSpan: 3,
+							children: "Total TCP Amount"
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+							className: "st-col-num",
+							children: formatNum(totals.totalTCP)
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+							className: "st-col-center",
+							children: "—"
+						})
+					] }) })
+				]
+			})]
+		}) : null;
+		return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+			id: containerId,
+			className: "st-print-doc",
+			style: customVars,
+			children: [
+				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+					className: "st-print-doc-banner",
+					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+						className: "st-print-doc-brand",
+						children: "SiteTrack Pro"
 					}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-						className: "section-subtitle text-[10px] font-mono text-slate-600 truncate",
-						children: "BIR EWT (2% Service/Labor · 1% Material) applies to full TCP incl. Retention upon release"
-					})]
-				}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("table", {
-					className: "w-full table-fixed border-collapse",
-					children: [
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("thead", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-								className: "printable-ledger-th w-[17%]",
-								children: "Project SubCode"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-								className: "printable-ledger-th w-[12%]",
-								children: "Contractor"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-								className: "printable-ledger-th w-[10%]",
-								children: "TCP"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-								className: "printable-ledger-th w-[11%]",
-								title: "Retention Holdback (Part of TCP, not a tax; subject to BIR WHT upon release)",
-								children: "Ret. Hold (Subj. WHT)"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-								className: "printable-ledger-th w-[9%]",
-								children: "Vat Inc (12%)"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-								className: "printable-ledger-th w-[8%]",
-								children: "2% (Svc/Lab)"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-								className: "printable-ledger-th w-[8%]",
-								children: "1% (Mat/Item)"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-								className: "printable-ledger-th w-[8%]",
-								children: "WH Total"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-								className: "printable-ledger-th w-[8%]",
-								children: "WH Due"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-								className: "printable-ledger-th w-[9%]",
-								children: "WH Deducted"
-							})
-						] }) }),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("tbody", { children: computedTaxRows.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tr", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-							colSpan: 10,
-							className: "printable-ledger-td text-center text-slate-500 py-3",
-							children: "No contract tax records found for this project."
-						}) }) : computedTaxRows.map((row) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-								className: "printable-ledger-td text-center font-mono",
-								children: row.contract.subProjectCode
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-								className: "printable-ledger-td text-center font-medium",
-								children: row.contract.contractorName || row.contract.contractorCode
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-								className: "printable-ledger-td text-center font-mono tabular-nums",
-								children: formatNum(row.tcp)
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-								className: "printable-ledger-td text-center font-mono tabular-nums",
-								title: row.retPct > 0 ? `${row.retPct}% of TCP held in retention; subject to BIR WHT when released` : "No retention holdback",
-								children: row.retPct > 0 ? `${row.retPct}% (${formatNum(row.unreleasedRetAmt)})` : "0% (0.00)"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-								className: "printable-ledger-td text-center font-mono tabular-nums",
-								title: row.isVatInc ? `Net Base: ${formatNum(row.netTaxBase)} | Output VAT: ${formatNum(row.vatAmount)}` : "Non-VAT / VAT Exclusive",
-								children: row.isVatInc ? row.vatAmount > 0 ? `Y (${formatNum(row.vatAmount)})` : "Y" : "N"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-								className: "printable-ledger-td text-center font-mono tabular-nums",
-								children: row.labor2PctEwt > 0 ? formatNum(row.labor2PctEwt) : row.has2PctFlag ? "Y" : "N"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-								className: "printable-ledger-td text-center font-mono tabular-nums",
-								children: row.material1PctEwt > 0 ? formatNum(row.material1PctEwt) : row.has1PctFlag ? "Y" : "N"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-								className: "printable-ledger-td text-center font-mono tabular-nums",
-								children: row.whTotal > 0 ? formatNum(row.whTotal) : "-"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-								className: "printable-ledger-td text-center font-mono tabular-nums",
-								children: row.whDue > 0 ? formatNum(row.whDue) : "-"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-								className: "printable-ledger-td text-center font-mono font-semibold tabular-nums",
-								children: row.whDeducted > 0 ? formatNum(row.whDeducted) : ""
-							})
-						] }, `tax-${row.contract.contractId}`)) }),
-						showSectionTotalsRow && computedTaxRows.length > 1 && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tfoot", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-								colSpan: 2,
-								className: "printable-ledger-tfoot-td text-right font-bold",
-								children: "Total Tax Ledger"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-								className: "printable-ledger-tfoot-td text-center font-mono tabular-nums",
-								children: formatNum(taxTotals.tcp)
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-								className: "printable-ledger-tfoot-td text-center font-mono tabular-nums",
-								children: formatNum(taxTotals.unreleasedRet)
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-								className: "printable-ledger-tfoot-td text-center font-mono tabular-nums",
-								children: taxTotals.vat > 0 ? formatNum(taxTotals.vat) : "-"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-								className: "printable-ledger-tfoot-td text-center font-mono tabular-nums",
-								children: taxTotals.labor2Pct > 0 ? formatNum(taxTotals.labor2Pct) : "-"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-								className: "printable-ledger-tfoot-td text-center font-mono tabular-nums",
-								children: taxTotals.mat1Pct > 0 ? formatNum(taxTotals.mat1Pct) : "-"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-								className: "printable-ledger-tfoot-td text-center font-mono tabular-nums",
-								children: taxTotals.whTotal > 0 ? formatNum(taxTotals.whTotal) : "-"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-								className: "printable-ledger-tfoot-td text-center font-mono tabular-nums",
-								children: taxTotals.whDue > 0 ? formatNum(taxTotals.whDue) : "-"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-								className: "printable-ledger-tfoot-td text-center font-mono tabular-nums",
-								children: taxTotals.whDeducted > 0 ? formatNum(taxTotals.whDeducted) : ""
-							})
-						] }) })
-					]
-				})]
-			}),
-			sectionsVisibility.preparedByFooter && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				className: "prepared-by-footer printable-section-block pt-2 mt-2 border-t border-slate-300 flex items-center justify-between text-[11px] text-slate-600",
-				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
-					"Prepared by:",
-					" ",
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", {
-						className: "font-semibold text-slate-900",
-						children: preparedBy || activeUser.fullName
-					})
-				] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-					className: "font-mono",
-					children: [
-						"Printed:",
-						" ",
-						(/* @__PURE__ */ new Date()).toLocaleDateString("en-US", {
-							month: "short",
-							day: "numeric",
-							year: "numeric"
-						})
-					]
-				})]
-			})
-		]
-	});
-	if (projects.length === 0) return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-		className: "rounded-lg border border-slate-200 bg-white p-10 text-center space-y-4",
-		children: [
-			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(FileText, { className: "mx-auto h-8 w-8 text-slate-400" }),
-			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				className: "space-y-1",
-				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", {
-					className: "text-base font-bold text-slate-900",
-					children: "No Projects Available for Dashboard Report"
-				}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-					className: "text-xs text-slate-600 max-w-md mx-auto",
-					children: "Create your first Main Project and Sub-Project or provision starter data in Admin & Accounts to view and print the project monitoring dashboard."
-				})]
-			}),
-			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				className: "flex items-center justify-center gap-3 pt-2",
-				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-					type: "button",
-					onClick: () => onNavigateTab("projects"),
-					className: "rounded-md bg-slate-900 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-800",
-					children: "Go to Projects & Sub-Projects"
-				}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-					type: "button",
-					onClick: () => onNavigateTab("admin"),
-					className: "rounded-md border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-50",
-					children: "Open Admin & Accounts"
-				})]
-			})
-		]
-	});
-	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-		className: "space-y-4",
-		children: [
-			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				className: "no-print flex flex-col xl:flex-row xl:items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-5 py-3.5",
-				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-					className: "space-y-0.5",
-					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "flex flex-wrap items-center gap-2",
-						children: [
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h1", {
-								className: "text-base font-bold tracking-tight text-slate-900",
-								children: "Project Monitoring & Financial Ledger Dashboard"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-								className: "text-xs text-slate-400",
-								children: "·"
-							}),
+						className: "st-print-doc-subtitle",
+						children: "Project Financial & Payment History Ledger"
+					})] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "st-print-doc-meta",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Ref:" }),
+							" ",
 							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-								className: "text-xs font-mono font-semibold text-slate-700",
-								children: [
-									"Adaptive Print Density: ",
-									resolvedPrintTier.toUpperCase(),
-									" (",
-									totalLedgerEntryCount,
-									" rows)"
-								]
+								className: "st-col-code",
+								children: ["LEDGER-", project.mainProjectCode]
 							})
-						]
-					}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-						className: "text-xs text-slate-500",
-						children: "Comfortable full-sized layout on screen; automatically adapts row and font density when printing based on total entry count."
+						] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Prepared By:" }),
+							" ",
+							activeUser.fullName,
+							" ·",
+							" ",
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Printed:" }),
+							" ",
+							formatDisplayDate((/* @__PURE__ */ new Date()).toISOString().slice(0, 10))
+						] })]
 					})]
-				}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-					className: "flex flex-wrap items-center gap-2 shrink-0",
-					children: [
-						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-							className: "flex items-center rounded-md border border-slate-300 bg-slate-100 p-0.5 text-xs",
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-								type: "button",
-								onClick: () => setPresentationMode("classic-stacked"),
-								title: "Classic Stacked Ledger (Matches Reference Image)",
-								className: `inline-flex items-center gap-1.5 rounded px-2.5 py-1 font-medium transition-colors whitespace-nowrap ${presentationMode === "classic-stacked" ? "bg-white text-slate-900 shadow-2xs font-semibold" : "text-slate-600 hover:text-slate-900"}`,
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Rows3, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Classic Stacked" })]
-							}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-								type: "button",
-								onClick: () => setPresentationMode("executive-paired"),
-								title: "Executive Paired (Pairs Contracts & TCPs side-by-side to save vertical print space)",
-								className: `inline-flex items-center gap-1.5 rounded px-2.5 py-1 font-medium transition-colors whitespace-nowrap ${presentationMode === "executive-paired" ? "bg-white text-slate-900 shadow-2xs font-semibold" : "text-slate-600 hover:text-slate-900"}`,
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(LayoutGrid, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Executive Paired" })]
-							})]
-						}),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-							type: "button",
-							onClick: () => setShowSectionTotalsRow((prev) => !prev),
-							className: `inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors whitespace-nowrap ${showSectionTotalsRow ? "border-slate-800 bg-slate-100 text-slate-900 font-semibold" : "border-slate-300 bg-white text-slate-600 hover:bg-slate-50"}`,
-							children: [showSectionTotalsRow ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(SquareCheckBig, { className: "h-3.5 w-3.5" }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Square, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Table Totals" })]
-						}),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-							type: "button",
-							onClick: () => setIsPrintPreviewOpen(true),
-							className: "inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3.5 py-1.5 text-xs font-semibold text-slate-800 hover:bg-slate-50 whitespace-nowrap",
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Eye, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Print Preview & Setup" })]
-						}),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-							type: "button",
-							onClick: handleExecutePrint,
-							className: "inline-flex items-center gap-1.5 rounded-md bg-slate-900 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-slate-800 whitespace-nowrap",
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Printer, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Quick Print Report" })]
+				}),
+				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+					className: "st-print-section",
+					children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("table", {
+						className: "st-ledger-table",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("colgroup", { children: [
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("col", { style: { width: "11%" } }),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("col", { style: { width: "14%" } }),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("col", { style: { width: "11%" } }),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("col", { style: { width: "14%" } }),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("col", { style: { width: "11%" } }),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("col", { style: { width: "14%" } }),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("col", { style: { width: "11%" } }),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("col", { style: { width: "14%" } })
+						] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tbody", { children: [
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", { children: "Project" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
+								colSpan: 7,
+								className: "st-col-code",
+								children: [project.mainProjectCode, project.projectName ? ` — ${project.projectName}` : ""]
+							})] }),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", { children: "Site" }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+									className: "st-col-center",
+									children: project.siteCode
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", { children: "Developer" }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+									className: "st-col-center",
+									children: project.developer || "—"
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", { children: "Total TCP" }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+									className: "st-col-num",
+									children: formatNum(totals.totalTCP)
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", { children: "Original TCP" }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+									className: "st-col-num",
+									children: formatNum(totals.originalTCP)
+								})
+							] }),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", { children: "Status" }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+									className: "st-col-center",
+									children: project.status
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", { children: "Type" }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+									className: "st-col-center",
+									children: project.typeCode
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", { children: "Paid Gross" }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+									className: "st-col-num",
+									children: formatNum(totals.totalPaidGross)
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", { children: "Total ConAdd" }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+									className: "st-col-num",
+									children: formatNum(totals.totalConAdd)
+								})
+							] }),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", { children: "Description" }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+									colSpan: 3,
+									children: project.unitIdentifier || project.projectName || "—"
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", { children: "Balance" }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
+									className: "st-col-num",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: formatNum(totals.totalBalance) }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+										className: "st-col-muted",
+										children: [
+											"Ret: ",
+											formatNum(totals.totalRetentionHeld),
+											" · Safe:",
+											" ",
+											formatNum(totals.totalSafeRelease)
+										]
+									})]
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", { children: "No. ConAdd" }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+									className: "st-col-num",
+									children: totals.countConAdd
+								})
+							] }),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", { children: "Ret. Held" }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+									className: "st-col-num",
+									children: formatNum(totals.totalRetentionHeld)
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", { children: "Safe Release" }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+									className: "st-col-num",
+									children: formatNum(totals.totalSafeRelease)
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", { children: "Cheque Paid" }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+									className: "st-col-num",
+									children: formatNum(totals.totalCheques)
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", { children: "2307 Withheld" }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+									className: "st-col-num",
+									children: formatNum(totals.totalWithheld)
+								})
+							] }),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", { children: "Scope Items" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+								colSpan: 7,
+								children: reportData.remarksSummary || "—"
+							})] })
+						] })]
+					})
+				}),
+				usePaired && showContracts && showTcps ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+					className: "st-print-section",
+					children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "st-paired-landscape",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { children: contractsTableEl }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { children: tcpsTableEl })]
+					})
+				}) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [contractsTableEl, tcpsTableEl] }),
+				showRfps && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+					className: "st-print-section",
+					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+						className: "st-print-section-head",
+						children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h3", {
+							className: "st-print-section-title",
+							children: "RFPs (Requests for Payment)"
 						})
-					]
-				})]
-			}),
-			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-				id: "sitetrack-printable-ledger-content",
-				className: "printable-report-sheet rounded-lg border border-slate-300 bg-white p-6 shadow-xs overflow-x-auto",
-				children: renderLedgerTables(false)
-			}),
-			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				className: "no-print flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-5 py-2.5 text-xs",
-				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-					className: "text-slate-600",
-					children: [
-						"Update records for",
+					}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("table", {
+						className: "st-ledger-table",
+						children: [
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("colgroup", { children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("col", { style: { width: "14%" } }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("col", { style: { width: "18%" } }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("col", { style: { width: "12%" } }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("col", { style: { width: "11%" } }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("col", { style: { width: "11%" } }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("col", { style: { width: "16%" } }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("col", { style: { width: "18%" } })
+							] }),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("thead", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", { children: "RFP No." }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", { children: "Sub-Project Code" }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+									className: "st-col-num",
+									children: "RFP Amount"
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+									className: "st-col-center",
+									children: "RFP Date"
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+									className: "st-col-center",
+									children: "Submitted"
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", { children: "Payee" }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", { children: "Remarks" })
+							] }) }),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("tbody", { children: rfpRows.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tr", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+								colSpan: 7,
+								className: "st-col-center st-col-muted",
+								children: "No active payment requests (RFPs) recorded."
+							}) }) : rfpRows.map(({ payment, payee }) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+									className: "st-col-code",
+									children: payment.rfpNumber || payment.paymentId
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+									className: "st-col-code",
+									children: payment.subProjectCode
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+									className: "st-col-num",
+									children: formatNum(payment.rfpAmount)
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+									className: "st-col-center",
+									children: formatShortDate(payment.rfpDate)
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+									className: "st-col-center",
+									children: formatShortDate(payment.updatedAt || payment.rfpDate)
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", { children: payee }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", { children: payment.rfpRemarks || payment.billingType || "—" })
+							] }, `rfp-${payment.paymentId}`)) }),
+							showTotals && rfpRows.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tfoot", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
+									colSpan: 2,
+									children: [
+										"Total RFPs (",
+										rfpRows.length,
+										")"
+									]
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+									className: "st-col-num",
+									children: formatNum(totals.totalRfpAmount)
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", { colSpan: 4 })
+							] }) })
+						]
+					})]
+				}),
+				showPayments && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+					className: "st-print-section",
+					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+						className: "st-print-section-head",
+						children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h3", {
+							className: "st-print-section-title",
+							children: "Payments Disbursed (CV / 2307 / Receipt)"
+						})
+					}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("table", {
+						className: "st-ledger-table",
+						children: [
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("colgroup", { children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("col", { style: { width: "13%" } }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("col", { style: { width: "12%" } }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("col", { style: { width: "11%" } }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("col", { style: { width: "12%" } }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("col", { style: { width: "11%" } }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("col", { style: { width: "12%" } }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("col", { style: { width: "11%" } }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("col", { style: { width: "18%" } })
+							] }),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("thead", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", { children: "RFP No." }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", { children: "CV No." }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+									className: "st-col-center",
+									children: "Cheque Date"
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+									className: "st-col-num",
+									children: "Cheque Amt"
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+									className: "st-col-num",
+									children: "2307 Tax"
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", { children: "Receipt No." }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+									className: "st-col-center",
+									children: "OR Date"
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", { children: "Status / Remarks" })
+							] }) }),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("tbody", { children: releasedPayments.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tr", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+								colSpan: 8,
+								className: "st-col-center st-col-muted",
+								children: "No cheques / CVs released yet for this project."
+							}) }) : releasedPayments.map((p) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+									className: "st-col-code",
+									children: p.rfpNumber || p.paymentId
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+									className: "st-col-code",
+									children: p.cvNumber || "—"
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+									className: "st-col-center",
+									children: formatShortDate(p.cvDate)
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+									className: "st-col-num",
+									children: formatNum(p.chequeAmount)
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+									className: "st-col-num",
+									children: formatNum(p.withheldAmount)
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+									className: "st-col-code",
+									children: p.receiptNumber ? `${p.receiptType ? `${p.receiptType} ` : ""}${p.receiptNumber}` : "Pending"
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+									className: "st-col-center",
+									children: formatShortDate(p.receiptDate)
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", { children: [
+									p.paymentStatus === "RECEIVED" ? "Received" : "Cheque Released",
+									p.rfpRemarks ? ` · ${p.rfpRemarks}` : "",
+									" (Gross:",
+									" ",
+									formatNum(getPaymentSettledGross(p)),
+									")"
+								] })
+							] }, `pay-${p.paymentId}`)) }),
+							showTotals && releasedPayments.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tfoot", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
+									colSpan: 3,
+									children: [
+										"Total Disbursed (",
+										releasedPayments.length,
+										")"
+									]
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+									className: "st-col-num",
+									children: formatNum(totals.totalReleasedCheque)
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+									className: "st-col-num",
+									children: formatNum(totals.totalReleasedTax)
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", { colSpan: 3 })
+							] }) })
+						]
+					})]
+				}),
+				showTaxes && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+					className: "st-print-section",
+					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+						className: "st-print-section-head",
+						children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h3", {
+							className: "st-print-section-title",
+							children: "BIR VAT & Withholding Taxes (Form 2307)"
+						})
+					}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("table", {
+						className: "st-ledger-table",
+						children: [
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("colgroup", { children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("col", { style: { width: "14%" } }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("col", { style: { width: "13%" } }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("col", { style: { width: "10%" } }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("col", { style: { width: "9%" } }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("col", { style: { width: "9%" } }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("col", { style: { width: "10%" } }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("col", { style: { width: "9%" } }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("col", { style: { width: "6%" } }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("col", { style: { width: "10%" } }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("col", { style: { width: "10%" } })
+							] }),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("thead", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", { children: "Sub-Project" }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", { children: "Contractor" }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+									className: "st-col-num",
+									children: "TCP"
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", { children: "Tax Mode" }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+									className: "st-col-num",
+									children: "12% VAT"
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+									className: "st-col-num",
+									children: "Labor"
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+									className: "st-col-num",
+									children: "Materials"
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+									className: "st-col-center",
+									children: "EWT"
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+									className: "st-col-num",
+									children: "Target WHT"
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+									className: "st-col-num",
+									children: "2307 Paid"
+								})
+							] }) }),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("tbody", { children: taxRows.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tr", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+								colSpan: 10,
+								className: "st-col-center st-col-muted",
+								children: "No withholding tax obligations recorded for this project."
+							}) }) : taxRows.map((t) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+									className: "st-col-code",
+									children: t.contract.subProjectCode
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", { children: t.contractorDisplay }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+									className: "st-col-num",
+									children: formatNum(t.tcpAmt)
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", { children: t.modeShort }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+									className: "st-col-num",
+									children: formatNum(t.vatAmt)
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+									className: "st-col-num",
+									children: formatNum(t.laborAmt)
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+									className: "st-col-num",
+									children: formatNum(t.matAmt)
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+									className: "st-col-center",
+									children: t.ewtLabel
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+									className: "st-col-num",
+									children: formatNum(t.targetWht)
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+									className: "st-col-num",
+									children: formatNum(t.actualWht)
+								})
+							] }, `tax-${t.contract.contractId}`)) }),
+							showTotals && taxRows.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tfoot", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
+									colSpan: 4,
+									children: [
+										"Total BIR Taxes (",
+										taxRows.length,
+										")"
+									]
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+									className: "st-col-num",
+									children: formatNum(totals.totalTaxVat)
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", { colSpan: 3 }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+									className: "st-col-num",
+									children: formatNum(totals.totalTaxTargetWht)
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+									className: "st-col-num",
+									children: formatNum(totals.totalTaxActualWht)
+								})
+							] }) })
+						]
+					})]
+				}),
+				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+					className: "st-print-footer",
+					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { children: [
+						"SiteTrack Pro · Project Ledger (",
+						project.mainProjectCode,
+						")"
+					] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { children: [
+						"Prepared by ",
+						activeUser.fullName,
+						" · Printed",
 						" ",
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", {
-							className: "font-mono font-semibold text-slate-900",
-							children: selectedProject?.mainProjectCode
-						}),
-						":"
-					]
-				}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-					className: "flex flex-wrap items-center gap-2",
-					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+						formatDisplayDate((/* @__PURE__ */ new Date()).toISOString().slice(0, 10))
+					] })]
+				})
+			]
+		});
+	};
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+		className: "space-y-5",
+		children: [
+			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: "no-print grid grid-cols-2 lg:grid-cols-4 gap-3.5",
+				children: [
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
 						type: "button",
 						onClick: () => onNavigateTab("projects"),
-						className: "inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2.5 py-1 font-medium text-slate-800 hover:bg-slate-50",
-						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Projects & Sub-Projects" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ExternalLink, { className: "h-3 w-3" })]
-					}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+						className: "text-left rounded-xl border border-slate-200 bg-white p-4 hover:border-slate-300 transition-colors",
+						children: [
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "flex items-center justify-between text-xs font-medium text-slate-500",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Total Projects" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(FolderKanban, { className: "h-3.5 w-3.5 text-slate-400" })]
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+								className: "mt-1.5 text-xl font-bold tracking-tight text-slate-900 tabular-nums",
+								children: operationalMetrics.totalProjects
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "mt-1 text-xs text-slate-500",
+								children: [
+									subProjects.length,
+									" sub-projects · ",
+									sites.length,
+									" sites"
+								]
+							})
+						]
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
 						type: "button",
-						onClick: () => onNavigateTab("contracts"),
-						className: "inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2.5 py-1 font-medium text-slate-800 hover:bg-slate-50",
-						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Contracts, RFPs, Payments & BIR Taxes" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ExternalLink, { className: "h-3 w-3" })]
-					})]
-				})]
+						onClick: () => onNavigateTab("projects"),
+						className: "text-left rounded-xl border border-slate-200 bg-white p-4 hover:border-slate-300 transition-colors",
+						children: [
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "flex items-center justify-between text-xs font-medium text-slate-500",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Active Projects" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Clock, { className: "h-3.5 w-3.5 text-blue-600" })]
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+								className: "mt-1.5 text-xl font-bold tracking-tight text-blue-700 tabular-nums",
+								children: operationalMetrics.activeProjects
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+								className: "mt-1 text-xs text-slate-500",
+								children: "Started, In Progress, or Under Review"
+							})
+						]
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+						type: "button",
+						onClick: () => onNavigateTab("projects"),
+						className: "text-left rounded-xl border border-slate-200 bg-white p-4 hover:border-slate-300 transition-colors",
+						children: [
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "flex items-center justify-between text-xs font-medium text-slate-500",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Completed Projects" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(CircleCheck, { className: "h-3.5 w-3.5 text-emerald-600" })]
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+								className: "mt-1.5 text-xl font-bold tracking-tight text-emerald-700 tabular-nums",
+								children: operationalMetrics.completedProjects
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+								className: "mt-1 text-xs text-slate-500",
+								children: operationalMetrics.totalProjects > 0 ? `${Math.round(operationalMetrics.completedProjects / operationalMetrics.totalProjects * 100)}% portfolio completion` : "No projects recorded"
+							})
+						]
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+						type: "button",
+						onClick: () => onNavigateTab("projects"),
+						className: "text-left rounded-xl border border-slate-200 bg-white p-4 hover:border-slate-300 transition-colors",
+						children: [
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "flex items-center justify-between text-xs font-medium text-slate-500",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Delayed Projects" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(TriangleAlert, { className: `h-3.5 w-3.5 ${operationalMetrics.delayedProjects > 0 ? "text-red-600" : "text-slate-400"}` })]
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+								className: `mt-1.5 text-xl font-bold tracking-tight tabular-nums ${operationalMetrics.delayedProjects > 0 ? "text-red-700" : "text-slate-900"}`,
+								children: operationalMetrics.delayedProjects
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+								className: "mt-1 text-xs text-slate-500",
+								children: operationalMetrics.delayedProjects > 0 ? "Requires schedule follow-up" : "No projects currently flagged delayed"
+							})
+						]
+					})
+				]
 			}),
-			isPrintPreviewOpen && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				className: "no-print fixed inset-0 z-50 flex flex-col bg-slate-950/80 backdrop-blur-xs",
+			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: "no-print grid grid-cols-2 lg:grid-cols-4 gap-3.5",
+				children: [
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "rounded-xl border border-slate-200 bg-white p-4",
+						children: [
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+								className: "text-xs font-medium text-slate-500",
+								children: "Total Active Contract Value (TCP)"
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+								className: "mt-1.5 text-xl font-bold tracking-tight text-slate-900 tabular-nums",
+								children: formatCurrency(portfolioSummary.totalActiveTCP)
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "mt-1 text-xs text-slate-500",
+								children: [
+									contractsTCP.filter((c) => c.contractStatus !== "CANCEL").length,
+									" ",
+									"active contracts · ",
+									contractors.filter((c) => c.active).length,
+									" ",
+									"contractors"
+								]
+							})
+						]
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "rounded-xl border border-slate-200 bg-white p-4",
+						children: [
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+								className: "text-xs font-medium text-slate-500",
+								children: "Total Payments Made (Gross Settled)"
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+								className: "mt-1.5 text-xl font-bold tracking-tight text-emerald-700 tabular-nums",
+								children: formatCurrency(portfolioSummary.totalReceivedGross)
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "mt-1 text-xs text-slate-500",
+								children: ["Net Cheques: ", formatCurrency(portfolioSummary.totalReceivedCheques)]
+							})
+						]
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "rounded-xl border border-slate-200 bg-white p-4",
+						children: [
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+								className: "text-xs font-medium text-slate-500",
+								children: "Unreleased Retention Holdback"
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+								className: "mt-1.5 text-xl font-bold tracking-tight text-amber-700 tabular-nums",
+								children: formatCurrency(portfolioSummary.totalUnreleasedRetention)
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "mt-1 text-xs text-slate-500",
+								children: [
+									"Safe Progress Release:",
+									" ",
+									formatCurrency(portfolioSummary.totalSafeProgressRelease)
+								]
+							})
+						]
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "rounded-xl border border-slate-200 bg-white p-4",
+						children: [
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+								className: "text-xs font-medium text-slate-500",
+								children: "Outstanding Contract Balance"
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+								className: "mt-1.5 text-xl font-bold tracking-tight text-slate-900 tabular-nums",
+								children: formatCurrency(portfolioSummary.totalRemainingBalance)
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "mt-1 text-xs text-slate-500",
+								children: ["In-Flight RFPs: ", formatCurrency(portfolioSummary.totalInFlightRFP)]
+							})
+						]
+					})
+				]
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: "no-print grid grid-cols-1 lg:grid-cols-3 gap-4",
+				children: [
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "rounded-xl border border-slate-200 bg-white overflow-hidden flex flex-col",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-2.5",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "flex items-center gap-2 text-xs font-bold text-slate-800",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CalendarClock, { className: "h-3.5 w-3.5 text-slate-500" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Upcoming Target Dates" })]
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+								type: "button",
+								onClick: () => onNavigateTab("projects"),
+								className: "text-[11px] font-semibold text-blue-700 hover:underline",
+								children: "View Projects"
+							})]
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+							className: "divide-y divide-slate-200 text-xs flex-1",
+							children: operationalMetrics.upcomingTargets.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+								className: "px-4 py-6 text-center text-slate-500",
+								children: "No open sub-project target dates recorded."
+							}) : operationalMetrics.upcomingTargets.map(({ subProject, daysDiff }) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+								type: "button",
+								onClick: () => setSelectedProjectId(subProject.projectId),
+								className: "st-hover-row w-full px-4 py-2.5 text-left flex items-start justify-between gap-2 transition-colors",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "min-w-0",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+										className: "font-mono text-[11px] font-bold text-slate-900 truncate",
+										children: subProject.subProjectCode
+									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+										className: "text-slate-600 truncate",
+										children: subProject.subProjectName
+									})]
+								}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "text-right shrink-0",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+										className: "font-mono text-[11px] font-semibold text-slate-800",
+										children: formatShortDate(subProject.targetDate)
+									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+										className: `text-[10px] font-semibold ${daysDiff < 0 ? "text-red-700" : daysDiff <= 14 ? "text-amber-700" : "text-slate-500"}`,
+										children: daysDiff < 0 ? `${Math.abs(daysDiff)}d overdue` : daysDiff === 0 ? "Due today" : `In ${daysDiff}d`
+									})]
+								})]
+							}, subProject.subProjectId))
+						})]
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "rounded-xl border border-slate-200 bg-white overflow-hidden flex flex-col",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-2.5",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "flex items-center gap-2 text-xs font-bold text-slate-800",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(FolderKanban, { className: "h-3.5 w-3.5 text-slate-500" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Recent Project Updates" })]
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+								type: "button",
+								onClick: () => onNavigateTab("projects"),
+								className: "text-[11px] font-semibold text-blue-700 hover:underline",
+								children: "Manage All"
+							})]
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+							className: "divide-y divide-slate-200 text-xs flex-1",
+							children: operationalMetrics.recentUpdates.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+								className: "px-4 py-6 text-center text-slate-500",
+								children: "No project updates recorded yet."
+							}) : operationalMetrics.recentUpdates.map((item) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+								type: "button",
+								onClick: () => setSelectedProjectId(item.projectId),
+								className: "st-hover-row w-full px-4 py-2.5 text-left flex items-start justify-between gap-2 transition-colors",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "min-w-0",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+										className: "flex items-center gap-1.5",
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+											className: "font-mono text-[11px] font-bold text-slate-900 truncate",
+											children: item.code
+										}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+											className: "text-[10px] text-slate-500",
+											children: ["· ", item.kind]
+										})]
+									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+										className: "text-slate-600 truncate",
+										children: item.title
+									})]
+								}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "text-right shrink-0",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+										className: "text-[11px] font-semibold text-slate-800",
+										children: item.status
+									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+										className: "font-mono text-[10px] text-slate-500",
+										children: formatShortDate(item.date)
+									})]
+								})]
+							}, `${item.kind}-${item.id}`))
+						})]
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "rounded-xl border border-slate-200 bg-white overflow-hidden flex flex-col",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-2.5",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "flex items-center gap-2 text-xs font-bold text-slate-800",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CreditCard, { className: "h-3.5 w-3.5 text-slate-500" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Recent Payment Activities" })]
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+								type: "button",
+								onClick: () => onNavigateTab("contracts"),
+								className: "text-[11px] font-semibold text-blue-700 hover:underline",
+								children: "Payment Ledger"
+							})]
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+							className: "divide-y divide-slate-200 text-xs flex-1",
+							children: operationalMetrics.recentPayments.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+								className: "px-4 py-6 text-center text-slate-500",
+								children: "No payment activities recorded yet."
+							}) : operationalMetrics.recentPayments.map((pay) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+								type: "button",
+								onClick: () => onNavigateTab("contracts"),
+								className: "st-hover-row w-full px-4 py-2.5 text-left flex items-start justify-between gap-2 transition-colors",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "min-w-0",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+										className: "font-mono text-[11px] font-bold text-slate-900 truncate",
+										children: [pay.cvNumber ? `CV ${pay.cvNumber}` : `RFP ${pay.rfpNumber}`, /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+											className: "font-normal text-slate-500",
+											children: [
+												" ",
+												"· ",
+												pay.subProjectCode
+											]
+										})]
+									}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+										className: "text-slate-600 truncate",
+										children: [
+											pay.rfpPayee || pay.contractorName,
+											" · ",
+											pay.billingType
+										]
+									})]
+								}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "text-right shrink-0",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+										className: "font-mono text-[11px] font-bold text-slate-900 tabular-nums",
+										children: formatCurrency(pay.chequeAmount > 0 ? pay.chequeAmount : pay.rfpAmount)
+									}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+										className: "text-[10px] text-slate-500",
+										children: [
+											PAYMENT_STAGE_STATUS_LABELS[pay.paymentStatus],
+											" ·",
+											" ",
+											formatShortDate(pay.cvDate || pay.rfpDate)
+										]
+									})]
+								})]
+							}, pay.paymentId))
+						})]
+					})
+				]
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: "no-print rounded-xl border border-slate-200 bg-white p-4",
 				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-					className: "flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 bg-white px-6 py-2.5",
+					className: "flex flex-col lg:flex-row lg:items-center gap-3",
 					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "flex items-center gap-2.5",
-						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Printer, { className: "h-4 w-4 text-slate-800" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("h2", {
-							className: "text-sm font-bold text-slate-900",
-							children: [
-								"Live Print Preview — Adaptive Compact Light Mode (",
-								printPaperSize,
-								" ",
-								printOrientation.toUpperCase(),
-								" · Tier:",
-								" ",
-								resolvedPrintTier.toUpperCase(),
-								")"
-							]
-						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
-							className: "text-[11px] text-slate-500",
-							children: [totalLedgerEntryCount, " total rows across visible sections — automatically scaled so compact projects take only part of the sheet while large projects fit cleanly."]
-						})] })]
+						className: "relative flex-1 min-w-0",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Search, { className: "pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+							type: "text",
+							value: searchQuery,
+							onChange: (e) => setSearchQuery(e.target.value),
+							placeholder: "Search by Project Code, Site, Developer, Type, or Description...",
+							className: "w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 py-2 text-sm text-slate-900 focus:border-slate-900 focus:outline-none"
+						})]
 					}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "flex items-center gap-2.5",
-						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-							type: "button",
-							onClick: () => setIsPrintPreviewOpen(false),
-							className: "rounded border border-slate-300 bg-white px-3.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50",
-							children: "Close Preview"
+						className: "flex flex-wrap items-center gap-2.5",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("select", {
+							"aria-label": "Select project report",
+							value: selectedProject?.projectId || "",
+							onChange: (e) => setSelectedProjectId(e.target.value),
+							className: "min-w-[240px] max-w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-900 focus:border-slate-900 focus:outline-none",
+							children: filteredProjects.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
+								value: "",
+								children: "No matching projects"
+							}) : filteredProjects.map((p) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("option", {
+								value: p.projectId,
+								children: [
+									p.mainProjectCode,
+									" — ",
+									p.projectName || p.siteName
+								]
+							}, p.projectId))
 						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
 							type: "button",
-							onClick: handleExecutePrint,
-							className: "inline-flex items-center gap-1.5 rounded bg-slate-900 px-4 py-1.5 text-xs font-semibold text-white hover:bg-slate-800",
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Printer, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Print Now / Save as PDF" })]
+							disabled: !selectedProject,
+							onClick: () => setIsPrintModalOpen(true),
+							className: "inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50 transition-colors",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Printer, { className: "h-4 w-4" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Print / PDF Preview" })]
 						})]
 					})]
 				}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-					className: "flex-1 grid grid-cols-1 lg:grid-cols-12 overflow-hidden",
-					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "lg:col-span-4 xl:col-span-3 border-r border-slate-200 bg-white p-4 overflow-y-auto space-y-4 text-xs",
+					className: "mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3 text-xs text-slate-500",
+					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { children: [
+						"Showing complete financial ledger for",
+						" ",
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", {
+							className: "text-slate-900",
+							children: selectedProject ? selectedProject.mainProjectCode : "None"
+						}),
+						reportData ? ` (${reportData.contractRows.length} contracts · ${reportData.rfpRows.length} RFPs · ${reportData.releasedPayments.length} payments)` : ""
+					] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "flex items-center gap-3",
 						children: [
-							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								className: "space-y-3",
-								children: [
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-										className: "font-bold text-slate-900 uppercase tracking-wider text-[11px]",
-										children: "1. Adaptive Print Compaction"
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+								type: "button",
+								onClick: () => onNavigateTab("projects"),
+								className: "inline-flex items-center gap-1 font-medium text-slate-700 hover:text-slate-900",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(FolderKanban, { className: "h-3.5 w-3.5" }), "Manage Projects"]
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+								type: "button",
+								onClick: () => onNavigateTab("contracts"),
+								className: "inline-flex items-center gap-1 font-medium text-slate-700 hover:text-slate-900",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(FileSpreadsheet, { className: "h-3.5 w-3.5" }), "Manage Contracts & Payments"]
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+								type: "button",
+								onClick: () => onNavigateTab("sites"),
+								className: "inline-flex items-center gap-1 font-medium text-slate-700 hover:text-slate-900",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Building2, { className: "h-3.5 w-3.5" }), "Sites Directory"]
+							})
+						]
+					})]
+				})]
+			}),
+			!reportData ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: "rounded-xl border border-slate-200 bg-white p-10 text-center",
+				children: [
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+						className: "text-sm font-medium text-slate-700",
+						children: "No project records available to display."
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+						className: "mt-1 text-xs text-slate-500",
+						children: "Sync your Google Sheet or create a Main Project to view its live financial summary and printable ledger."
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+						type: "button",
+						onClick: () => onNavigateTab("projects"),
+						className: "mt-4 inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-800",
+						children: "Go to Projects"
+					})
+				]
+			}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+				className: "rounded-xl border border-slate-200 bg-white p-5 overflow-x-auto",
+				children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+					className: "min-w-[820px]",
+					children: renderLedgerDocument(void 0, false, {
+						["--print-font-size"]: "11px",
+						["--print-cell-py"]: "5px",
+						["--print-cell-px"]: "7px"
+					})
+				})
+			}),
+			isPrintModalOpen && reportData && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: "no-print fixed inset-0 z-50 flex bg-slate-950/75 backdrop-blur-[1px]",
+				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("aside", {
+					className: "w-72 shrink-0 border-r border-slate-200 bg-white flex flex-col overflow-y-auto",
+					children: [
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "flex items-center justify-between border-b border-slate-200 px-4 py-3.5",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "flex items-center gap-2",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(SlidersHorizontal, { className: "h-4 w-4 text-slate-700" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+									className: "text-sm font-semibold text-slate-900",
+									children: "Print & Page Setup"
+								})]
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+								type: "button",
+								onClick: () => setIsPrintModalOpen(false),
+								className: "rounded-md p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-900",
+								"aria-label": "Close print preview",
+								children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(X, { className: "h-4 w-4" })
+							})]
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "flex-1 space-y-5 p-4 text-xs",
+							children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", {
+									className: "block font-semibold text-slate-700 mb-1.5",
+									children: "Paper Size"
+								}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("select", {
+									value: paperSize,
+									onChange: (e) => setPaperSize(e.target.value),
+									className: "w-full rounded-md border border-slate-300 bg-white px-2.5 py-2 text-xs font-medium text-slate-900",
+									children: Object.keys(PAPER_DIMENSIONS).map((key) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
+										value: key,
+										children: PAPER_DIMENSIONS[key].label
+									}, key))
+								})] }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", {
+									className: "block font-semibold text-slate-700 mb-1.5",
+									children: "Orientation"
+								}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+									className: "grid grid-cols-2 gap-2",
+									children: [["portrait", "Portrait"], ["landscape", "Landscape"]].map(([val, lbl]) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+										type: "button",
+										onClick: () => {
+											setOrientation(val);
+											if (val === "portrait" && layoutStyle === "paired") setLayoutStyle("stacked");
+										},
+										className: `rounded-md border px-2.5 py-2 text-xs font-semibold transition-colors ${orientation === val ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"}`,
+										children: lbl
+									}, val))
+								})] }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", {
+										className: "block font-semibold text-slate-700 mb-1.5",
+										children: "Contracts & TCP Layout"
 									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", {
-										className: "block font-semibold text-slate-700 mb-1",
-										children: "Compaction Mode"
-									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-										className: "grid grid-cols-2 gap-1.5",
-										children: [
-											["auto", `Auto (${resolvedPrintTier})`],
-											["standard", "Standard (11px)"],
-											["compact", "Compact (10px)"],
-											["ultra-compact", "Ultra-Compact (9px)"]
-										].map(([scale, label]) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-											type: "button",
-											onClick: () => setPrintCompactScale(scale),
-											className: `rounded border px-2 py-1.5 text-[11px] font-semibold transition-colors ${printCompactScale === scale ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"}`,
-											children: label
-										}, scale))
-									})] }),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", {
-										className: "block font-semibold text-slate-700 mb-1",
-										children: "Report Layout Style"
-									}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-										className: "grid grid-cols-2 gap-1.5",
-										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-											type: "button",
-											onClick: () => setPresentationMode("classic-stacked"),
-											className: `rounded border px-2 py-1.5 text-[11px] font-semibold transition-colors ${presentationMode === "classic-stacked" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"}`,
-											children: "Classic Stacked"
-										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-											type: "button",
-											onClick: () => setPresentationMode("executive-paired"),
-											className: `rounded border px-2 py-1.5 text-[11px] font-semibold transition-colors ${presentationMode === "executive-paired" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"}`,
-											children: "Executive Paired"
-										})]
-									})] }),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", {
-										className: "block font-semibold text-slate-700 mb-1",
-										children: "Orientation"
-									}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 										className: "grid grid-cols-2 gap-2",
 										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
 											type: "button",
-											onClick: () => setPrintOrientation("portrait"),
-											className: `rounded border px-3 py-1.5 font-semibold transition-colors ${printOrientation === "portrait" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"}`,
-											children: "Portrait"
+											onClick: () => handleSelectLayoutStyle("stacked"),
+											className: `rounded-md border px-2 py-2 text-xs font-semibold transition-colors ${!effectivePairedLayout ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"}`,
+											children: "Stacked (All)"
 										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
 											type: "button",
-											onClick: () => setPrintOrientation("landscape"),
-											className: `rounded border px-3 py-1.5 font-semibold transition-colors ${printOrientation === "landscape" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"}`,
-											children: "Landscape"
+											onClick: () => handleSelectLayoutStyle("paired"),
+											className: `rounded-md border px-2 py-2 text-xs font-semibold transition-colors ${effectivePairedLayout ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"}`,
+											children: "Paired (Land.)"
 										})]
-									})] }),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", {
-										htmlFor: "preview-paper-size",
-										className: "block font-semibold text-slate-700 mb-1",
-										children: "Paper Size"
-									}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("select", {
-										id: "preview-paper-size",
-										value: printPaperSize,
-										onChange: (e) => setPrintPaperSize(e.target.value),
-										className: "w-full rounded border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-900",
-										children: [
-											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
-												value: "A4",
-												children: "A4 (210mm × 297mm)"
-											}),
-											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
-												value: "Letter",
-												children: "US Letter (8.5in × 11in)"
-											}),
-											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
-												value: "Legal",
-												children: "US Legal (8.5in × 14in)"
-											})
-										]
-									})] })
-								]
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								className: "space-y-2 border-t border-slate-200 pt-3",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-									className: "font-bold text-slate-900 uppercase tracking-wider text-[11px]",
-									children: "2. Sections & Totals to Print"
-								}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-									className: "space-y-1.5",
-									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+										className: "mt-1.5 text-[11px] text-slate-500 leading-relaxed",
+										children: "Portrait automatically uses full-width stacked tables so all columns fit strictly within 10 mm page margins."
+									})
+								] }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
+									className: "block font-semibold text-slate-700 mb-1.5",
+									children: [
+										"Table Text Density (",
+										densityMetrics.label,
+										")"
+									]
+								}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+									className: "grid grid-cols-2 gap-2",
+									children: [
+										["auto", "Auto Fit"],
+										["standard", "Standard"],
+										["compact", "Compact"],
+										["dense", "Dense"]
+									].map(([val, lbl]) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
 										type: "button",
-										onClick: () => setShowSectionTotalsRow((prev) => !prev),
-										className: `flex w-full items-center gap-2 rounded border px-2.5 py-1.5 text-left font-medium transition-colors ${showSectionTotalsRow ? "border-slate-800 bg-slate-50 text-slate-900" : "border-slate-200 bg-white text-slate-400"}`,
-										children: [showSectionTotalsRow ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(SquareCheckBig, { className: "h-3.5 w-3.5 text-slate-900 shrink-0" }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Square, { className: "h-3.5 w-3.5 text-slate-400 shrink-0" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-											className: "truncate",
-											children: "Show Table Footer Totals Row"
+										onClick: () => setDensityMode(val),
+										className: `rounded-md border px-2 py-1.5 text-xs font-medium transition-colors ${densityMode === val ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"}`,
+										children: lbl
+									}, val))
+								})] }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+									className: "font-semibold text-slate-700 mb-2",
+									children: "Included Sections"
+								}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+									className: "space-y-2",
+									children: [
+										[
+											"Table Footer Totals",
+											showTotals,
+											setShowTotals
+										],
+										[
+											"Contracts Summary",
+											showContracts,
+											setShowContracts
+										],
+										[
+											"TCPs Breakdown",
+											showTcps,
+											setShowTcps
+										],
+										[
+											"RFPs (Requests)",
+											showRfps,
+											setShowRfps
+										],
+										[
+											"Payments (CV / 2307 / OR)",
+											showPayments,
+											setShowPayments
+										],
+										[
+											"BIR Withholding Taxes",
+											showTaxes,
+											setShowTaxes
+										]
+									].map(([label, checked, setter]) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
+										className: "flex items-center gap-2 rounded-md border border-slate-200 px-2.5 py-2 cursor-pointer hover:bg-slate-50",
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+											type: "checkbox",
+											checked,
+											onChange: (e) => setter(e.target.checked),
+											className: "h-3.5 w-3.5 rounded border-slate-300 accent-slate-900"
+										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+											className: "text-xs font-medium text-slate-800",
+											children: label
 										})]
-									}), [
-										["contracts", "Contracts Summary Table"],
-										["tcps", "TCPs Breakdown Table"],
-										["rfps", "RFPs (Payment Requests) Table"],
-										["payments", "Payments (CV / 2307 / OR) Table"],
-										["taxes", "BIR Withholding Taxes Table"],
-										["preparedByFooter", "Prepared By Timestamp Footer"]
-									].map(([key, label]) => {
-										const checked = sectionsVisibility[key];
-										return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-											type: "button",
-											onClick: () => toggleSection(key),
-											className: `flex w-full items-center gap-2 rounded border px-2.5 py-1.5 text-left font-medium transition-colors ${checked ? "border-slate-800 bg-slate-50 text-slate-900" : "border-slate-200 bg-white text-slate-400"}`,
-											children: [checked ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(SquareCheckBig, { className: "h-3.5 w-3.5 text-slate-900 shrink-0" }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Square, { className: "h-3.5 w-3.5 text-slate-400 shrink-0" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-												className: "truncate",
-												children: label
-											})]
-										}, key);
-									})]
-								})]
-							}),
-							sectionsVisibility.preparedByFooter && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								className: "space-y-2 border-t border-slate-200 pt-3",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", {
-									htmlFor: "preview-prepared-by",
-									className: "block font-semibold text-slate-700",
-									children: "Prepared By (Footer Note)"
-								}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-									id: "preview-prepared-by",
-									type: "text",
-									value: preparedBy,
-									onChange: (e) => setPreparedBy(e.target.value),
-									className: "w-full rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-900"
-								})]
-							})
-						]
+									}, label))
+								})] })
+							]
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "border-t border-slate-200 p-4 space-y-2 bg-slate-50",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+								type: "button",
+								onClick: handleExecutePrint,
+								className: "w-full inline-flex items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 transition-colors",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Printer, { className: "h-4 w-4" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Print / Save as PDF" })]
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+								type: "button",
+								onClick: () => setIsPrintModalOpen(false),
+								className: "w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50",
+								children: "Close Preview"
+							})]
+						})
+					]
+				}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+					className: "flex-1 overflow-auto p-6 sm:p-8 flex flex-col items-center",
+					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+						className: "mb-3 flex items-center gap-3 text-xs text-slate-300",
+						children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { children: [
+							paperSpec.label,
+							" ·",
+							" ",
+							orientation === "landscape" ? "Landscape" : "Portrait",
+							" · 10 mm Margins · White Paper Output"
+						] })
 					}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-						className: "lg:col-span-8 xl:col-span-9 bg-neutral-700/90 p-5 overflow-auto flex justify-center items-start",
-						children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-							className: `print-light-paper print-tier-${resolvedPrintTier} rounded shadow-2xl border border-slate-300 p-4 transition-all h-fit ${printOrientation === "landscape" ? "w-full max-w-[1060px]" : "w-full max-w-[780px]"}`,
-							children: renderLedgerTables(true)
+						className: "bg-white shadow-2xl border border-slate-300 shrink-0",
+						style: {
+							width: `${previewPaperWidthMm}mm`,
+							minHeight: `${previewPaperHeightMm}mm`,
+							padding: "10mm",
+							boxSizing: "border-box"
+						},
+						children: renderLedgerDocument("sitetrack-print-source", effectivePairedLayout, {
+							["--print-font-size"]: `${densityMetrics.fontSizePx}px`,
+							["--print-cell-py"]: `${densityMetrics.cellPyPx}px`,
+							["--print-cell-px"]: `${densityMetrics.cellPxPx}px`
 						})
 					})]
 				})]
@@ -22212,7 +23177,7 @@ var ContractsTCPView = ({ subProjects, contractors, contractsTCP, contractPaymen
 	const activeContractors = (0, import_react.useMemo)(() => contractors.filter((c) => c.active), [contractors]);
 	const [activeSection, setActiveSection] = (0, import_react.useState)("contracts_and_rollups");
 	const [showBirGuide, setShowBirGuide] = (0, import_react.useState)(false);
-	const [isAwardFormOpen, setIsAwardFormOpen] = (0, import_react.useState)(true);
+	const [isAwardFormOpen, setIsAwardFormOpen] = (0, import_react.useState)(false);
 	const [selectedSubProjectId, setSelectedSubProjectId] = (0, import_react.useState)("");
 	const [tcpType, setTcpType] = (0, import_react.useState)("Original");
 	const [customContractIdInput, setCustomContractIdInput] = (0, import_react.useState)("");
@@ -22246,6 +23211,10 @@ var ContractsTCPView = ({ subProjects, contractors, contractsTCP, contractPaymen
 	const [contractorFilter, setContractorFilter] = (0, import_react.useState)("ALL");
 	const [subProjectFilter, setSubProjectFilter] = (0, import_react.useState)("ALL");
 	const [searchQuery, setSearchQuery] = (0, import_react.useState)("");
+	const [contractSortKey, setContractSortKey] = (0, import_react.useState)("subProject");
+	const [contractSortDir, setContractSortDir] = (0, import_react.useState)("asc");
+	const [contractsPage, setContractsPage] = (0, import_react.useState)(1);
+	const CONTRACTS_PAGE_SIZE = 15;
 	const [editingRow, setEditingRow] = (0, import_react.useState)(null);
 	const [editForm, setEditForm] = (0, import_react.useState)(null);
 	const [rfpModalContract, setRfpModalContract] = (0, import_react.useState)(null);
@@ -22270,6 +23239,10 @@ var ContractsTCPView = ({ subProjects, contractors, contractsTCP, contractPaymen
 	const [receiptDate, setReceiptDate] = (0, import_react.useState)((/* @__PURE__ */ new Date()).toISOString().slice(0, 10));
 	const [paymentStageFilter, setPaymentStageFilter] = (0, import_react.useState)("ALL");
 	const [paymentSearchQuery, setPaymentSearchQuery] = (0, import_react.useState)("");
+	const [paymentSortKey, setPaymentSortKey] = (0, import_react.useState)("date");
+	const [paymentSortDir, setPaymentSortDir] = (0, import_react.useState)("desc");
+	const [paymentsPage, setPaymentsPage] = (0, import_react.useState)(1);
+	const PAYMENTS_PAGE_SIZE = 20;
 	(0, import_react.useEffect)(() => {
 		if (preselectedSubProjectId) {
 			setSelectedSubProjectId(preselectedSubProjectId);
@@ -22394,49 +23367,6 @@ var ContractsTCPView = ({ subProjects, contractors, contractsTCP, contractPaymen
 		draftBirTax
 	]);
 	const rollupByContractId = (0, import_react.useMemo)(() => computeContractRollups(contractsTCP, contractPayments), [contractsTCP, contractPayments]);
-	const portfolioSummary = (0, import_react.useMemo)(() => {
-		let totalActiveTCP = 0;
-		let totalDeductedPaymentsReceived = 0;
-		let totalRemainingTCP = 0;
-		let totalRetentionTarget = 0;
-		let totalUnreleasedRetentionHoldback = 0;
-		let totalSafeRemainingProgressBillable = 0;
-		let totalWithholdingTarget = 0;
-		let totalDeductibleTarget = 0;
-		let totalRetentionAlreadyDeducted = 0;
-		let totalWithholdingAlreadyDeducted = 0;
-		let totalAlreadyDeducted = 0;
-		for (const c of contractsTCP) {
-			if (c.contractStatus === "CANCEL") continue;
-			const r = rollupByContractId[c.contractId];
-			if (!r) continue;
-			totalActiveTCP += r.tcpAmount;
-			totalDeductedPaymentsReceived += r.receivedGrossDeducted;
-			totalRemainingTCP += r.remainingTCPAfterReceived;
-			totalRetentionTarget += r.retentionTargetAmount;
-			totalUnreleasedRetentionHoldback += r.unreleasedRetentionHoldback;
-			totalSafeRemainingProgressBillable += r.safeRemainingProgressBillable;
-			totalWithholdingTarget += r.withholdingTargetAmount;
-			totalDeductibleTarget += r.totalDeductibleTarget;
-			totalRetentionAlreadyDeducted += r.retentionAlreadyDeducted;
-			totalWithholdingAlreadyDeducted += r.withholdingAlreadyDeducted;
-			totalAlreadyDeducted += r.totalAlreadyDeducted;
-		}
-		return {
-			totalActiveTCP,
-			totalDeductedPaymentsReceived,
-			totalRemainingTCP,
-			totalRetentionTarget,
-			totalUnreleasedRetentionHoldback,
-			totalSafeRemainingProgressBillable,
-			totalWithholdingTarget,
-			totalDeductibleTarget,
-			totalRetentionAlreadyDeducted,
-			totalWithholdingAlreadyDeducted,
-			totalAlreadyDeducted,
-			remainingDeductible: Math.max(0, totalDeductibleTarget - totalAlreadyDeducted)
-		};
-	}, [contractsTCP, rollupByContractId]);
 	const isModificationType = tcpType !== "Original";
 	const canSubmitAward = Boolean(selectedSubProject) && Boolean(selectedContractor) && parsedAmount !== null && parsedAmount !== 0 && !duplicateContractId && !duplicateTcpId;
 	const handleStartModifyExistingContract = (existing, suggestedType = "Escalation") => {
@@ -23081,7 +24011,7 @@ var ContractsTCPView = ({ subProjects, contractors, contractsTCP, contractPaymen
 	};
 	const filteredContracts = (0, import_react.useMemo)(() => {
 		const q = searchQuery.trim().toLowerCase();
-		return contractsTCP.filter((c) => {
+		const list = contractsTCP.filter((c) => {
 			if (statusFilter !== "ALL" && c.contractStatus !== statusFilter) return false;
 			if (typeFilter !== "ALL" && c.tcpType !== typeFilter) return false;
 			if (contractorFilter !== "ALL" && c.contractorCode !== contractorFilter) return false;
@@ -23089,26 +24019,94 @@ var ContractsTCPView = ({ subProjects, contractors, contractsTCP, contractPaymen
 			if (!q) return true;
 			return c.contractId.toLowerCase().includes(q) || (c.tcpId || "").toLowerCase().includes(q) || (c.parentContractId || "").toLowerCase().includes(q) || c.subProjectCode.toLowerCase().includes(q) || c.subProjectName.toLowerCase().includes(q) || c.mainProjectCode.toLowerCase().includes(q) || c.contractorCode.toLowerCase().includes(q) || c.contractorName.toLowerCase().includes(q) || c.remarks.toLowerCase().includes(q);
 		});
+		const dir = contractSortDir === "asc" ? 1 : -1;
+		return [...list].sort((a, b) => {
+			const ra = rollupByContractId[a.contractId];
+			const rb = rollupByContractId[b.contractId];
+			switch (contractSortKey) {
+				case "tcp": return (a.tcpAmount - b.tcpAmount) * dir;
+				case "paid": return ((ra?.receivedGrossDeducted || 0) - (rb?.receivedGrossDeducted || 0)) * dir;
+				case "balance": return ((ra?.remainingTCPAfterReceived ?? a.tcpAmount) - (rb?.remainingTCPAfterReceived ?? b.tcpAmount)) * dir;
+				case "status": return a.contractStatus.localeCompare(b.contractStatus) * dir;
+				default: return (a.subProjectCode.localeCompare(b.subProjectCode) || a.contractorName.localeCompare(b.contractorName) || a.contractId.localeCompare(b.contractId)) * dir;
+			}
+		});
 	}, [
 		contractsTCP,
+		rollupByContractId,
+		statusFilter,
+		typeFilter,
+		contractorFilter,
+		subProjectFilter,
+		searchQuery,
+		contractSortKey,
+		contractSortDir
+	]);
+	const contractsTotalPages = Math.max(1, Math.ceil(filteredContracts.length / CONTRACTS_PAGE_SIZE));
+	const safeContractsPage = Math.min(contractsPage, contractsTotalPages);
+	const paginatedContracts = (0, import_react.useMemo)(() => {
+		const start = (safeContractsPage - 1) * CONTRACTS_PAGE_SIZE;
+		return filteredContracts.slice(start, start + CONTRACTS_PAGE_SIZE);
+	}, [filteredContracts, safeContractsPage]);
+	(0, import_react.useEffect)(() => {
+		setContractsPage(1);
+	}, [
 		statusFilter,
 		typeFilter,
 		contractorFilter,
 		subProjectFilter,
 		searchQuery
 	]);
+	const toggleContractSort = (key) => {
+		if (contractSortKey === key) setContractSortDir((d) => d === "asc" ? "desc" : "asc");
+		else {
+			setContractSortKey(key);
+			setContractSortDir(key === "tcp" || key === "paid" || key === "balance" ? "desc" : "asc");
+		}
+	};
 	const filteredAllPayments = (0, import_react.useMemo)(() => {
 		const q = paymentSearchQuery.trim().toLowerCase();
-		return contractPayments.filter((p) => {
+		const list = contractPayments.filter((p) => {
 			if (paymentStageFilter !== "ALL" && p.paymentStatus !== paymentStageFilter) return false;
 			if (!q) return true;
-			return p.paymentId.toLowerCase().includes(q) || p.contractId.toLowerCase().includes(q) || p.subProjectCode.toLowerCase().includes(q) || p.rfpNumber.toLowerCase().includes(q) || p.rfpPayee.toLowerCase().includes(q) || p.cvNumber.toLowerCase().includes(q) || p.receiptNumber.toLowerCase().includes(q);
+			return p.paymentId.toLowerCase().includes(q) || p.contractId.toLowerCase().includes(q) || p.subProjectCode.toLowerCase().includes(q) || p.rfpNumber.toLowerCase().includes(q) || p.rfpPayee.toLowerCase().includes(q) || (p.rfpRemarks || "").toLowerCase().includes(q) || p.cvNumber.toLowerCase().includes(q) || p.receiptNumber.toLowerCase().includes(q);
+		});
+		const dir = paymentSortDir === "asc" ? 1 : -1;
+		return [...list].sort((a, b) => {
+			switch (paymentSortKey) {
+				case "rfpAmount": return (a.rfpAmount - b.rfpAmount) * dir;
+				case "chequeAmount": return (a.chequeAmount - b.chequeAmount) * dir;
+				case "status": return a.paymentStatus.localeCompare(b.paymentStatus) * dir;
+				default: {
+					const da = a.cvDate || a.rfpDate || a.updatedAt || "";
+					const db = b.cvDate || b.rfpDate || b.updatedAt || "";
+					return (da.localeCompare(db) || a.paymentId.localeCompare(b.paymentId)) * dir;
+				}
+			}
 		});
 	}, [
 		contractPayments,
 		paymentStageFilter,
-		paymentSearchQuery
+		paymentSearchQuery,
+		paymentSortKey,
+		paymentSortDir
 	]);
+	const paymentsTotalPages = Math.max(1, Math.ceil(filteredAllPayments.length / PAYMENTS_PAGE_SIZE));
+	const safePaymentsPage = Math.min(paymentsPage, paymentsTotalPages);
+	const paginatedPayments = (0, import_react.useMemo)(() => {
+		const start = (safePaymentsPage - 1) * PAYMENTS_PAGE_SIZE;
+		return filteredAllPayments.slice(start, start + PAYMENTS_PAGE_SIZE);
+	}, [filteredAllPayments, safePaymentsPage]);
+	(0, import_react.useEffect)(() => {
+		setPaymentsPage(1);
+	}, [paymentStageFilter, paymentSearchQuery]);
+	const togglePaymentSort = (key) => {
+		if (paymentSortKey === key) setPaymentSortDir((d) => d === "asc" ? "desc" : "asc");
+		else {
+			setPaymentSortKey(key);
+			setPaymentSortDir("desc");
+		}
+	};
 	const toggleExpandContract = (contractId) => {
 		setExpandedContractIds((prev) => ({
 			...prev,
@@ -23131,163 +24129,67 @@ var ContractsTCPView = ({ subProjects, contractors, contractsTCP, contractPaymen
 		}
 	};
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-		className: "space-y-6",
+		className: "space-y-5",
 		children: [
-			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				className: "grid grid-cols-1 lg:grid-cols-2 gap-3",
-				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(ModulePermissionBanner, {
-					moduleKey: "contracts",
-					moduleLabel: "Contracts & TCP Awarding",
-					permission: contractsPermission,
-					activeUser,
-					onOpenProfileModal,
-					onOpenAdminAccounts
-				}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ModulePermissionBanner, {
-					moduleKey: "payments",
-					moduleLabel: "Contract Payments (RFP / CV / Receipts)",
-					permission: paymentsPermission,
-					activeUser,
-					onOpenProfileModal,
-					onOpenAdminAccounts
-				})]
-			}),
-			(contractsPermission.view || paymentsPermission.view) && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				className: "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4",
+			(!contractsPermission.add || !contractsPermission.edit || !paymentsPermission.add || !paymentsPermission.edit) && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: "rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-900",
 				children: [
-					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "rounded-lg border border-slate-200 bg-white p-4",
-						children: [
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-								className: "text-xs text-slate-500",
-								children: "Total Active Contract Price (TCP)"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-								className: "mt-1 text-xl font-bold text-slate-900 font-mono tabular-nums",
-								children: formatCurrency(portfolioSummary.totalActiveTCP)
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								className: "mt-1 text-xs text-slate-500",
-								children: [
-									"Active Contracts (OPEN + CLOSED):",
-									" ",
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", {
-										className: "font-mono text-slate-800",
-										children: contractsTCP.filter((c) => c.contractStatus !== "CANCEL").length
-									})
-								]
-							})
-						]
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "rounded-lg border border-slate-200 bg-white p-4",
-						children: [
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-								className: "text-xs text-slate-500",
-								children: "Payments Released/Received & Remaining TCP"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-								className: "mt-1 text-xl font-bold text-emerald-700 font-mono tabular-nums",
-								children: formatCurrency(portfolioSummary.totalDeductedPaymentsReceived)
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								className: "mt-1 text-xs text-slate-500 font-mono tabular-nums",
-								children: [
-									"Remaining TCP:",
-									" ",
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", {
-										className: "text-slate-900",
-										children: formatCurrency(portfolioSummary.totalRemainingTCP)
-									})
-								]
-							})
-						]
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "rounded-lg border border-slate-200 bg-white p-4",
-						children: [
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-								className: "text-xs text-slate-500",
-								children: "Protected Retention Holdback (Not a Tax · Releasable w/ WHT)"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-								className: "mt-1 text-xl font-bold text-amber-700 font-mono tabular-nums",
-								children: formatCurrency(portfolioSummary.totalUnreleasedRetentionHoldback)
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								className: "mt-1 text-xs text-slate-500 font-mono tabular-nums",
-								children: [
-									"Max Safe Progress Release:",
-									" ",
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", {
-										className: "text-slate-900",
-										children: formatCurrency(portfolioSummary.totalSafeRemainingProgressBillable)
-									})
-								]
-							})
-						]
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "rounded-lg border border-slate-200 bg-white p-4",
-						children: [
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-								className: "text-xs text-slate-500",
-								children: "BIR Withholding Tax (Target vs. 2307 Withheld)"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-								className: "mt-1 text-xl font-bold text-blue-700 font-mono tabular-nums",
-								children: formatCurrency(portfolioSummary.totalWithholdingAlreadyDeducted)
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								className: "mt-1 text-xs text-slate-500 font-mono tabular-nums",
-								children: [
-									"Target WHT: ",
-									formatCurrency(portfolioSummary.totalWithholdingTarget),
-									" · Rem WHT:",
-									" ",
-									formatCurrency(Math.max(0, portfolioSummary.totalWithholdingTarget - portfolioSummary.totalWithholdingAlreadyDeducted))
-								]
-							})
-						]
-					})
+					"Active profile ",
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: activeUser.fullName }),
+					" has restricted write access (Contracts: ",
+					contractsPermission.add ? "Add" : "No Add",
+					"/",
+					contractsPermission.edit ? "Edit" : "No Edit",
+					" · Payments:",
+					" ",
+					paymentsPermission.add ? "Add" : "No Add",
+					"/",
+					paymentsPermission.edit ? "Edit" : "No Edit",
+					")."
 				]
 			}),
 			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				className: "flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-4",
-				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h1", {
-					className: "text-xl font-bold tracking-tight text-slate-900",
-					children: "Contract TCP, Modification Lineage, BIR Tax & Payment System"
-				}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-					className: "mt-0.5 text-xs text-slate-500",
-					children: "Unique TCP & Contract IDs, modification/escalation/takeover tracking, and BIR tax calculations (12% VAT, 2% Service/Labor EWT, 1% Material/Item EWT) with manual user overwrite."
-				})] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-					className: "flex flex-wrap items-center gap-2 shrink-0",
-					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+				className: "flex flex-col md:flex-row md:items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4",
+				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+					className: "flex flex-wrap items-center gap-2.5",
+					children: [contractsPermission.add && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
 						type: "button",
-						onClick: () => setShowBirGuide(!showBirGuide),
-						className: "inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-800 hover:bg-slate-50",
-						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Info, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: showBirGuide ? "Hide BIR Tax Guide" : "BIR Tax Guide" })]
+						onClick: () => {
+							setActiveSection("contracts_and_rollups");
+							setIsAwardFormOpen((prev) => !prev);
+						},
+						className: "inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-800 transition-colors shrink-0",
+						children: isAwardFormOpen ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(X, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Close Award Form" })] }) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Plus, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Award Contract / TCP" })] })
 					}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 						className: "flex items-center gap-1 rounded-lg bg-slate-100 p-1",
 						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
 							type: "button",
 							onClick: () => setActiveSection("contracts_and_rollups"),
-							className: `rounded-md px-3 py-1.5 text-xs font-medium transition-colors whitespace-nowrap ${activeSection === "contracts_and_rollups" ? "bg-white text-slate-900 shadow-xs" : "text-slate-600 hover:text-slate-900"}`,
+							className: `rounded-md px-3.5 py-1.5 text-xs font-semibold transition-colors whitespace-nowrap ${activeSection === "contracts_and_rollups" ? "bg-white text-slate-900 shadow-xs" : "text-slate-600 hover:text-slate-900"}`,
 							children: [
-								"Contracts & Balance Rollups (",
+								"Contracts & Rollups (",
 								contractsTCP.length,
 								")"
 							]
 						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
 							type: "button",
 							onClick: () => setActiveSection("payment_requests_ledger"),
-							className: `rounded-md px-3 py-1.5 text-xs font-medium transition-colors whitespace-nowrap ${activeSection === "payment_requests_ledger" ? "bg-white text-slate-900 shadow-xs" : "text-slate-600 hover:text-slate-900"}`,
+							className: `rounded-md px-3.5 py-1.5 text-xs font-semibold transition-colors whitespace-nowrap ${activeSection === "payment_requests_ledger" ? "bg-white text-slate-900 shadow-xs" : "text-slate-600 hover:text-slate-900"}`,
 							children: [
-								"All Payment Requests / CV / Receipts (",
+								"Payments: RFP / CV / Receipts (",
 								contractPayments.length,
 								")"
 							]
 						})]
 					})]
+				}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+					className: "flex flex-wrap items-center gap-2 shrink-0",
+					children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+						type: "button",
+						onClick: () => setShowBirGuide(!showBirGuide),
+						className: "inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Info, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: showBirGuide ? "Hide BIR Guide" : "BIR Tax Guide" })]
+					})
 				})]
 			}),
 			showBirGuide && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
@@ -23402,54 +24304,40 @@ var ContractsTCPView = ({ subProjects, contractors, contractsTCP, contractPaymen
 				activeUser,
 				onSwitchToAdmin: () => onSelectActiveUser("USR-0001"),
 				onOpenProfileModal
-			}) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				className: "rounded-lg border border-slate-200 bg-white",
+			}) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [isAwardFormOpen && contractsPermission.add && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: "rounded-xl border border-slate-300 bg-white shadow-sm",
 				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-					className: "flex items-center justify-between border-b border-slate-200 px-6 py-4",
+					className: "flex items-center justify-between border-b border-slate-200 bg-slate-50 px-6 py-3.5 rounded-t-xl",
 					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 						className: "flex items-center gap-2.5",
 						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(FileText, { className: "h-4 w-4 text-slate-800" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", {
-							className: "text-base font-bold text-slate-900",
-							children: "Award Sub-Project TCP Contract / Modification & Configure BIR Taxes"
+							className: "text-sm font-bold text-slate-900",
+							children: "Award Sub-Project TCP Contract / Modification & BIR Taxes"
 						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
 							className: "text-xs text-slate-500",
 							children: [
-								"Assigns unique Contract ID (",
+								"Contract ID:",
+								" ",
 								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
 									className: "font-mono font-semibold text-slate-800",
 									children: effectiveContractId
 								}),
-								") and unique TCP ID (",
+								" ",
+								"· TCP ID:",
+								" ",
 								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
 									className: "font-mono font-semibold text-slate-800",
 									children: effectiveTcpId
-								}),
-								"), tracks parent contracts for Escalations/Takeovers, and computes BIR VAT & EWT."
+								})
 							]
 						})] })]
-					}), contractsPermission.add && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+					}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
 						type: "button",
-						onClick: () => setIsAwardFormOpen(!isAwardFormOpen),
-						className: "rounded-md border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 whitespace-nowrap",
-						children: isAwardFormOpen ? "Collapse Form" : "Expand Award Form"
+						onClick: () => setIsAwardFormOpen(false),
+						className: "inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 whitespace-nowrap",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(X, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Close" })]
 					})]
-				}), !contractsPermission.add ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-					className: "p-6",
-					children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "rounded-md border border-amber-200 bg-amber-50/70 p-4 text-xs text-amber-900",
-						children: [
-							"Awarding new Sub-Project TCP contracts is disabled for your active user profile (",
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: activeUser.fullName }),
-							" ·",
-							" ",
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-								className: "font-mono",
-								children: "Contracts Add = Disabled"
-							}),
-							")."
-						]
-					})
-				}) : isAwardFormOpen && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("form", {
+				}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("form", {
 					onSubmit: handleAwardSubmit,
 					className: "p-6 space-y-6",
 					children: [
@@ -24165,838 +25053,937 @@ var ContractsTCPView = ({ subProjects, contractors, contractsTCP, contractPaymen
 				})]
 			}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 				className: "rounded-lg border border-slate-200 bg-white",
-				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-					className: "border-b border-slate-200 px-6 py-4 space-y-4",
-					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "flex flex-col lg:flex-row lg:items-center justify-between gap-4",
-						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", {
-							className: "text-base font-bold text-slate-900",
-							children: "Awarded Contracts, Modification Lineage & Retention / BIR Withholding Tracker"
-						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
-							className: "text-xs text-slate-500",
+				children: [
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "border-b border-slate-200 px-6 py-4 space-y-4",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "flex flex-col lg:flex-row lg:items-center justify-between gap-4",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", {
+								className: "text-base font-bold text-slate-900",
+								children: "Awarded Contracts, Modification Lineage & Retention / BIR Withholding Tracker"
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
+								className: "text-xs text-slate-500",
+								children: [
+									"Click any contract row to expand its Payment Requests (RFP), Cheque Vouchers (CV), Contractor Receipts (OR/CR/Invoice), or click ",
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Modify / Takeover" }),
+									" to link an escalation or takeover contract."
+								]
+							})] }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+								className: "flex flex-wrap items-center gap-1 rounded-lg bg-slate-100 p-1",
+								children: ["ALL", ...CONTRACT_STATUS_OPTIONS].map((stOpt) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+									type: "button",
+									onClick: () => setStatusFilter(stOpt),
+									className: `rounded-md px-3 py-1.5 text-xs font-medium transition-colors whitespace-nowrap shrink-0 ${statusFilter === stOpt ? "bg-white text-slate-900 shadow-xs" : "text-slate-600 hover:text-slate-900"}`,
+									children: stOpt === "ALL" ? "All Contracts" : stOpt
+								}, stOpt))
+							})]
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "grid grid-cols-1 md:grid-cols-12 gap-3",
 							children: [
-								"Click any contract row to expand its Payment Requests (RFP), Cheque Vouchers (CV), Contractor Receipts (OR/CR/Invoice), or click ",
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Modify / Takeover" }),
-								" to link an escalation or takeover contract."
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "md:col-span-4 relative",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Search, { className: "pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+										type: "text",
+										value: searchQuery,
+										onChange: (e) => setSearchQuery(e.target.value),
+										placeholder: "Search Contract ID, TCP ID, Parent ID, Sub-Project, Contractor...",
+										className: "w-full rounded-md border border-slate-300 bg-slate-50/50 pl-9 pr-3 py-1.5 text-xs text-slate-900 focus:border-slate-900 focus:bg-white focus:outline-none"
+									})]
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+									className: "md:col-span-3",
+									children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("select", {
+										value: subProjectFilter,
+										onChange: (e) => setSubProjectFilter(e.target.value),
+										className: "w-full rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-700 focus:border-slate-900 focus:outline-none",
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("option", {
+											value: "ALL",
+											children: [
+												"All Sub-Projects (",
+												subProjects.length,
+												")"
+											]
+										}), subProjects.map((sp) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("option", {
+											value: sp.subProjectId,
+											children: [
+												sp.subProjectCode,
+												" — ",
+												sp.subProjectName
+											]
+										}, sp.subProjectId))]
+									})
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+									className: "md:col-span-2",
+									children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("select", {
+										value: typeFilter,
+										onChange: (e) => setTypeFilter(e.target.value),
+										className: "w-full rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-700 focus:border-slate-900 focus:outline-none",
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
+											value: "ALL",
+											children: "All TCP Types"
+										}), TCP_TYPE_OPTIONS.map((t) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
+											value: t,
+											children: t
+										}, t))]
+									})
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+									className: "md:col-span-3",
+									children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("select", {
+										value: contractorFilter,
+										onChange: (e) => setContractorFilter(e.target.value),
+										className: "w-full rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-700 focus:border-slate-900 focus:outline-none",
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("option", {
+											value: "ALL",
+											children: [
+												"All Contractors (",
+												contractors.length,
+												")"
+											]
+										}), contractors.map((c) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("option", {
+											value: c.contractorCode,
+											children: [
+												c.contractorCode,
+												" — ",
+												c.contractorName
+											]
+										}, c.contractorCode))]
+									})
+								})
 							]
-						})] }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-							className: "flex flex-wrap items-center gap-1 rounded-lg bg-slate-100 p-1",
-							children: ["ALL", ...CONTRACT_STATUS_OPTIONS].map((stOpt) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-								type: "button",
-								onClick: () => setStatusFilter(stOpt),
-								className: `rounded-md px-3 py-1.5 text-xs font-medium transition-colors whitespace-nowrap shrink-0 ${statusFilter === stOpt ? "bg-white text-slate-900 shadow-xs" : "text-slate-600 hover:text-slate-900"}`,
-								children: stOpt === "ALL" ? "All Contracts" : stOpt
-							}, stOpt))
 						})]
-					}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "grid grid-cols-1 md:grid-cols-12 gap-3",
-						children: [
-							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								className: "md:col-span-4 relative",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Search, { className: "pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-									type: "text",
-									value: searchQuery,
-									onChange: (e) => setSearchQuery(e.target.value),
-									placeholder: "Search Contract ID, TCP ID, Parent ID, Sub-Project, Contractor...",
-									className: "w-full rounded-md border border-slate-300 bg-slate-50/50 pl-9 pr-3 py-1.5 text-xs text-slate-900 focus:border-slate-900 focus:bg-white focus:outline-none"
-								})]
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-								className: "md:col-span-3",
-								children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("select", {
-									value: subProjectFilter,
-									onChange: (e) => setSubProjectFilter(e.target.value),
-									className: "w-full rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-700 focus:border-slate-900 focus:outline-none",
-									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("option", {
-										value: "ALL",
-										children: [
-											"All Sub-Projects (",
-											subProjects.length,
-											")"
-										]
-									}), subProjects.map((sp) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("option", {
-										value: sp.subProjectId,
-										children: [
-											sp.subProjectCode,
-											" — ",
-											sp.subProjectName
-										]
-									}, sp.subProjectId))]
-								})
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-								className: "md:col-span-2",
-								children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("select", {
-									value: typeFilter,
-									onChange: (e) => setTypeFilter(e.target.value),
-									className: "w-full rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-700 focus:border-slate-900 focus:outline-none",
-									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
-										value: "ALL",
-										children: "All TCP Types"
-									}), TCP_TYPE_OPTIONS.map((t) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
-										value: t,
-										children: t
-									}, t))]
-								})
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-								className: "md:col-span-3",
-								children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("select", {
-									value: contractorFilter,
-									onChange: (e) => setContractorFilter(e.target.value),
-									className: "w-full rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-700 focus:border-slate-900 focus:outline-none",
-									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("option", {
-										value: "ALL",
-										children: [
-											"All Contractors (",
-											contractors.length,
-											")"
-										]
-									}), contractors.map((c) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("option", {
-										value: c.contractorCode,
-										children: [
-											c.contractorCode,
-											" — ",
-											c.contractorName
-										]
-									}, c.contractorCode))]
-								})
-							})
-						]
-					})]
-				}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-					className: "overflow-x-auto",
-					children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("table", {
-						className: "w-full text-left border-collapse",
-						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("thead", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", {
-							className: "border-b border-slate-200 bg-slate-50/80 text-xs font-semibold text-slate-500",
-							children: [
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", { className: "py-2.5 px-3 w-8" }),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-									className: "py-2.5 px-3 font-mono",
-									children: "Contract ID & TCP ID"
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-									className: "py-2.5 px-3",
-									children: "Sub-Project, Contractor & Lineage"
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-									className: "py-2.5 px-3",
-									children: "Terms & BIR Tax"
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-									className: "py-2.5 px-3 text-right",
-									children: "Total TCP"
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-									className: "py-2.5 px-3 text-right",
-									children: "Paid / Released"
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-									className: "py-2.5 px-3 text-right",
-									children: "Remaining TCP"
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-									className: "py-2.5 px-3 text-right",
-									children: "Retention Holdback (Protected)"
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-									className: "py-2.5 px-3 text-right",
-									children: "Max Safe Progress Release"
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-									className: "py-2.5 px-3",
-									children: "Status"
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-									className: "py-2.5 px-3 text-right",
-									children: "Actions"
-								})
-							]
-						}) }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tbody", {
-							className: "divide-y divide-slate-200 text-xs",
-							children: filteredContracts.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tr", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-								colSpan: 11,
-								className: "py-12 px-6 text-center text-slate-500",
-								children: "No TCP contracts found matching your filter criteria."
-							}) }) : filteredContracts.map((record) => {
-								const isEditing = editingRow === record.rowNumber && editForm !== null;
-								const isExpanded = Boolean(expandedContractIds[record.contractId]);
-								const rollup = rollupByContractId[record.contractId] || {
-									tcpAmount: record.tcpAmount,
-									retentionTargetAmount: 0,
-									withholdingTargetAmount: 0,
-									totalDeductibleTarget: 0,
-									maxSafeNonRetentionBillable: record.tcpAmount,
-									nonRetentionSettledAndRequested: 0,
-									retentionReleasedGross: 0,
-									unreleasedRetentionHoldback: 0,
-									safeRemainingProgressBillable: record.tcpAmount,
-									receivedGrossDeducted: 0,
-									receivedChequePaid: 0,
-									remainingTCPAfterReceived: record.tcpAmount,
-									inFlightRFPAmount: 0,
-									retentionAlreadyDeducted: 0,
-									withholdingAlreadyDeducted: 0,
-									totalAlreadyDeducted: 0,
-									remainingDeductibleBalance: 0,
-									payments: []
-								};
-								return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_react.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", {
-									className: `hover:bg-slate-50/80 transition-colors ${record.contractStatus === "CANCEL" ? "opacity-65" : ""}`,
-									children: [
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-											className: "py-3 px-3",
-											children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-												type: "button",
-												onClick: () => toggleExpandContract(record.contractId),
-												className: "rounded p-1 text-slate-500 hover:bg-slate-200/70 hover:text-slate-900",
-												children: isExpanded ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ChevronDown, { className: "h-4 w-4" }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ChevronRight, { className: "h-4 w-4" })
-											})
-										}),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
-											onClick: () => toggleExpandContract(record.contractId),
-											className: "py-3 px-3 font-mono cursor-pointer whitespace-nowrap",
-											children: [
-												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-													className: "font-bold text-slate-900",
-													children: record.contractId
-												}),
-												/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-													className: "text-xs text-slate-600",
-													children: [
-														"TCP:",
-														" ",
-														/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: record.tcpId || `TCP-${record.contractId.replace(/^CON-/i, "")}` })
-													]
-												}),
-												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-													className: "text-xs font-sans font-semibold text-blue-700",
-													children: record.tcpType
-												})
-											]
-										}),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
-											onClick: () => toggleExpandContract(record.contractId),
-											className: "py-3 px-3 cursor-pointer",
-											children: [
-												/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-													className: "font-mono font-semibold text-slate-900",
-													children: [
-														record.subProjectCode,
-														" ",
-														/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-															className: "font-sans font-normal text-slate-500",
-															children: [
-																"(",
-																record.mainProjectCode,
-																")"
-															]
-														})
-													]
-												}),
-												/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-													className: "text-xs text-slate-700 font-medium",
-													children: [
-														record.contractorCode,
-														" ·",
-														" ",
-														record.contractorName
-													]
-												}),
-												record.parentContractId && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-													className: "mt-0.5 inline-flex items-center gap-1 text-xs font-mono text-amber-800",
-													children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(GitBranch, { className: "h-3 w-3 shrink-0" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { children: ["Modifies/Ref: ", record.parentContractId] })]
-												})
-											]
-										}),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-											className: "py-3 px-3 whitespace-nowrap",
-											children: isEditing && editForm ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-												className: "space-y-1 text-xs",
-												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-													className: "flex items-center gap-1",
-													children: [
-														/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "DP%" }),
-														/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-															type: "number",
-															value: editForm.dpPercent,
-															onChange: (e) => setEditForm({
-																...editForm,
-																dpPercent: Number.parseFloat(e.target.value) || 0
-															}),
-															className: "w-12 rounded border border-slate-300 px-1 py-0.5 font-mono"
-														}),
-														/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Ret%" }),
-														/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-															type: "number",
-															value: editForm.retentionPercent,
-															onChange: (e) => setEditForm({
-																...editForm,
-																retentionPercent: Number.parseFloat(e.target.value) || 0
-															}),
-															className: "w-12 rounded border border-slate-300 px-1 py-0.5 font-mono"
-														})
-													]
-												}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-													className: "flex items-center gap-1",
-													children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Parent ID:" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-														type: "text",
-														value: editForm.parentContractId || "",
-														onChange: (e) => setEditForm({
-															...editForm,
-															parentContractId: e.target.value.toUpperCase()
-														}),
-														placeholder: "CON-0001",
-														className: "w-24 rounded border border-slate-300 px-1 py-0.5 font-mono"
-													})]
-												})]
-											}) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-												className: "font-mono text-xs text-slate-700 space-y-0.5",
-												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
-													"DP ",
-													record.dpPercent,
-													"% · Prog",
-													" ",
-													record.progressBillingPercent,
-													"%"
-												] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-													className: "text-slate-500",
-													children: [
-														"Ret ",
-														record.retentionPercent,
-														"% · WHT",
-														" ",
-														record.hasWithholdingTax ? `${Number(record.withholdingTaxPercent).toFixed(2)}%` : "None"
-													]
-												})]
-											})
-										}),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-											className: "py-3 px-3 text-right font-mono font-semibold text-slate-900 tabular-nums whitespace-nowrap",
-											children: isEditing && editForm ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-												type: "number",
-												step: "0.01",
-												value: editForm.tcpAmount,
-												onChange: (e) => setEditForm({
-													...editForm,
-													tcpAmount: Number.parseFloat(e.target.value) || 0
-												}),
-												className: "w-28 rounded border border-slate-300 px-2 py-1 text-xs font-mono text-right"
-											}) : formatCurrency(record.tcpAmount)
-										}),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
-											className: "py-3 px-3 text-right font-mono tabular-nums whitespace-nowrap",
-											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-												className: "font-semibold text-emerald-700",
-												children: formatCurrency(rollup.receivedGrossDeducted)
-											}), rollup.inFlightRFPAmount > 0 && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-												className: "text-xs text-amber-700",
-												children: [
-													"In-Flight:",
-													" ",
-													formatCurrency(rollup.inFlightRFPAmount)
-												]
-											})]
-										}),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-											className: "py-3 px-3 text-right font-mono font-bold text-slate-900 tabular-nums whitespace-nowrap",
-											children: formatCurrency(rollup.remainingTCPAfterReceived)
-										}),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-											className: "py-3 px-3 text-right font-mono tabular-nums whitespace-nowrap",
-											children: record.retentionPercent > 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-												className: "font-semibold text-amber-700",
-												children: formatCurrency(rollup.unreleasedRetentionHoldback)
-											}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-												className: "text-xs text-slate-500",
-												children: [
-													"Target (",
-													record.retentionPercent,
-													"%):",
-													" ",
-													formatCurrency(rollup.retentionTargetAmount)
-												]
-											})] }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-												className: "text-slate-400",
-												children: "NA"
-											})
-										}),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
-											className: "py-3 px-3 text-right font-mono tabular-nums whitespace-nowrap",
-											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-												className: "font-bold text-emerald-700",
-												children: formatCurrency(rollup.safeRemainingProgressBillable)
-											}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-												className: "text-xs text-slate-500",
-												children: [
-													"WHT Withheld:",
-													" ",
-													formatCurrency(rollup.withholdingAlreadyDeducted)
-												]
-											})]
-										}),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-											className: "py-3 px-3 whitespace-nowrap",
-											children: contractsPermission.edit ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("select", {
-												value: record.contractStatus,
-												onChange: (e) => handleQuickStatusChange(record, e.target.value),
-												"aria-label": `Change status for contract ${record.contractId}`,
-												className: `rounded border border-slate-200 bg-white px-2 py-1 text-xs font-mono focus:border-slate-900 focus:outline-none ${contractStatusClass(record.contractStatus)}`,
-												children: CONTRACT_STATUS_OPTIONS.map((st) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
-													value: st,
-													className: "text-slate-900 font-normal no-underline",
-													children: st
-												}, st))
-											}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-												className: `font-mono ${contractStatusClass(record.contractStatus)}`,
-												children: record.contractStatus
-											})
-										}),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-											className: "py-3 px-3 text-right whitespace-nowrap",
-											children: isEditing ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-												className: "flex items-center justify-end gap-1.5",
-												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-													type: "button",
-													onClick: handleSaveEdit,
-													className: "rounded bg-slate-900 px-2.5 py-1 text-xs font-medium text-white hover:bg-slate-800",
-													children: "Save"
-												}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-													type: "button",
-													onClick: () => {
-														setEditingRow(null);
-														setEditForm(null);
-													},
-													className: "rounded border border-slate-300 p-1 text-slate-500 hover:bg-slate-100",
-													children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(X, { className: "h-3.5 w-3.5" })
-												})]
-											}) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-												className: "flex items-center justify-end gap-1.5",
-												children: [
-													paymentsPermission.add && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-														type: "button",
-														onClick: () => openNewRfpModal(record),
-														disabled: record.contractStatus === "CANCEL",
-														className: "inline-flex items-center gap-1 rounded bg-slate-900 px-2.5 py-1 text-xs font-medium text-white hover:bg-slate-800 disabled:opacity-40 whitespace-nowrap",
-														children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Plus, { className: "h-3 w-3" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "New RFP" })]
-													}),
-													contractsPermission.add && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-														type: "button",
-														onClick: () => handleStartModifyExistingContract(record, "Escalation"),
-														title: "Create Escalation, Modification, or Takeover linked to this Contract",
-														className: "inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-800 hover:bg-slate-100 whitespace-nowrap",
-														children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(GitBranch, { className: "h-3 w-3" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Modify / Takeover" })]
-													}),
-													contractsPermission.edit && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-														type: "button",
-														onClick: () => startEditing(record),
-														className: "inline-flex items-center gap-1 rounded border border-slate-200 px-2 py-1 text-xs font-medium text-slate-600 hover:border-slate-300 hover:bg-slate-100",
-														children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(PenLine, { className: "h-3 w-3" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Edit" })]
-													}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-														type: "button",
-														onClick: () => handleDeleteContract(record),
-														disabled: rollup.payments.some((p) => p.paymentStatus !== "CANCELLED") || contractsTCP.some((c) => c.parentContractId === record.contractId),
-														title: rollup.payments.some((p) => p.paymentStatus !== "CANCELLED") ? "Cannot delete contract with active payments (cancel/delete payments first or set status to CANCEL)" : `Delete contract ${record.contractId}`,
-														className: "inline-flex items-center gap-1 rounded border border-red-200 bg-red-50/60 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-35 disabled:cursor-not-allowed",
-														children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Trash2, { className: "h-3 w-3" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Delete" })]
-													})] })
-												]
-											})
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+						className: "overflow-x-auto",
+						children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("table", {
+							className: "w-full text-left border-collapse",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("thead", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", {
+								className: "border-b border-slate-300 bg-slate-100 text-xs font-semibold text-slate-700",
+								children: [
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", { className: "py-2.5 px-3 w-8" }),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+										className: "py-2.5 px-3",
+										children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+											type: "button",
+											onClick: () => toggleContractSort("subProject"),
+											className: "inline-flex items-center gap-1 hover:text-slate-900",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Sub-Project, Contractor & Scope" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ArrowUpDown, { className: "h-3 w-3 opacity-60" })]
 										})
-									]
-								}), isExpanded && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tr", {
-									className: "bg-slate-50/70",
-									children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-										colSpan: 11,
-										className: "px-6 py-5",
-										children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-											className: "rounded-md border border-slate-200 bg-white space-y-4 p-4",
-											children: [
-												/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-													className: "grid grid-cols-1 md:grid-cols-4 gap-3 rounded-md border border-slate-200 bg-slate-50 p-3.5 text-xs",
-													children: [
-														/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
-															/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-																className: "text-slate-500",
-																children: "1. Contract Price & Paid / Released"
-															}),
-															/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-																className: "mt-1 font-mono font-bold text-slate-900 tabular-nums",
-																children: ["TCP: ", formatCurrency(rollup.tcpAmount)]
-															}),
-															/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-																className: "font-mono text-emerald-700 tabular-nums",
-																children: ["Paid / Released: -", formatCurrency(rollup.receivedGrossDeducted)]
-															}),
-															/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-																className: "font-mono font-semibold text-slate-900 tabular-nums",
-																children: [
-																	"Total Remaining TCP:",
-																	" ",
-																	formatCurrency(rollup.remainingTCPAfterReceived)
-																]
-															})
-														] }),
-														/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
-															/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-																className: "text-slate-500",
-																children: [
-																	"2. Retention Holdback (",
-																	record.retentionPercent,
-																	"% of TCP · Not a Tax)"
-																]
-															}),
-															/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-																className: "mt-1 font-mono font-semibold text-slate-900 tabular-nums",
-																children: [
-																	"Retention Holdback:",
-																	" ",
-																	formatCurrency(rollup.retentionTargetAmount)
-																]
-															}),
-															/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-																className: "font-mono text-amber-700 font-semibold tabular-nums",
-																children: [
-																	"Protected (Unreleased):",
-																	" ",
-																	formatCurrency(rollup.unreleasedRetentionHoldback)
-																]
-															}),
-															/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-																className: "font-mono text-slate-600 tabular-nums",
-																children: [
-																	"Released Retention:",
-																	" ",
-																	formatCurrency(rollup.retentionReleasedGross)
-																]
-															})
-														] }),
-														/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
-															/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-																className: "text-slate-500",
-																children: "3. Safe Releasable Progress Balance"
-															}),
-															/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-																className: "mt-1 font-mono font-bold text-emerald-700 tabular-nums",
-																children: [
-																	"Max Safe Progress Release:",
-																	" ",
-																	formatCurrency(rollup.safeRemainingProgressBillable)
-																]
-															}),
-															/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-																className: "font-mono text-slate-600 tabular-nums",
-																children: [
-																	"Max Non-Ret TCP (",
-																	100 - (record.retentionPercent || 0),
-																	"%):",
-																	" ",
-																	formatCurrency(rollup.maxSafeNonRetentionBillable)
-																]
-															}),
-															/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-																className: "text-[11px] text-slate-500",
-																children: [
-																	"Releasing above this amount will eat into the ",
-																	record.retentionPercent,
-																	"% retention holdback."
-																]
-															})
-														] }),
-														/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
-															/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-																className: "text-slate-500",
-																children: "4. BIR Withholding Tax (Applies to Billings & Retention Release)"
-															}),
-															/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-																className: "mt-1 font-mono font-semibold text-slate-900 tabular-nums",
-																children: [
-																	"Total WHT Target:",
-																	" ",
-																	formatCurrency(rollup.withholdingTargetAmount)
-																]
-															}),
-															/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-																className: "font-mono text-blue-700 tabular-nums",
-																children: [
-																	"2307 Already Withheld:",
-																	" ",
-																	formatCurrency(rollup.withholdingAlreadyDeducted)
-																]
-															}),
-															/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-																className: "font-mono text-slate-600 tabular-nums",
-																children: [
-																	"Remaining WHT Due:",
-																	" ",
-																	formatCurrency(Math.max(0, rollup.withholdingTargetAmount - rollup.withholdingAlreadyDeducted))
-																]
-															})
-														] })
-													]
-												}),
-												/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-													className: "flex flex-wrap items-center justify-between gap-3",
-													children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-														className: "text-xs font-semibold text-slate-900",
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+										className: "py-2.5 px-3",
+										children: "Terms & BIR Tax"
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+										className: "py-2.5 px-3 text-right",
+										children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+											type: "button",
+											onClick: () => toggleContractSort("tcp"),
+											className: "inline-flex items-center justify-end gap-1 hover:text-slate-900",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Total TCP" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ArrowUpDown, { className: "h-3 w-3 opacity-60" })]
+										})
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+										className: "py-2.5 px-3 text-right",
+										children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+											type: "button",
+											onClick: () => toggleContractSort("paid"),
+											className: "inline-flex items-center justify-end gap-1 hover:text-slate-900",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Paid / Released" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ArrowUpDown, { className: "h-3 w-3 opacity-60" })]
+										})
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+										className: "py-2.5 px-3 text-right",
+										children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+											type: "button",
+											onClick: () => toggleContractSort("balance"),
+											className: "inline-flex items-center justify-end gap-1 hover:text-slate-900",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Remaining TCP" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ArrowUpDown, { className: "h-3 w-3 opacity-60" })]
+										})
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+										className: "py-2.5 px-3 text-right",
+										children: "Retention Holdback (Protected)"
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+										className: "py-2.5 px-3 text-right",
+										children: "Max Safe Progress Release"
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+										className: "py-2.5 px-3",
+										children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+											type: "button",
+											onClick: () => toggleContractSort("status"),
+											className: "inline-flex items-center gap-1 hover:text-slate-900",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Status" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ArrowUpDown, { className: "h-3 w-3 opacity-60" })]
+										})
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+										className: "py-2.5 px-3 text-right",
+										children: "Actions"
+									})
+								]
+							}) }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tbody", {
+								className: "divide-y divide-slate-200 text-xs",
+								children: paginatedContracts.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tr", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+									colSpan: 10,
+									className: "py-12 px-6 text-center text-slate-500",
+									children: "No TCP contracts found matching your filter criteria."
+								}) }) : paginatedContracts.map((record) => {
+									const isEditing = editingRow === record.rowNumber && editForm !== null;
+									const isExpanded = Boolean(expandedContractIds[record.contractId]);
+									const rollup = rollupByContractId[record.contractId] || {
+										tcpAmount: record.tcpAmount,
+										retentionTargetAmount: 0,
+										withholdingTargetAmount: 0,
+										totalDeductibleTarget: 0,
+										maxSafeNonRetentionBillable: record.tcpAmount,
+										nonRetentionSettledAndRequested: 0,
+										retentionReleasedGross: 0,
+										unreleasedRetentionHoldback: 0,
+										safeRemainingProgressBillable: record.tcpAmount,
+										receivedGrossDeducted: 0,
+										receivedChequePaid: 0,
+										remainingTCPAfterReceived: record.tcpAmount,
+										inFlightRFPAmount: 0,
+										retentionAlreadyDeducted: 0,
+										withholdingAlreadyDeducted: 0,
+										totalAlreadyDeducted: 0,
+										remainingDeductibleBalance: 0,
+										payments: []
+									};
+									return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_react.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", {
+										className: `transition-colors ${record.contractStatus === "CANCEL" ? "opacity-65" : ""}`,
+										children: [
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+												className: "py-3 px-3",
+												children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+													type: "button",
+													onClick: () => toggleExpandContract(record.contractId),
+													className: "rounded p-1 text-slate-500 hover:bg-slate-200/70 hover:text-slate-900",
+													children: isExpanded ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ChevronDown, { className: "h-4 w-4" }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ChevronRight, { className: "h-4 w-4" })
+												})
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
+												onClick: () => toggleExpandContract(record.contractId),
+												className: "py-3 px-3 cursor-pointer",
+												children: [
+													/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+														className: "flex flex-wrap items-center gap-1.5",
 														children: [
-															"Payment Requests (RFP), Cheque Releases (CV) & Contractor Receipts (",
-															rollup.payments.length,
-															")"
+															/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+																className: "font-mono font-bold text-slate-900",
+																children: record.subProjectCode
+															}),
+															/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+																className: "font-sans text-slate-500",
+																children: [
+																	"(",
+																	record.mainProjectCode,
+																	")"
+																]
+															}),
+															/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+																className: "rounded bg-blue-50 border border-blue-200 px-1.5 py-0.5 text-[10px] font-semibold text-blue-800",
+																children: record.tcpType
+															})
+														]
+													}),
+													/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+														className: "text-xs text-slate-800 font-semibold mt-0.5",
+														children: [
+															record.contractorCode,
+															" ·",
+															" ",
+															record.contractorName
+														]
+													}),
+													record.remarks && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+														className: "text-[11px] text-slate-500 mt-0.5",
+														children: record.remarks
+													}),
+													record.parentContractId && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+														className: "mt-0.5 inline-flex items-center gap-1 text-xs font-mono text-amber-800",
+														children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(GitBranch, { className: "h-3 w-3 shrink-0" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { children: ["Modifies/Ref: ", record.parentContractId] })]
+													})
+												]
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+												className: "py-3 px-3 whitespace-nowrap",
+												children: isEditing && editForm ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+													className: "space-y-1 text-xs",
+													children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+														className: "flex items-center gap-1",
+														children: [
+															/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "DP%" }),
+															/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+																type: "number",
+																value: editForm.dpPercent,
+																onChange: (e) => setEditForm({
+																	...editForm,
+																	dpPercent: Number.parseFloat(e.target.value) || 0
+																}),
+																className: "w-12 rounded border border-slate-300 px-1 py-0.5 font-mono"
+															}),
+															/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Ret%" }),
+															/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+																type: "number",
+																value: editForm.retentionPercent,
+																onChange: (e) => setEditForm({
+																	...editForm,
+																	retentionPercent: Number.parseFloat(e.target.value) || 0
+																}),
+																className: "w-12 rounded border border-slate-300 px-1 py-0.5 font-mono"
+															})
 														]
 													}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-														className: "flex flex-wrap items-center gap-2",
-														children: [contractsPermission.add && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+														className: "flex items-center gap-1",
+														children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Parent ID:" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+															type: "text",
+															value: editForm.parentContractId || "",
+															onChange: (e) => setEditForm({
+																...editForm,
+																parentContractId: e.target.value.toUpperCase()
+															}),
+															placeholder: "CON-0001",
+															className: "w-24 rounded border border-slate-300 px-1 py-0.5 font-mono"
+														})]
+													})]
+												}) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+													className: "font-mono text-xs text-slate-700 space-y-0.5",
+													children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
+														"DP ",
+														record.dpPercent,
+														"% · Prog",
+														" ",
+														record.progressBillingPercent,
+														"%"
+													] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+														className: "text-slate-500",
+														children: [
+															"Ret ",
+															record.retentionPercent,
+															"% · WHT",
+															" ",
+															record.hasWithholdingTax ? `${Number(record.withholdingTaxPercent).toFixed(2)}%` : "None"
+														]
+													})]
+												})
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+												className: "py-3 px-3 text-right font-mono font-semibold text-slate-900 tabular-nums whitespace-nowrap",
+												children: isEditing && editForm ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+													type: "number",
+													step: "0.01",
+													value: editForm.tcpAmount,
+													onChange: (e) => setEditForm({
+														...editForm,
+														tcpAmount: Number.parseFloat(e.target.value) || 0
+													}),
+													className: "w-28 rounded border border-slate-300 px-2 py-1 text-xs font-mono text-right"
+												}) : formatCurrency(record.tcpAmount)
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
+												className: "py-3 px-3 text-right font-mono tabular-nums whitespace-nowrap",
+												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+													className: "font-semibold text-emerald-700",
+													children: formatCurrency(rollup.receivedGrossDeducted)
+												}), rollup.inFlightRFPAmount > 0 && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+													className: "text-xs text-amber-700",
+													children: [
+														"In-Flight:",
+														" ",
+														formatCurrency(rollup.inFlightRFPAmount)
+													]
+												})]
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+												className: "py-3 px-3 text-right font-mono font-bold text-slate-900 tabular-nums whitespace-nowrap",
+												children: formatCurrency(rollup.remainingTCPAfterReceived)
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+												className: "py-3 px-3 text-right font-mono tabular-nums whitespace-nowrap",
+												children: record.retentionPercent > 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+													className: "font-semibold text-amber-700",
+													children: formatCurrency(rollup.unreleasedRetentionHoldback)
+												}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+													className: "text-xs text-slate-500",
+													children: [
+														"Target (",
+														record.retentionPercent,
+														"%):",
+														" ",
+														formatCurrency(rollup.retentionTargetAmount)
+													]
+												})] }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+													className: "text-slate-400",
+													children: "NA"
+												})
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
+												className: "py-3 px-3 text-right font-mono tabular-nums whitespace-nowrap",
+												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+													className: "font-bold text-emerald-700",
+													children: formatCurrency(rollup.safeRemainingProgressBillable)
+												}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+													className: "text-xs text-slate-500",
+													children: [
+														"WHT Withheld:",
+														" ",
+														formatCurrency(rollup.withholdingAlreadyDeducted)
+													]
+												})]
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+												className: "py-3 px-3 whitespace-nowrap",
+												children: contractsPermission.edit ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("select", {
+													value: record.contractStatus,
+													onChange: (e) => handleQuickStatusChange(record, e.target.value),
+													"aria-label": `Change status for contract ${record.contractId}`,
+													className: `rounded border border-slate-200 bg-white px-2 py-1 text-xs font-mono focus:border-slate-900 focus:outline-none ${contractStatusClass(record.contractStatus)}`,
+													children: CONTRACT_STATUS_OPTIONS.map((st) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
+														value: st,
+														className: "text-slate-900 font-normal no-underline",
+														children: st
+													}, st))
+												}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+													className: `font-mono ${contractStatusClass(record.contractStatus)}`,
+													children: record.contractStatus
+												})
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+												className: "py-3 px-3 text-right whitespace-nowrap",
+												children: isEditing ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+													className: "flex items-center justify-end gap-1.5",
+													children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+														type: "button",
+														onClick: handleSaveEdit,
+														className: "rounded bg-slate-900 px-2.5 py-1 text-xs font-medium text-white hover:bg-slate-800",
+														children: "Save"
+													}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+														type: "button",
+														onClick: () => {
+															setEditingRow(null);
+															setEditForm(null);
+														},
+														className: "rounded border border-slate-300 p-1 text-slate-500 hover:bg-slate-100",
+														children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(X, { className: "h-3.5 w-3.5" })
+													})]
+												}) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+													className: "flex items-center justify-end gap-1.5",
+													children: [
+														/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+															type: "button",
+															onClick: () => printContractPaymentHistoryAttachment({
+																contract: record,
+																rollup,
+																payments: rollup.payments,
+																preparedBy: activeUser.fullName
+															}),
+															title: "Print Contract & Payment History Attachment",
+															className: "inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 whitespace-nowrap",
+															children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Printer, { className: "h-3 w-3" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Print" })]
+														}),
+														paymentsPermission.add && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+															type: "button",
+															onClick: () => openNewRfpModal(record),
+															disabled: record.contractStatus === "CANCEL",
+															className: "inline-flex items-center gap-1 rounded bg-slate-900 px-2.5 py-1 text-xs font-medium text-white hover:bg-slate-800 disabled:opacity-40 whitespace-nowrap",
+															children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Plus, { className: "h-3 w-3" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "New RFP" })]
+														}),
+														contractsPermission.add && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
 															type: "button",
 															onClick: () => handleStartModifyExistingContract(record, "Escalation"),
-															className: "rounded border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-800 hover:bg-slate-50",
-															children: "+ Escalation / Addon"
-														}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+															title: "Create Escalation, Modification, or Takeover linked to this Contract",
+															className: "inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-800 hover:bg-slate-100 whitespace-nowrap",
+															children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(GitBranch, { className: "h-3 w-3" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Modify / Takeover" })]
+														}),
+														contractsPermission.edit && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
 															type: "button",
-															onClick: () => handleStartModifyExistingContract(record, "Contract Takeover"),
-															className: "rounded border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-800 hover:bg-slate-50",
-															children: "+ Contract Takeover"
-														})] }), paymentsPermission.add && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
-															/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-																type: "button",
-																onClick: () => openNewRfpModal(record, "Downpayment (DP)"),
-																className: "rounded border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-800 hover:bg-slate-50",
-																children: [
-																	"+ Request DP (",
-																	record.dpPercent,
-																	"%)"
-																]
-															}),
-															/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-																type: "button",
-																onClick: () => openNewRfpModal(record, "Progress Billing"),
-																className: "rounded bg-slate-900 px-3 py-1 text-xs font-medium text-white hover:bg-slate-800",
-																children: "+ New Progress Billing RFP"
-															}),
-															/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-																type: "button",
-																onClick: () => openNewRfpModal(record, "Retention Release"),
-																className: "rounded border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-800 hover:bg-slate-50",
-																children: [
-																	"+ Release Retention (",
-																	record.retentionPercent,
-																	"%)"
-																]
-															})
-														] })]
-													})]
-												}),
-												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-													className: "overflow-x-auto",
-													children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("table", {
-														className: "w-full text-left border-collapse border-t border-slate-200",
-														children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("thead", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", {
-															className: "border-b border-slate-200 bg-slate-50/60 text-xs font-semibold text-slate-500",
-															children: [
-																/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-																	className: "py-2 px-3 font-mono",
-																	children: "Pay ID"
+															onClick: () => startEditing(record),
+															className: "inline-flex items-center gap-1 rounded border border-slate-200 px-2 py-1 text-xs font-medium text-slate-600 hover:border-slate-300 hover:bg-slate-100",
+															children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(PenLine, { className: "h-3 w-3" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Edit" })]
+														}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+															type: "button",
+															onClick: () => handleDeleteContract(record),
+															disabled: rollup.payments.some((p) => p.paymentStatus !== "CANCELLED") || contractsTCP.some((c) => c.parentContractId === record.contractId),
+															title: rollup.payments.some((p) => p.paymentStatus !== "CANCELLED") ? "Cannot delete contract with active payments (cancel/delete payments first or set status to CANCEL)" : `Delete contract ${record.contractId}`,
+															className: "inline-flex items-center gap-1 rounded border border-red-200 bg-red-50/60 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-35 disabled:cursor-not-allowed",
+															children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Trash2, { className: "h-3 w-3" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Delete" })]
+														})] })
+													]
+												})
+											})
+										]
+									}), isExpanded && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tr", {
+										className: "bg-slate-50/70",
+										children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+											colSpan: 10,
+											className: "px-6 py-5",
+											children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+												className: "rounded-md border border-slate-200 bg-white space-y-4 p-4",
+												children: [
+													/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+														className: "grid grid-cols-1 md:grid-cols-4 gap-3 rounded-md border border-slate-200 bg-slate-50 p-3.5 text-xs",
+														children: [
+															/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
+																/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+																	className: "text-slate-500",
+																	children: "1. Contract Price & Paid / Released"
 																}),
-																/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-																	className: "py-2 px-3",
-																	children: "1. Payment Request (RFP)"
+																/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+																	className: "mt-1 font-mono font-bold text-slate-900 tabular-nums",
+																	children: ["TCP: ", formatCurrency(rollup.tcpAmount)]
 																}),
-																/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-																	className: "py-2 px-3 text-right",
-																	children: "RFP Gross & Ret"
+																/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+																	className: "font-mono text-emerald-700 tabular-nums",
+																	children: ["Paid / Released: -", formatCurrency(rollup.receivedGrossDeducted)]
 																}),
-																/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-																	className: "py-2 px-3",
-																	children: "2. Cheque Release (CV)"
-																}),
-																/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-																	className: "py-2 px-3 text-right",
-																	children: "Cheque Amt & Withheld"
-																}),
-																/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-																	className: "py-2 px-3",
-																	children: "3. Contractor Receipt (OR/CR/Inv)"
-																}),
-																/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-																	className: "py-2 px-3",
-																	children: "Stage"
-																}),
-																/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-																	className: "py-2 px-3 text-right",
-																	children: "Workflow Actions"
+																/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+																	className: "font-mono font-semibold text-slate-900 tabular-nums",
+																	children: [
+																		"Total Remaining TCP:",
+																		" ",
+																		formatCurrency(rollup.remainingTCPAfterReceived)
+																	]
 																})
+															] }),
+															/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
+																/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+																	className: "text-slate-500",
+																	children: [
+																		"2. Retention Holdback (",
+																		record.retentionPercent,
+																		"% of TCP · Not a Tax)"
+																	]
+																}),
+																/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+																	className: "mt-1 font-mono font-semibold text-slate-900 tabular-nums",
+																	children: [
+																		"Retention Holdback:",
+																		" ",
+																		formatCurrency(rollup.retentionTargetAmount)
+																	]
+																}),
+																/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+																	className: "font-mono text-amber-700 font-semibold tabular-nums",
+																	children: [
+																		"Protected (Unreleased):",
+																		" ",
+																		formatCurrency(rollup.unreleasedRetentionHoldback)
+																	]
+																}),
+																/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+																	className: "font-mono text-slate-600 tabular-nums",
+																	children: [
+																		"Released Retention:",
+																		" ",
+																		formatCurrency(rollup.retentionReleasedGross)
+																	]
+																})
+															] }),
+															/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
+																/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+																	className: "text-slate-500",
+																	children: "3. Safe Releasable Progress Balance"
+																}),
+																/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+																	className: "mt-1 font-mono font-bold text-emerald-700 tabular-nums",
+																	children: [
+																		"Max Safe Progress Release:",
+																		" ",
+																		formatCurrency(rollup.safeRemainingProgressBillable)
+																	]
+																}),
+																/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+																	className: "font-mono text-slate-600 tabular-nums",
+																	children: [
+																		"Max Non-Ret TCP (",
+																		100 - (record.retentionPercent || 0),
+																		"%):",
+																		" ",
+																		formatCurrency(rollup.maxSafeNonRetentionBillable)
+																	]
+																}),
+																/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+																	className: "text-[11px] text-slate-500",
+																	children: [
+																		"Releasing above this amount will eat into the ",
+																		record.retentionPercent,
+																		"% retention holdback."
+																	]
+																})
+															] }),
+															/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
+																/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+																	className: "text-slate-500",
+																	children: "4. BIR Withholding Tax (Applies to Billings & Retention Release)"
+																}),
+																/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+																	className: "mt-1 font-mono font-semibold text-slate-900 tabular-nums",
+																	children: [
+																		"Total WHT Target:",
+																		" ",
+																		formatCurrency(rollup.withholdingTargetAmount)
+																	]
+																}),
+																/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+																	className: "font-mono text-blue-700 tabular-nums",
+																	children: [
+																		"2307 Already Withheld:",
+																		" ",
+																		formatCurrency(rollup.withholdingAlreadyDeducted)
+																	]
+																}),
+																/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+																	className: "font-mono text-slate-600 tabular-nums",
+																	children: [
+																		"Remaining WHT Due:",
+																		" ",
+																		formatCurrency(Math.max(0, rollup.withholdingTargetAmount - rollup.withholdingAlreadyDeducted))
+																	]
+																})
+															] })
+														]
+													}),
+													/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+														className: "flex flex-wrap items-center justify-between gap-3",
+														children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+															className: "text-xs font-semibold text-slate-900",
+															children: [
+																"Payment History — RFPs, Cheque Releases (CV) & Contractor Receipts (",
+																rollup.payments.length,
+																") · Newest First"
 															]
-														}) }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tbody", {
-															className: "divide-y divide-slate-100 text-xs",
-															children: rollup.payments.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tr", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
-																colSpan: 8,
-																className: "py-6 px-4 text-center text-slate-500",
+														}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+															className: "flex flex-wrap items-center gap-2",
+															children: [
+																/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+																	type: "button",
+																	onClick: () => printContractPaymentHistoryAttachment({
+																		contract: record,
+																		rollup,
+																		payments: rollup.payments,
+																		preparedBy: activeUser.fullName
+																	}),
+																	className: "inline-flex items-center gap-1.5 rounded border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-800 hover:bg-slate-100",
+																	children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Printer, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Print Payment History" })]
+																}),
+																contractsPermission.add && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+																	type: "button",
+																	onClick: () => handleStartModifyExistingContract(record, "Escalation"),
+																	className: "rounded border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-800 hover:bg-slate-50",
+																	children: "+ Escalation / Addon"
+																}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+																	type: "button",
+																	onClick: () => handleStartModifyExistingContract(record, "Contract Takeover"),
+																	className: "rounded border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-800 hover:bg-slate-50",
+																	children: "+ Contract Takeover"
+																})] }),
+																paymentsPermission.add && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
+																	/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+																		type: "button",
+																		onClick: () => openNewRfpModal(record, "Downpayment (DP)"),
+																		className: "rounded border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-800 hover:bg-slate-50",
+																		children: [
+																			"+ Request DP (",
+																			record.dpPercent,
+																			"%)"
+																		]
+																	}),
+																	/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+																		type: "button",
+																		onClick: () => openNewRfpModal(record, "Progress Billing"),
+																		className: "rounded bg-slate-900 px-3 py-1 text-xs font-medium text-white hover:bg-slate-800",
+																		children: "+ New Progress Billing RFP"
+																	}),
+																	/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+																		type: "button",
+																		onClick: () => openNewRfpModal(record, "Retention Release"),
+																		className: "rounded border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-800 hover:bg-slate-50",
+																		children: [
+																			"+ Release Retention (",
+																			record.retentionPercent,
+																			"%)"
+																		]
+																	})
+																] })
+															]
+														})]
+													}),
+													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+														className: "overflow-x-auto",
+														children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("table", {
+															className: "w-full text-left border-collapse border-t border-slate-200",
+															children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("thead", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", {
+																className: "border-b border-slate-200 bg-slate-50/60 text-xs font-semibold text-slate-500",
 																children: [
-																	"No payment requests (RFPs) recorded for ",
-																	record.contractId,
-																	" yet."
-																]
-															}) }) : rollup.payments.map((p) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", {
-																className: p.paymentStatus === "CANCELLED" ? "opacity-55 bg-red-50/20" : "hover:bg-slate-50/80",
-																children: [
-																	/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
-																		className: "py-2.5 px-3 font-mono font-semibold text-slate-800 whitespace-nowrap",
-																		children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { children: p.paymentId }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-																			className: "text-xs font-sans font-normal text-slate-500",
-																			children: p.billingType
-																		})]
+																	/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+																		className: "py-2 px-3 font-mono",
+																		children: "Pay ID"
 																	}),
-																	/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
-																		className: "py-2.5 px-3",
-																		children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-																			className: "font-mono font-semibold text-slate-900",
-																			children: [
-																				"RFP #",
-																				p.rfpNumber,
-																				" ",
-																				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-																					className: "font-normal text-slate-500",
-																					children: [
-																						"(",
-																						p.rfpDate,
-																						")"
-																					]
-																				})
-																			]
-																		}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-																			className: "text-xs text-slate-600",
-																			children: [
-																				"Payee:",
-																				" ",
-																				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: p.rfpPayee })
-																			]
-																		})]
+																	/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+																		className: "py-2 px-3",
+																		children: "1. Payment Request (RFP)"
 																	}),
-																	/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
-																		className: "py-2.5 px-3 text-right font-mono tabular-nums whitespace-nowrap",
-																		children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-																			className: "font-semibold text-slate-900",
-																			children: formatCurrency(p.rfpAmount)
-																		}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-																			className: "text-xs text-slate-500",
-																			children: ["Ret: -", formatCurrency(p.retentionDeducted)]
-																		})]
+																	/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+																		className: "py-2 px-3 text-right",
+																		children: "RFP Gross & Ret"
 																	}),
-																	/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-																		className: "py-2.5 px-3 whitespace-nowrap",
-																		children: p.cvNumber ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-																			className: "font-mono font-semibold text-slate-900",
-																			children: ["CV #", p.cvNumber]
-																		}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-																			className: "text-xs font-mono text-slate-500",
-																			children: ["Date: ", p.cvDate]
-																		})] }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-																			className: "text-slate-400",
-																			children: "Awaiting Cheque Release"
-																		})
+																	/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+																		className: "py-2 px-3",
+																		children: "2. Cheque Release (CV)"
 																	}),
-																	/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-																		className: "py-2.5 px-3 text-right font-mono tabular-nums whitespace-nowrap",
-																		children: p.cvNumber || p.chequeAmount > 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-																			className: "font-semibold text-blue-700",
-																			children: [
-																				"Cheque:",
-																				" ",
-																				formatCurrency(p.chequeAmount)
-																			]
-																		}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-																			className: "text-xs text-slate-500",
-																			children: ["Withheld: -", formatCurrency(p.withheldAmount)]
-																		})] }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-																			className: "text-slate-400",
-																			children: "—"
-																		})
+																	/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+																		className: "py-2 px-3 text-right",
+																		children: "Cheque Amt & Withheld"
 																	}),
-																	/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-																		className: "py-2.5 px-3 whitespace-nowrap",
-																		children: p.receiptNumber ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-																			className: "font-mono font-semibold text-emerald-800",
-																			children: [
-																				p.receiptType,
-																				" #",
-																				p.receiptNumber
-																			]
-																		}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-																			className: "text-xs font-mono text-slate-500",
-																			children: [
-																				"Received:",
-																				" ",
-																				p.receiptDate
-																			]
-																		})] }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-																			className: "text-slate-400",
-																			children: "Awaiting Contractor Receipt"
-																		})
+																	/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+																		className: "py-2 px-3",
+																		children: "3. Contractor Receipt (OR/CR/Inv)"
 																	}),
-																	/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-																		className: "py-2.5 px-3 whitespace-nowrap",
-																		children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-																			className: paymentStageClass(p.paymentStatus),
-																			children: PAYMENT_STAGE_STATUS_LABELS[p.paymentStatus]
-																		})
+																	/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+																		className: "py-2 px-3",
+																		children: "Stage"
 																	}),
-																	/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
-																		className: "py-2.5 px-3 text-right whitespace-nowrap",
-																		children: [p.paymentStatus !== "CANCELLED" && (paymentsPermission.edit ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-																			className: "flex items-center justify-end gap-1.5",
-																			children: [
-																				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-																					type: "button",
-																					onClick: () => openReleaseChequeModal(p),
-																					className: "inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-800 hover:bg-slate-100",
-																					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CreditCard, { className: "h-3 w-3" }), p.cvNumber ? "Edit CV" : "Release Cheque (CV)"]
-																				}),
-																				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-																					type: "button",
-																					onClick: () => openContractorReceiptModal(p),
-																					className: "inline-flex items-center gap-1 rounded bg-slate-900 px-2 py-1 text-xs font-medium text-white hover:bg-slate-800",
-																					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Receipt, { className: "h-3 w-3" }), p.receiptNumber ? "Edit Receipt" : "Contractor Receipt"]
-																				}),
-																				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-																					type: "button",
-																					onClick: () => handleCancelPayment(p),
-																					className: "inline-flex items-center gap-1 rounded border border-red-200 bg-red-50/60 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100",
-																					title: "Cancel Payment Request",
-																					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Ban, { className: "h-3 w-3" }), "Cancel"]
-																				}),
-																				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-																					type: "button",
-																					onClick: () => handleDeletePayment(p),
-																					className: "inline-flex items-center gap-1 rounded border border-red-200 bg-white px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50",
-																					title: "Delete Payment Row",
-																					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Trash2, { className: "h-3 w-3" }), "Delete"]
-																				})
-																			]
-																		}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-																			className: "text-xs font-mono text-slate-400",
-																			children: "Read-Only"
-																		})), p.paymentStatus === "CANCELLED" && paymentsPermission.edit && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-																			type: "button",
-																			onClick: () => handleDeletePayment(p),
-																			className: "inline-flex items-center gap-1 rounded border border-red-200 bg-white px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50",
-																			title: "Permanently Delete Cancelled Payment Row",
-																			children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Trash2, { className: "h-3 w-3" }), "Delete"]
-																		})]
+																	/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+																		className: "py-2 px-3 text-right",
+																		children: "Workflow Actions"
 																	})
 																]
-															}, `${p.paymentId}-${p.rowNumber}`))
-														})]
+															}) }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tbody", {
+																className: "divide-y divide-slate-100 text-xs",
+																children: rollup.payments.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tr", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
+																	colSpan: 8,
+																	className: "py-6 px-4 text-center text-slate-500",
+																	children: [
+																		"No payment requests (RFPs) recorded for ",
+																		record.contractId,
+																		" yet."
+																	]
+																}) }) : [...rollup.payments].sort((a, b) => {
+																	const da = a.cvDate || a.rfpDate || a.updatedAt || "";
+																	return (b.cvDate || b.rfpDate || b.updatedAt || "").localeCompare(da) || b.paymentId.localeCompare(a.paymentId);
+																}).map((p) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", {
+																	className: p.paymentStatus === "CANCELLED" ? "opacity-55 bg-red-50/20" : "hover:bg-slate-50/80",
+																	children: [
+																		/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
+																			className: "py-2.5 px-3 font-mono font-semibold text-slate-800 whitespace-nowrap",
+																			children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { children: p.paymentId }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+																				className: "text-xs font-sans font-normal text-slate-500",
+																				children: p.billingType
+																			})]
+																		}),
+																		/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
+																			className: "py-2.5 px-3",
+																			children: [
+																				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+																					className: "font-mono font-semibold text-slate-900",
+																					children: [
+																						"RFP #",
+																						p.rfpNumber,
+																						" ",
+																						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+																							className: "font-normal text-slate-500",
+																							children: [
+																								"(",
+																								p.rfpDate,
+																								")"
+																							]
+																						})
+																					]
+																				}),
+																				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+																					className: "text-xs text-slate-600",
+																					children: [
+																						"Payee:",
+																						" ",
+																						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: p.rfpPayee })
+																					]
+																				}),
+																				p.rfpRemarks && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+																					className: "text-[11px] text-slate-500 mt-0.5",
+																					children: p.rfpRemarks
+																				})
+																			]
+																		}),
+																		/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
+																			className: "py-2.5 px-3 text-right font-mono tabular-nums whitespace-nowrap",
+																			children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+																				className: "font-semibold text-slate-900",
+																				children: formatCurrency(p.rfpAmount)
+																			}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+																				className: "text-xs text-slate-500",
+																				children: ["Ret: -", formatCurrency(p.retentionDeducted)]
+																			})]
+																		}),
+																		/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+																			className: "py-2.5 px-3 whitespace-nowrap",
+																			children: p.cvNumber ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+																				className: "font-mono font-semibold text-slate-900",
+																				children: ["CV #", p.cvNumber]
+																			}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+																				className: "text-xs font-mono text-slate-500",
+																				children: ["Date: ", p.cvDate]
+																			})] }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+																				className: "text-slate-400",
+																				children: "Awaiting Cheque Release"
+																			})
+																		}),
+																		/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+																			className: "py-2.5 px-3 text-right font-mono tabular-nums whitespace-nowrap",
+																			children: p.cvNumber || p.chequeAmount > 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+																				className: "font-semibold text-blue-700",
+																				children: [
+																					"Cheque:",
+																					" ",
+																					formatCurrency(p.chequeAmount)
+																				]
+																			}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+																				className: "text-xs text-slate-500",
+																				children: ["Withheld: -", formatCurrency(p.withheldAmount)]
+																			})] }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+																				className: "text-slate-400",
+																				children: "—"
+																			})
+																		}),
+																		/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+																			className: "py-2.5 px-3 whitespace-nowrap",
+																			children: p.receiptNumber ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+																				className: "font-mono font-semibold text-emerald-800",
+																				children: [
+																					p.receiptType,
+																					" #",
+																					p.receiptNumber
+																				]
+																			}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+																				className: "text-xs font-mono text-slate-500",
+																				children: [
+																					"Received:",
+																					" ",
+																					p.receiptDate
+																				]
+																			})] }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+																				className: "text-slate-400",
+																				children: "Awaiting Contractor Receipt"
+																			})
+																		}),
+																		/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+																			className: "py-2.5 px-3 whitespace-nowrap",
+																			children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+																				className: paymentStageClass(p.paymentStatus),
+																				children: PAYMENT_STAGE_STATUS_LABELS[p.paymentStatus]
+																			})
+																		}),
+																		/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
+																			className: "py-2.5 px-3 text-right whitespace-nowrap",
+																			children: [p.paymentStatus !== "CANCELLED" && (paymentsPermission.edit ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+																				className: "flex items-center justify-end gap-1.5",
+																				children: [
+																					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+																						type: "button",
+																						onClick: () => openReleaseChequeModal(p),
+																						className: "inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-800 hover:bg-slate-100",
+																						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CreditCard, { className: "h-3 w-3" }), p.cvNumber ? "Edit CV" : "Release Cheque (CV)"]
+																					}),
+																					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+																						type: "button",
+																						onClick: () => openContractorReceiptModal(p),
+																						className: "inline-flex items-center gap-1 rounded bg-slate-900 px-2 py-1 text-xs font-medium text-white hover:bg-slate-800",
+																						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Receipt, { className: "h-3 w-3" }), p.receiptNumber ? "Edit Receipt" : "Contractor Receipt"]
+																					}),
+																					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+																						type: "button",
+																						onClick: () => handleCancelPayment(p),
+																						className: "inline-flex items-center gap-1 rounded border border-red-200 bg-red-50/60 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100",
+																						title: "Cancel Payment Request",
+																						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Ban, { className: "h-3 w-3" }), "Cancel"]
+																					}),
+																					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+																						type: "button",
+																						onClick: () => handleDeletePayment(p),
+																						className: "inline-flex items-center gap-1 rounded border border-red-200 bg-white px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50",
+																						title: "Delete Payment Row",
+																						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Trash2, { className: "h-3 w-3" }), "Delete"]
+																					})
+																				]
+																			}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+																				className: "text-xs font-mono text-slate-400",
+																				children: "Read-Only"
+																			})), p.paymentStatus === "CANCELLED" && paymentsPermission.edit && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+																				type: "button",
+																				onClick: () => handleDeletePayment(p),
+																				className: "inline-flex items-center gap-1 rounded border border-red-200 bg-white px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50",
+																				title: "Permanently Delete Cancelled Payment Row",
+																				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Trash2, { className: "h-3 w-3" }), "Delete"]
+																			})]
+																		})
+																	]
+																}, `${p.paymentId}-${p.rowNumber}`))
+															})]
+														})
 													})
-												})
-											]
+												]
+											})
 										})
-									})
-								})] }, `${record.contractId}-${record.rowNumber}`);
-							})
+									})] }, `${record.contractId}-${record.rowNumber}`);
+								})
+							})]
+						})
+					}),
+					filteredContracts.length > CONTRACTS_PAGE_SIZE && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-6 py-3 text-xs text-slate-600",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
+							"Showing",
+							" ",
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+								className: "font-semibold text-slate-900",
+								children: [
+									(safeContractsPage - 1) * CONTRACTS_PAGE_SIZE + 1,
+									"–",
+									Math.min(safeContractsPage * CONTRACTS_PAGE_SIZE, filteredContracts.length)
+								]
+							}),
+							" ",
+							"of",
+							" ",
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+								className: "font-semibold text-slate-900",
+								children: filteredContracts.length
+							}),
+							" ",
+							"contracts"
+						] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "flex items-center gap-1.5",
+							children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+									type: "button",
+									disabled: safeContractsPage <= 1,
+									onClick: () => setContractsPage((p) => Math.max(1, p - 1)),
+									className: "rounded border border-slate-300 bg-white px-2.5 py-1 font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40",
+									children: "Previous"
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+									className: "px-2 font-mono text-slate-700",
+									children: [
+										"Page ",
+										safeContractsPage,
+										" / ",
+										contractsTotalPages
+									]
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+									type: "button",
+									disabled: safeContractsPage >= contractsTotalPages,
+									onClick: () => setContractsPage((p) => Math.min(contractsTotalPages, p + 1)),
+									className: "rounded border border-slate-300 bg-white px-2.5 py-1 font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40",
+									children: "Next"
+								})
+							]
 						})]
 					})
-				})]
+				]
 			})] })),
 			activeSection === "payment_requests_ledger" && (!paymentsPermission.view ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ModuleViewRestrictedState, {
 				moduleLabel: "Contract Payments (RFP / CV / Receipts)",
@@ -25005,252 +25992,333 @@ var ContractsTCPView = ({ subProjects, contractors, contractsTCP, contractPaymen
 				onOpenProfileModal
 			}) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 				className: "rounded-lg border border-slate-200 bg-white",
-				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-					className: "border-b border-slate-200 px-6 py-4 space-y-4",
-					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "flex flex-col lg:flex-row lg:items-center justify-between gap-4",
-						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", {
-							className: "text-base font-bold text-slate-900",
-							children: "Master Contract Payments Ledger (RFP → Cheque CV → Contractor Receipt)"
-						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
-							className: "text-xs text-slate-500",
-							children: [
-								"Synced with the",
-								" ",
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-									className: "font-mono font-medium text-slate-800",
-									children: SHEET_NAMES.CONTRACT_PAYMENTS
-								}),
-								" ",
-								"sheet tab."
-							]
-						})] }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-							className: "flex flex-wrap items-center gap-1 rounded-lg bg-slate-100 p-1",
-							children: [
-								"ALL",
-								"RFP_SUBMITTED",
-								"CHEQUE_RELEASED",
-								"RECEIVED",
-								"CANCELLED"
-							].map((stage) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-								type: "button",
-								onClick: () => setPaymentStageFilter(stage),
-								className: `rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors whitespace-nowrap ${paymentStageFilter === stage ? "bg-white text-slate-900 shadow-xs" : "text-slate-600 hover:text-slate-900"}`,
-								children: stage === "ALL" ? "All Stages" : PAYMENT_STAGE_STATUS_LABELS[stage]
-							}, stage))
-						})]
-					}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "relative max-w-md",
-						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Search, { className: "pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-							type: "text",
-							value: paymentSearchQuery,
-							onChange: (e) => setPaymentSearchQuery(e.target.value),
-							placeholder: "Search RFP Number, CV Number, OR/CR Receipt Number, Payee, or Contract ID...",
-							className: "w-full rounded-md border border-slate-300 bg-slate-50/50 pl-9 pr-3 py-1.5 text-xs text-slate-900 focus:border-slate-900 focus:bg-white focus:outline-none"
-						})]
-					})]
-				}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-					className: "overflow-x-auto",
-					children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("table", {
-						className: "w-full text-left border-collapse",
-						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("thead", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", {
-							className: "border-b border-slate-200 bg-slate-50/80 text-xs font-semibold text-slate-500",
-							children: [
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-									className: "py-2.5 px-3 font-mono",
-									children: "Pay ID"
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-									className: "py-2.5 px-3",
-									children: "Contract & Sub-Project"
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-									className: "py-2.5 px-3",
-									children: "RFP Details & Payee"
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-									className: "py-2.5 px-3 text-right",
-									children: "RFP Amt & Retention"
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-									className: "py-2.5 px-3",
-									children: "Cheque Release (CV)"
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-									className: "py-2.5 px-3 text-right",
-									children: "Cheque Amt & Withheld"
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-									className: "py-2.5 px-3",
-									children: "Contractor Receipt Issued"
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-									className: "py-2.5 px-3",
-									children: "Stage"
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-									className: "py-2.5 px-3 text-right",
-									children: "Actions"
-								})
-							]
-						}) }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tbody", {
-							className: "divide-y divide-slate-200 text-xs",
-							children: filteredAllPayments.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tr", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-								colSpan: 9,
-								className: "py-12 px-6 text-center text-slate-500",
-								children: "No payment records found."
-							}) }) : filteredAllPayments.map((p) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", {
-								className: p.paymentStatus === "CANCELLED" ? "opacity-55 bg-red-50/20" : "hover:bg-slate-50/80",
+				children: [
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "border-b border-slate-200 px-6 py-4 space-y-4",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "flex flex-col lg:flex-row lg:items-center justify-between gap-4",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", {
+								className: "text-base font-bold text-slate-900",
+								children: "Master Contract Payments Ledger (RFP → Cheque CV → Contractor Receipt)"
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
+								className: "text-xs text-slate-500",
 								children: [
-									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
-										className: "py-3 px-3 font-mono font-semibold text-slate-900 whitespace-nowrap",
-										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { children: p.paymentId }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-											className: "text-xs font-sans font-normal text-slate-500",
-											children: p.billingType
-										})]
+									"Synced with the",
+									" ",
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+										className: "font-mono font-medium text-slate-800",
+										children: SHEET_NAMES.CONTRACT_PAYMENTS
 									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
-										className: "py-3 px-3 whitespace-nowrap",
-										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-											className: "font-mono font-semibold text-slate-900",
-											children: p.contractId
-										}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-											className: "text-xs font-mono text-slate-500",
-											children: [
-												p.subProjectCode,
-												" (",
-												p.mainProjectCode,
-												")"
-											]
-										})]
+									" ",
+									"sheet tab."
+								]
+							})] }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+								className: "flex flex-wrap items-center gap-1 rounded-lg bg-slate-100 p-1",
+								children: [
+									"ALL",
+									"RFP_SUBMITTED",
+									"CHEQUE_RELEASED",
+									"RECEIVED",
+									"CANCELLED"
+								].map((stage) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+									type: "button",
+									onClick: () => setPaymentStageFilter(stage),
+									className: `rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors whitespace-nowrap ${paymentStageFilter === stage ? "bg-white text-slate-900 shadow-xs" : "text-slate-600 hover:text-slate-900"}`,
+									children: stage === "ALL" ? "All Stages" : PAYMENT_STAGE_STATUS_LABELS[stage]
+								}, stage))
+							})]
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "relative max-w-md",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Search, { className: "pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+								type: "text",
+								value: paymentSearchQuery,
+								onChange: (e) => setPaymentSearchQuery(e.target.value),
+								placeholder: "Search RFP Number, CV Number, OR/CR Receipt Number, Payee, or Contract ID...",
+								className: "w-full rounded-md border border-slate-300 bg-slate-50/50 pl-9 pr-3 py-1.5 text-xs text-slate-900 focus:border-slate-900 focus:bg-white focus:outline-none"
+							})]
+						})]
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+						className: "overflow-x-auto",
+						children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("table", {
+							className: "w-full text-left border-collapse",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("thead", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", {
+								className: "border-b border-slate-200 bg-slate-50/80 text-xs font-semibold text-slate-500",
+								children: [
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+										className: "py-2.5 px-3 font-mono",
+										children: "Pay ID"
 									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
-										className: "py-3 px-3",
-										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-											className: "font-mono font-semibold text-slate-900",
-											children: [
-												"RFP #",
-												p.rfpNumber,
-												" ",
-												/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-													className: "font-normal text-slate-500",
-													children: [
-														"(",
-														p.rfpDate,
-														")"
-													]
-												})
-											]
-										}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-											className: "text-xs text-slate-700",
-											children: ["Payee: ", /* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: p.rfpPayee })]
-										})]
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+										className: "py-2.5 px-3",
+										children: "Contract & Sub-Project"
 									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
-										className: "py-3 px-3 text-right font-mono tabular-nums whitespace-nowrap",
-										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-											className: "font-semibold text-slate-900",
-											children: formatCurrency(p.rfpAmount)
-										}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-											className: "text-xs text-slate-500",
-											children: ["Ret Ded: ", formatCurrency(p.retentionDeducted)]
-										})]
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-										className: "py-3 px-3 whitespace-nowrap",
-										children: p.cvNumber ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-											className: "font-mono font-semibold text-slate-900",
-											children: ["CV #", p.cvNumber]
-										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-											className: "text-xs font-mono text-slate-500",
-											children: p.cvDate
-										})] }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-											className: "text-slate-400",
-											children: "Pending CV"
-										})
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-										className: "py-3 px-3 text-right font-mono tabular-nums whitespace-nowrap",
-										children: p.cvNumber || p.chequeAmount > 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-											className: "font-semibold text-blue-700",
-											children: formatCurrency(p.chequeAmount)
-										}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-											className: "text-xs text-slate-500",
-											children: ["Withheld: ", formatCurrency(p.withheldAmount)]
-										})] }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-											className: "text-slate-400",
-											children: "—"
-										})
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-										className: "py-3 px-3 whitespace-nowrap",
-										children: p.receiptNumber ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-											className: "font-mono font-semibold text-emerald-800",
-											children: [
-												p.receiptType,
-												" #",
-												p.receiptNumber
-											]
-										}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-											className: "text-xs font-mono text-slate-500",
-											children: ["Date: ", p.receiptDate]
-										})] }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-											className: "text-slate-400",
-											children: "Not Received"
-										})
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-										className: "py-3 px-3 whitespace-nowrap",
-										children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-											className: paymentStageClass(p.paymentStatus),
-											children: PAYMENT_STAGE_STATUS_LABELS[p.paymentStatus]
-										})
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
-										className: "py-3 px-3 text-right whitespace-nowrap",
-										children: [p.paymentStatus !== "CANCELLED" && (paymentsPermission.edit ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-											className: "flex items-center justify-end gap-1.5",
-											children: [
-												/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-													type: "button",
-													onClick: () => openReleaseChequeModal(p),
-													className: "inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-800 hover:bg-slate-100",
-													children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CreditCard, { className: "h-3 w-3" }), p.cvNumber ? "Edit CV" : "Release Cheque"]
-												}),
-												/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-													type: "button",
-													onClick: () => openContractorReceiptModal(p),
-													className: "inline-flex items-center gap-1 rounded bg-slate-900 px-2 py-1 text-xs font-medium text-white hover:bg-slate-800",
-													children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Receipt, { className: "h-3 w-3" }), p.receiptNumber ? "Edit Receipt" : "Receipt"]
-												}),
-												/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-													type: "button",
-													onClick: () => handleCancelPayment(p),
-													className: "inline-flex items-center gap-1 rounded border border-red-200 bg-red-50/60 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100",
-													children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Ban, { className: "h-3 w-3" }), "Cancel"]
-												}),
-												/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-													type: "button",
-													onClick: () => handleDeletePayment(p),
-													className: "inline-flex items-center gap-1 rounded border border-red-200 bg-white px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50",
-													children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Trash2, { className: "h-3 w-3" }), "Delete"]
-												})
-											]
-										}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-											className: "text-xs font-mono text-slate-400",
-											children: "Read-Only"
-										})), p.paymentStatus === "CANCELLED" && paymentsPermission.edit && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+										className: "py-2.5 px-3",
+										children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
 											type: "button",
-											onClick: () => handleDeletePayment(p),
-											className: "inline-flex items-center gap-1 rounded border border-red-200 bg-white px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50",
-											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Trash2, { className: "h-3 w-3" }), "Delete"]
-										})]
+											onClick: () => togglePaymentSort("date"),
+											className: "inline-flex items-center gap-1 hover:text-slate-900",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "RFP Details, Date & Payee" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ArrowUpDown, { className: "h-3 w-3 opacity-60" })]
+										})
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+										className: "py-2.5 px-3 text-right",
+										children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+											type: "button",
+											onClick: () => togglePaymentSort("rfpAmount"),
+											className: "inline-flex items-center justify-end gap-1 hover:text-slate-900",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "RFP Amt & Retention" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ArrowUpDown, { className: "h-3 w-3 opacity-60" })]
+										})
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+										className: "py-2.5 px-3",
+										children: "Cheque Release (CV)"
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+										className: "py-2.5 px-3 text-right",
+										children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+											type: "button",
+											onClick: () => togglePaymentSort("chequeAmount"),
+											className: "inline-flex items-center justify-end gap-1 hover:text-slate-900",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Cheque Amt & Withheld" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ArrowUpDown, { className: "h-3 w-3 opacity-60" })]
+										})
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+										className: "py-2.5 px-3",
+										children: "Contractor Receipt Issued"
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+										className: "py-2.5 px-3",
+										children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+											type: "button",
+											onClick: () => togglePaymentSort("status"),
+											className: "inline-flex items-center gap-1 hover:text-slate-900",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Stage" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ArrowUpDown, { className: "h-3 w-3 opacity-60" })]
+										})
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+										className: "py-2.5 px-3 text-right",
+										children: "Actions"
 									})
 								]
-							}, `${p.paymentId}-${p.rowNumber}`))
+							}) }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tbody", {
+								className: "divide-y divide-slate-200 text-xs",
+								children: paginatedPayments.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tr", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+									colSpan: 9,
+									className: "py-12 px-6 text-center text-slate-500",
+									children: "No payment records found."
+								}) }) : paginatedPayments.map((p) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", {
+									className: p.paymentStatus === "CANCELLED" ? "opacity-55 bg-red-50/20" : "hover:bg-slate-50/80",
+									children: [
+										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
+											className: "py-3 px-3 font-mono font-semibold text-slate-900 whitespace-nowrap",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { children: p.paymentId }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+												className: "text-xs font-sans font-normal text-slate-500",
+												children: p.billingType
+											})]
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
+											className: "py-3 px-3 whitespace-nowrap",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+												className: "font-mono font-semibold text-slate-900",
+												children: p.contractId
+											}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+												className: "text-xs font-mono text-slate-500",
+												children: [
+													p.subProjectCode,
+													" (",
+													p.mainProjectCode,
+													")"
+												]
+											})]
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
+											className: "py-3 px-3",
+											children: [
+												/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+													className: "font-mono font-semibold text-slate-900",
+													children: [
+														"RFP #",
+														p.rfpNumber,
+														" ",
+														/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+															className: "font-normal text-slate-500",
+															children: [
+																"(",
+																p.rfpDate,
+																")"
+															]
+														})
+													]
+												}),
+												/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+													className: "text-xs text-slate-700",
+													children: ["Payee: ", /* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: p.rfpPayee })]
+												}),
+												p.rfpRemarks && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+													className: "text-[11px] text-slate-500 mt-0.5",
+													children: p.rfpRemarks
+												})
+											]
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
+											className: "py-3 px-3 text-right font-mono tabular-nums whitespace-nowrap",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+												className: "font-semibold text-slate-900",
+												children: formatCurrency(p.rfpAmount)
+											}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+												className: "text-xs text-slate-500",
+												children: ["Ret Ded: ", formatCurrency(p.retentionDeducted)]
+											})]
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+											className: "py-3 px-3 whitespace-nowrap",
+											children: p.cvNumber ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+												className: "font-mono font-semibold text-slate-900",
+												children: ["CV #", p.cvNumber]
+											}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+												className: "text-xs font-mono text-slate-500",
+												children: p.cvDate
+											})] }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+												className: "text-slate-400",
+												children: "Pending CV"
+											})
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+											className: "py-3 px-3 text-right font-mono tabular-nums whitespace-nowrap",
+											children: p.cvNumber || p.chequeAmount > 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+												className: "font-semibold text-blue-700",
+												children: formatCurrency(p.chequeAmount)
+											}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+												className: "text-xs text-slate-500",
+												children: ["Withheld: ", formatCurrency(p.withheldAmount)]
+											})] }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+												className: "text-slate-400",
+												children: "—"
+											})
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+											className: "py-3 px-3 whitespace-nowrap",
+											children: p.receiptNumber ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+												className: "font-mono font-semibold text-emerald-800",
+												children: [
+													p.receiptType,
+													" #",
+													p.receiptNumber
+												]
+											}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+												className: "text-xs font-mono text-slate-500",
+												children: ["Date: ", p.receiptDate]
+											})] }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+												className: "text-slate-400",
+												children: "Not Received"
+											})
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+											className: "py-3 px-3 whitespace-nowrap",
+											children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+												className: paymentStageClass(p.paymentStatus),
+												children: PAYMENT_STAGE_STATUS_LABELS[p.paymentStatus]
+											})
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
+											className: "py-3 px-3 text-right whitespace-nowrap",
+											children: [p.paymentStatus !== "CANCELLED" && (paymentsPermission.edit ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+												className: "flex items-center justify-end gap-1.5",
+												children: [
+													/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+														type: "button",
+														onClick: () => openReleaseChequeModal(p),
+														className: "inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-800 hover:bg-slate-100",
+														children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CreditCard, { className: "h-3 w-3" }), p.cvNumber ? "Edit CV" : "Release Cheque"]
+													}),
+													/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+														type: "button",
+														onClick: () => openContractorReceiptModal(p),
+														className: "inline-flex items-center gap-1 rounded bg-slate-900 px-2 py-1 text-xs font-medium text-white hover:bg-slate-800",
+														children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Receipt, { className: "h-3 w-3" }), p.receiptNumber ? "Edit Receipt" : "Receipt"]
+													}),
+													/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+														type: "button",
+														onClick: () => handleCancelPayment(p),
+														className: "inline-flex items-center gap-1 rounded border border-red-200 bg-red-50/60 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100",
+														children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Ban, { className: "h-3 w-3" }), "Cancel"]
+													}),
+													/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+														type: "button",
+														onClick: () => handleDeletePayment(p),
+														className: "inline-flex items-center gap-1 rounded border border-red-200 bg-white px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50",
+														children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Trash2, { className: "h-3 w-3" }), "Delete"]
+													})
+												]
+											}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+												className: "text-xs font-mono text-slate-400",
+												children: "Read-Only"
+											})), p.paymentStatus === "CANCELLED" && paymentsPermission.edit && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+												type: "button",
+												onClick: () => handleDeletePayment(p),
+												className: "inline-flex items-center gap-1 rounded border border-red-200 bg-white px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50",
+												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Trash2, { className: "h-3 w-3" }), "Delete"]
+											})]
+										})
+									]
+								}, `${p.paymentId}-${p.rowNumber}`))
+							})]
+						})
+					}),
+					filteredAllPayments.length > PAYMENTS_PAGE_SIZE && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-6 py-3 text-xs text-slate-600",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
+							"Showing",
+							" ",
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+								className: "font-semibold text-slate-900",
+								children: [
+									(safePaymentsPage - 1) * PAYMENTS_PAGE_SIZE + 1,
+									"–",
+									Math.min(safePaymentsPage * PAYMENTS_PAGE_SIZE, filteredAllPayments.length)
+								]
+							}),
+							" ",
+							"of",
+							" ",
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+								className: "font-semibold text-slate-900",
+								children: filteredAllPayments.length
+							}),
+							" ",
+							"payment records"
+						] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "flex items-center gap-1.5",
+							children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+									type: "button",
+									disabled: safePaymentsPage <= 1,
+									onClick: () => setPaymentsPage((p) => Math.max(1, p - 1)),
+									className: "rounded border border-slate-300 bg-white px-2.5 py-1 font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40",
+									children: "Previous"
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+									className: "px-2 font-mono text-slate-700",
+									children: [
+										"Page ",
+										safePaymentsPage,
+										" / ",
+										paymentsTotalPages
+									]
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+									type: "button",
+									disabled: safePaymentsPage >= paymentsTotalPages,
+									onClick: () => setPaymentsPage((p) => Math.min(paymentsTotalPages, p + 1)),
+									className: "rounded border border-slate-300 bg-white px-2.5 py-1 font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40",
+									children: "Next"
+								})
+							]
 						})]
 					})
-				})]
+				]
 			})),
 			rfpModalContract && (() => {
 				const modalRollup = rollupByContractId[rfpModalContract.contractId];
@@ -26027,140 +27095,849 @@ var ContractsTCPView = ({ subProjects, contractors, contractsTCP, contractPaymen
 		]
 	});
 };
+// src/components/ContractorsSheetView.tsx
+function generateNextContractorCode(contractors) {
+	let maxNum = 0;
+	for (const c of contractors) {
+		const match = c.contractorCode.match(/(\d+)$/);
+		if (match) {
+			const num = parseInt(match[1], 10);
+			if (!Number.isNaN(num) && num > maxNum) maxNum = num;
+		}
+	}
+	return `CTR-${String(maxNum + 1).padStart(4, "0")}`;
+}
+var ContractorsSheetView = ({ contractors, contractsTCP, contractPayments = [], modulePermission, activeUser, onOpenProfileModal, onOpenAdminAccounts, onAddContractor, onUpdateContractor, onDeleteContractor, requestConfirmation }) => {
+	const [searchQuery, setSearchQuery] = (0, import_react.useState)("");
+	const [statusFilter, setStatusFilter] = (0, import_react.useState)("ALL");
+	const [sortBy, setSortBy] = (0, import_react.useState)("code");
+	const [sortDir, setSortDir] = (0, import_react.useState)("asc");
+	const [page, setPage] = (0, import_react.useState)(1);
+	const PAGE_SIZE = 15;
+	const [isDrawerOpen, setIsDrawerOpen] = (0, import_react.useState)(false);
+	const [editingContractor, setEditingContractor] = (0, import_react.useState)(null);
+	const [contractorName, setContractorName] = (0, import_react.useState)("");
+	const [specialty, setSpecialty] = (0, import_react.useState)("");
+	const [contactPerson, setContactPerson] = (0, import_react.useState)("");
+	const [contactInfo, setContactInfo] = (0, import_react.useState)("");
+	const [active, setActive] = (0, import_react.useState)(true);
+	const [formError, setFormError] = (0, import_react.useState)(null);
+	const contractMetricsByCode = (0, import_react.useMemo)(() => {
+		const map = {};
+		for (const c of contractsTCP) {
+			if (c.contractStatus === "CANCEL") continue;
+			const key = c.contractorCode.trim().toUpperCase();
+			if (!map[key]) map[key] = {
+				count: 0,
+				totalTcp: 0
+			};
+			map[key].count += 1;
+			map[key].totalTcp += Number(c.tcpAmount) || 0;
+		}
+		return map;
+	}, [contractsTCP]);
+	const filteredContractors = (0, import_react.useMemo)(() => {
+		const q = searchQuery.trim().toLowerCase();
+		return contractors.filter((c) => {
+			if (statusFilter === "Active" && !c.active) return false;
+			if (statusFilter === "Inactive" && c.active) return false;
+			if (!q) return true;
+			return [
+				c.contractorCode,
+				c.contractorName,
+				c.specialty,
+				c.contactPerson,
+				c.contactInfo
+			].join(" ").toLowerCase().includes(q);
+		});
+	}, [
+		contractors,
+		searchQuery,
+		statusFilter
+	]);
+	const sortedContractors = (0, import_react.useMemo)(() => {
+		const dir = sortDir === "asc" ? 1 : -1;
+		return [...filteredContractors].sort((a, b) => {
+			if (sortBy === "code") return a.contractorCode.localeCompare(b.contractorCode) * dir;
+			if (sortBy === "name") return a.contractorName.localeCompare(b.contractorName) * dir;
+			if (sortBy === "specialty") return (a.specialty || "").localeCompare(b.specialty || "") * dir;
+			if (sortBy === "status") return (Number(b.active) - Number(a.active)) * dir;
+			return ((contractMetricsByCode[a.contractorCode.trim().toUpperCase()]?.totalTcp || 0) - (contractMetricsByCode[b.contractorCode.trim().toUpperCase()]?.totalTcp || 0)) * dir;
+		});
+	}, [
+		filteredContractors,
+		sortBy,
+		sortDir,
+		contractMetricsByCode
+	]);
+	const totalPages = Math.max(1, Math.ceil(sortedContractors.length / PAGE_SIZE));
+	const safePage = Math.min(page, totalPages);
+	const paginatedContractors = (0, import_react.useMemo)(() => {
+		const start = (safePage - 1) * PAGE_SIZE;
+		return sortedContractors.slice(start, start + PAGE_SIZE);
+	}, [sortedContractors, safePage]);
+	const toggleSort = (col) => {
+		if (sortBy === col) setSortDir((prev) => prev === "asc" ? "desc" : "asc");
+		else {
+			setSortBy(col);
+			setSortDir("asc");
+		}
+		setPage(1);
+	};
+	const nextAutoCode = (0, import_react.useMemo)(() => generateNextContractorCode(contractors), [contractors]);
+	if (!modulePermission.view) return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ModuleViewRestrictedState, {
+		moduleTitle: "Contractors Registry",
+		activeUser,
+		onOpenProfileModal,
+		onOpenAdminAccounts
+	});
+	const openAddDrawer = () => {
+		setEditingContractor(null);
+		setContractorName("");
+		setSpecialty("");
+		setContactPerson("");
+		setContactInfo("");
+		setActive(true);
+		setFormError(null);
+		setIsDrawerOpen(true);
+	};
+	const openEditDrawer = (c) => {
+		setEditingContractor(c);
+		setContractorName(c.contractorName);
+		setSpecialty(c.specialty);
+		setContactPerson(c.contactPerson);
+		setContactInfo(c.contactInfo);
+		setActive(c.active);
+		setFormError(null);
+		setIsDrawerOpen(true);
+	};
+	const closeDrawer = () => {
+		setIsDrawerOpen(false);
+		setEditingContractor(null);
+		setFormError(null);
+	};
+	const duplicateNameMatch = contractors.find((c) => c.contractorName.trim().toLowerCase() === contractorName.trim().toLowerCase() && (!editingContractor || c.contractorCode !== editingContractor.contractorCode));
+	const handleSubmit = (e) => {
+		e.preventDefault();
+		setFormError(null);
+		if (!editingContractor && !modulePermission.add) {
+			setFormError("Your active profile cannot register new contractors.");
+			return;
+		}
+		if (editingContractor && !modulePermission.edit) {
+			setFormError("Your active profile cannot edit contractors.");
+			return;
+		}
+		if (!contractorName.trim()) {
+			setFormError("Contractor Name is required.");
+			return;
+		}
+		if (duplicateNameMatch) {
+			setFormError(`Contractor "${contractorName.trim()}" is already registered (${duplicateNameMatch.contractorCode}).`);
+			return;
+		}
+		if (editingContractor) {
+			const payload = {
+				contractorCode: editingContractor.contractorCode,
+				contractorName: contractorName.trim(),
+				specialty: specialty.trim(),
+				contactPerson: contactPerson.trim(),
+				contactInfo: contactInfo.trim(),
+				active,
+				createdAt: editingContractor.createdAt
+			};
+			requestConfirmation({
+				title: `Update Contractor — ${editingContractor.contractorCode}`,
+				description: `Save updates for ${payload.contractorName} to the Contractors worksheet.`,
+				sheetName: SHEET_NAMES.CONTRACTORS,
+				details: [
+					{
+						label: "Code",
+						value: payload.contractorCode
+					},
+					{
+						label: "Name",
+						value: payload.contractorName
+					},
+					{
+						label: "Specialty",
+						value: payload.specialty || "—"
+					},
+					{
+						label: "Status",
+						value: payload.active ? "Active" : "Inactive"
+					}
+				],
+				confirmLabel: "Save Contractor",
+				onConfirm: async () => {
+					await onUpdateContractor(editingContractor.rowNumber, payload);
+					closeDrawer();
+				}
+			});
+		} else {
+			const payload = {
+				contractorCode: nextAutoCode,
+				contractorName: contractorName.trim(),
+				specialty: specialty.trim(),
+				contactPerson: contactPerson.trim(),
+				contactInfo: contactInfo.trim(),
+				active
+			};
+			requestConfirmation({
+				title: `Register Contractor — ${payload.contractorCode}`,
+				description: `Append ${payload.contractorName} to the Contractors worksheet.`,
+				sheetName: SHEET_NAMES.CONTRACTORS,
+				details: [
+					{
+						label: "Assigned Code",
+						value: payload.contractorCode
+					},
+					{
+						label: "Contractor Name",
+						value: payload.contractorName
+					},
+					{
+						label: "Specialty",
+						value: payload.specialty || "—"
+					},
+					{
+						label: "Status",
+						value: payload.active ? "Active" : "Inactive"
+					}
+				],
+				confirmLabel: "Register Contractor",
+				onConfirm: async () => {
+					await onAddContractor(payload);
+					closeDrawer();
+				}
+			});
+		}
+	};
+	const handleRequestDelete = (c) => {
+		const linked = contractMetricsByCode[c.contractorCode.trim().toUpperCase()]?.count || 0;
+		requestConfirmation({
+			title: `Delete Contractor — ${c.contractorCode}`,
+			description: linked > 0 ? `Contractor ${c.contractorName} has ${linked} linked contract(s) and cannot be deleted. Edit the contractor and mark as Inactive instead.` : `Permanently delete contractor "${c.contractorName}" (${c.contractorCode}) from the Contractors worksheet.`,
+			sheetName: SHEET_NAMES.CONTRACTORS,
+			details: [
+				{
+					label: "Code",
+					value: c.contractorCode
+				},
+				{
+					label: "Name",
+					value: c.contractorName
+				},
+				{
+					label: "Linked Contracts",
+					value: String(linked)
+				}
+			],
+			confirmLabel: "Delete Contractor",
+			onConfirm: async () => {
+				await onDeleteContractor(c);
+			}
+		});
+	};
+	const activeCount = contractors.filter((c) => c.active).length;
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+		className: "space-y-5",
+		children: [
+			(!modulePermission.add || !modulePermission.edit) && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: "rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-900",
+				children: [
+					"Active profile ",
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: activeUser.fullName }),
+					" has limited write access on Contractors (Add:",
+					" ",
+					modulePermission.add ? "Yes" : "No",
+					" · Edit:",
+					" ",
+					modulePermission.edit ? "Yes" : "No",
+					")."
+				]
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: "flex flex-col md:flex-row md:items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4",
+				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+					className: "flex flex-wrap flex-1 items-center gap-2.5",
+					children: [
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+							type: "button",
+							disabled: !modulePermission.add,
+							onClick: openAddDrawer,
+							className: "inline-flex items-center justify-center gap-1.5 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50 transition-colors shrink-0",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Plus, { className: "h-4 w-4" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Register Contractor" })]
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "relative flex-1 min-w-[220px] max-w-md",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Search, { className: "pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+								type: "text",
+								value: searchQuery,
+								onChange: (e) => setSearchQuery(e.target.value),
+								placeholder: "Search contractor by code, name, trade, or contact...",
+								className: "w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 py-2 text-sm text-slate-900 focus:border-slate-900 focus:outline-none"
+							})]
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("select", {
+							"aria-label": "Filter by status",
+							value: statusFilter,
+							onChange: (e) => setStatusFilter(e.target.value),
+							className: "rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700",
+							children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("option", {
+									value: "ALL",
+									children: [
+										"All Statuses (",
+										contractors.length,
+										")"
+									]
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("option", {
+									value: "Active",
+									children: [
+										"Active (",
+										activeCount,
+										")"
+									]
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("option", {
+									value: "Inactive",
+									children: [
+										"Inactive (",
+										contractors.length - activeCount,
+										")"
+									]
+								})
+							]
+						})
+					]
+				}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+					className: "text-xs font-medium text-slate-500 shrink-0",
+					children: [
+						"Showing ",
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", {
+							className: "text-slate-900",
+							children: filteredContractors.length
+						}),
+						" of",
+						" ",
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", {
+							className: "text-slate-900",
+							children: contractors.length
+						}),
+						" contractors"
+					]
+				})]
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: "rounded-xl border border-slate-200 bg-white overflow-hidden",
+				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+					className: "overflow-x-auto",
+					children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("table", {
+						className: "w-full text-left text-sm border-collapse",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("thead", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", {
+							className: "border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-600",
+							children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+									className: "px-4 py-3",
+									children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+										type: "button",
+										onClick: () => toggleSort("code"),
+										className: "inline-flex items-center gap-1 hover:text-slate-900",
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Code" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ArrowUpDown, { className: "h-3 w-3 opacity-60" })]
+									})
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+									className: "px-4 py-3",
+									children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+										type: "button",
+										onClick: () => toggleSort("name"),
+										className: "inline-flex items-center gap-1 hover:text-slate-900",
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Contractor / Supplier" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ArrowUpDown, { className: "h-3 w-3 opacity-60" })]
+									})
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+									className: "px-4 py-3",
+									children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+										type: "button",
+										onClick: () => toggleSort("specialty"),
+										className: "inline-flex items-center gap-1 hover:text-slate-900",
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Trade Specialty" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ArrowUpDown, { className: "h-3 w-3 opacity-60" })]
+									})
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+									className: "px-4 py-3",
+									children: "Contact"
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+									className: "px-4 py-3 text-right",
+									children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+										type: "button",
+										onClick: () => toggleSort("tcp"),
+										className: "inline-flex items-center gap-1 hover:text-slate-900",
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Active TCP" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ArrowUpDown, { className: "h-3 w-3 opacity-60" })]
+									})
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+									className: "px-4 py-3",
+									children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+										type: "button",
+										onClick: () => toggleSort("status"),
+										className: "inline-flex items-center gap-1 hover:text-slate-900",
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Status" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ArrowUpDown, { className: "h-3 w-3 opacity-60" })]
+									})
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+									className: "px-4 py-3 text-right",
+									children: "Actions"
+								})
+							]
+						}) }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tbody", {
+							className: "divide-y divide-slate-100",
+							children: paginatedContractors.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tr", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+								colSpan: 7,
+								className: "px-4 py-10 text-center text-sm text-slate-500",
+								children: contractors.length === 0 ? "No contractors registered yet. Click \"Register Contractor\" to add one." : "No contractors match your filters."
+							}) }) : paginatedContractors.map((c) => {
+								const metrics = contractMetricsByCode[c.contractorCode.trim().toUpperCase()];
+								const count = metrics?.count || 0;
+								const totalTcp = metrics?.totalTcp || 0;
+								return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", {
+									className: "hover:bg-slate-50/80 transition-colors",
+									children: [
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+											className: "px-4 py-3 font-mono font-semibold text-slate-900 whitespace-nowrap",
+											children: c.contractorCode
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+											className: "px-4 py-3 font-medium text-slate-900",
+											children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+												className: "flex items-center gap-2",
+												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(HardHat, { className: "h-4 w-4 text-slate-400 shrink-0" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: c.contractorName })]
+											})
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+											className: "px-4 py-3 text-slate-700",
+											children: c.specialty || "—"
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
+											className: "px-4 py-3 text-xs text-slate-600",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+												className: "font-medium text-slate-800",
+												children: c.contactPerson || "—"
+											}), c.contactInfo && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+												className: "text-slate-500",
+												children: c.contactInfo
+											})]
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
+											className: "px-4 py-3 text-right font-mono tabular-nums whitespace-nowrap",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+												className: "font-semibold text-slate-900",
+												children: formatCurrency(totalTcp)
+											}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+												className: "text-xs text-slate-500",
+												children: [
+													count,
+													" contract",
+													count === 1 ? "" : "s"
+												]
+											})]
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+											className: "px-4 py-3 whitespace-nowrap",
+											children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+												className: `inline-block rounded px-2 py-0.5 text-xs font-semibold ${c.active ? "bg-emerald-50 text-emerald-800 border border-emerald-200" : "bg-slate-100 text-slate-600 border border-slate-200"}`,
+												children: c.active ? "Active" : "Inactive"
+											})
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+											className: "px-4 py-3 text-right whitespace-nowrap",
+											children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+												className: "inline-flex items-center gap-1.5",
+												children: [
+													/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+														type: "button",
+														onClick: () => {
+															const vendorContracts = contractsTCP.filter((ct) => ct.contractorCode.trim().toUpperCase() === c.contractorCode.trim().toUpperCase());
+															const vendorContractIds = new Set(vendorContracts.map((ct) => ct.contractId));
+															printContractorInfoAttachment({
+																contractor: c,
+																contracts: vendorContracts,
+																payments: contractPayments.filter((p) => vendorContractIds.has(p.contractId) || p.contractorCode.trim().toUpperCase() === c.contractorCode.trim().toUpperCase()),
+																preparedBy: activeUser.fullName
+															});
+														},
+														title: "Print Contractor Profile & Contract Schedule",
+														className: "inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50",
+														children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Printer, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Print" })]
+													}),
+													/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+														type: "button",
+														disabled: !modulePermission.edit,
+														onClick: () => openEditDrawer(c),
+														className: "inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40",
+														children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(PenLine, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Edit" })]
+													}),
+													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+														type: "button",
+														disabled: !modulePermission.edit || count > 0,
+														onClick: () => handleRequestDelete(c),
+														title: count > 0 ? `Has ${count} active contract(s)` : `Delete ${c.contractorCode}`,
+														className: "inline-flex items-center rounded-md border border-slate-200 bg-white p-1.5 text-slate-500 hover:border-red-200 hover:bg-red-50 hover:text-red-600 disabled:opacity-35",
+														children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Trash2, { className: "h-3.5 w-3.5" })
+													})
+												]
+											})
+										})
+									]
+								}, c.contractorCode);
+							})
+						})]
+					})
+				}), sortedContractors.length > PAGE_SIZE && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+					className: "flex items-center justify-between border-t border-slate-200 bg-slate-50 px-4 py-2.5 text-xs text-slate-600",
+					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { children: [
+						"Page ",
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: safePage }),
+						" of ",
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: totalPages }),
+						" ",
+						"(",
+						sortedContractors.length,
+						" contractors)"
+					] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "flex items-center gap-1.5",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+							type: "button",
+							disabled: safePage <= 1,
+							onClick: () => setPage((p) => Math.max(1, p - 1)),
+							className: "rounded-md border border-slate-300 bg-white px-2.5 py-1 font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-40",
+							children: "Previous"
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+							type: "button",
+							disabled: safePage >= totalPages,
+							onClick: () => setPage((p) => Math.min(totalPages, p + 1)),
+							className: "rounded-md border border-slate-300 bg-white px-2.5 py-1 font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-40",
+							children: "Next"
+						})]
+					})]
+				})]
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(FormDrawerModal, {
+				isOpen: isDrawerOpen,
+				title: editingContractor ? `Edit Contractor — ${editingContractor.contractorCode}` : `Register New Contractor (${nextAutoCode})`,
+				subtitle: editingContractor ? "Update contractor profile, trade specialty, contact details, or active status." : "Contractor code is auto-assigned sequentially to prevent duplicates.",
+				size: "md",
+				onClose: closeDrawer,
+				children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("form", {
+					onSubmit: handleSubmit,
+					className: "space-y-4",
+					children: [
+						formError && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-xs text-red-800",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CircleAlert, { className: "h-4 w-4 text-red-600 shrink-0 mt-0.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: formError })]
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-2.5 flex items-center justify-between text-xs",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+								className: "font-medium text-slate-600",
+								children: "Contractor Code"
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+								className: "font-mono font-bold text-slate-900",
+								children: editingContractor ? editingContractor.contractorCode : nextAutoCode
+							})]
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
+								className: "block text-xs font-semibold text-slate-700 mb-1",
+								children: ["Contractor / Supplier Name ", /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+									className: "text-red-500",
+									children: "*"
+								})]
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+								type: "text",
+								value: contractorName,
+								onChange: (e) => setContractorName(e.target.value),
+								placeholder: "e.g. Summit Builders & Engineering Corp.",
+								className: "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-slate-900 focus:outline-none"
+							}),
+							duplicateNameMatch && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
+								className: "mt-1 text-xs text-red-600",
+								children: [
+									"Duplicate contractor name detected (",
+									duplicateNameMatch.contractorCode,
+									")."
+								]
+							})
+						] }),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", {
+							className: "block text-xs font-semibold text-slate-700 mb-1",
+							children: "Trade / Specialty"
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+							type: "text",
+							value: specialty,
+							onChange: (e) => setSpecialty(e.target.value),
+							placeholder: "e.g. Electrical, MEPF, Civil & Structural",
+							className: "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-slate-900 focus:outline-none"
+						})] }),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "grid grid-cols-1 sm:grid-cols-2 gap-3",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", {
+								className: "block text-xs font-semibold text-slate-700 mb-1",
+								children: "Contact Person"
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+								type: "text",
+								value: contactPerson,
+								onChange: (e) => setContactPerson(e.target.value),
+								placeholder: "e.g. Engr. Alex Rivera",
+								className: "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-slate-900 focus:outline-none"
+							})] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", {
+								className: "block text-xs font-semibold text-slate-700 mb-1",
+								children: "Status"
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("select", {
+								value: active ? "Active" : "Inactive",
+								onChange: (e) => setActive(e.target.value === "Active"),
+								className: "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-slate-900 focus:outline-none",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
+									value: "Active",
+									children: "Active"
+								}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
+									value: "Inactive",
+									children: "Inactive"
+								})]
+							})] })]
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", {
+							className: "block text-xs font-semibold text-slate-700 mb-1",
+							children: "Contact Info (Phone / Email)"
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+							type: "text",
+							value: contactInfo,
+							onChange: (e) => setContactInfo(e.target.value),
+							placeholder: "e.g. +63 917 555 0199 / billing@contractor.example",
+							className: "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-slate-900 focus:outline-none"
+						})] }),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "flex items-center justify-end gap-2 pt-4 border-t border-slate-200",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+								type: "button",
+								onClick: closeDrawer,
+								className: "rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50",
+								children: "Cancel"
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+								type: "submit",
+								disabled: Boolean(duplicateNameMatch),
+								className: "rounded-lg bg-slate-900 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-50",
+								children: editingContractor ? "Review & Save Changes" : "Review & Register Contractor"
+							})]
+						})
+					]
+				})
+			})
+		]
+	});
+};
 // src/components/SitesSheetView.tsx
-var SitesSheetView = ({ sites, projects, modulePermission, activeUser, onSelectActiveUser, onOpenProfileModal, onOpenAdminAccounts, onAddSite, onUpdateSite, onDeleteSite, requestConfirmation }) => {
+var SitesSheetView = ({ sites, projects, modulePermission, activeUser, onOpenProfileModal, onOpenAdminAccounts, onAddSite, onUpdateSite, onDeleteSite, requestConfirmation }) => {
+	const [searchQuery, setSearchQuery] = (0, import_react.useState)("");
+	const [sortBy, setSortBy] = (0, import_react.useState)("code");
+	const [sortDir, setSortDir] = (0, import_react.useState)("asc");
+	const [page, setPage] = (0, import_react.useState)(1);
+	const PAGE_SIZE = 15;
+	const [isDrawerOpen, setIsDrawerOpen] = (0, import_react.useState)(false);
+	const [editingSite, setEditingSite] = (0, import_react.useState)(null);
 	const [siteCode, setSiteCode] = (0, import_react.useState)("");
 	const [siteName, setSiteName] = (0, import_react.useState)("");
 	const [developer, setDeveloper] = (0, import_react.useState)("");
 	const [location, setLocation] = (0, import_react.useState)("");
-	const [searchQuery, setSearchQuery] = (0, import_react.useState)("");
-	const [editingRow, setEditingRow] = (0, import_react.useState)(null);
-	const [editForm, setEditForm] = (0, import_react.useState)(null);
-	const normalizedInputCode = siteCode.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
-	const duplicateSite = (0, import_react.useMemo)(() => {
-		if (!normalizedInputCode) return null;
-		return sites.find((s) => s.siteCode.toUpperCase() === normalizedInputCode) || null;
-	}, [sites, normalizedInputCode]);
-	const duplicateSiteName = (0, import_react.useMemo)(() => {
-		const cleanName = siteName.trim().toLowerCase();
-		if (!cleanName) return null;
-		return sites.find((s) => s.siteName.trim().toLowerCase() === cleanName) || null;
-	}, [sites, siteName]);
+	const [formError, setFormError] = (0, import_react.useState)(null);
 	const projectCountBySite = (0, import_react.useMemo)(() => {
-		const counts = {};
-		for (const p of projects) counts[p.siteCode] = (counts[p.siteCode] || 0) + 1;
-		return counts;
+		const map = {};
+		for (const p of projects) {
+			const code = p.siteCode.trim().toUpperCase();
+			map[code] = (map[code] || 0) + 1;
+		}
+		return map;
 	}, [projects]);
 	const filteredSites = (0, import_react.useMemo)(() => {
 		const q = searchQuery.trim().toLowerCase();
 		if (!q) return sites;
-		return sites.filter((s) => s.siteCode.toLowerCase().includes(q) || s.siteName.toLowerCase().includes(q) || s.developer.toLowerCase().includes(q) || s.location.toLowerCase().includes(q));
+		return sites.filter((s) => [
+			s.siteCode,
+			s.siteName,
+			s.developer,
+			s.location
+		].join(" ").toLowerCase().includes(q));
 	}, [sites, searchQuery]);
-	const handleCreateSubmit = (e) => {
-		e.preventDefault();
-		if (!modulePermission.add || !normalizedInputCode || !siteName.trim() || !developer.trim() || duplicateSite || duplicateSiteName) return;
-		requestConfirmation({
-			title: "Add New Site to Google Sheet",
-			description: "This will append a new site row to the \"Sites\" tab in your connected Google Sheet so it can be selected during project creation.",
-			sheetName: SHEET_NAMES.SITES,
-			details: [
-				{
-					label: "Site Code",
-					value: normalizedInputCode
-				},
-				{
-					label: "Site Name",
-					value: siteName.trim()
-				},
-				{
-					label: "Developer",
-					value: developer.trim()
-				},
-				{
-					label: "Region / Location",
-					value: location.trim() || "—"
-				}
-			],
-			confirmLabel: "Confirm & Add Site",
-			onConfirm: async () => {
-				await onAddSite({
-					siteCode: normalizedInputCode,
-					siteName: siteName.trim(),
-					developer: developer.trim(),
-					location: location.trim()
-				});
-				setSiteCode("");
-				setSiteName("");
-				setDeveloper("");
-				setLocation("");
-			}
+	const sortedSites = (0, import_react.useMemo)(() => {
+		const dir = sortDir === "asc" ? 1 : -1;
+		return [...filteredSites].sort((a, b) => {
+			if (sortBy === "code") return a.siteCode.localeCompare(b.siteCode) * dir;
+			if (sortBy === "name") return a.siteName.localeCompare(b.siteName) * dir;
+			if (sortBy === "developer") return (a.developer || "").localeCompare(b.developer || "") * dir;
+			return ((projectCountBySite[a.siteCode.trim().toUpperCase()] || 0) - (projectCountBySite[b.siteCode.trim().toUpperCase()] || 0)) * dir;
 		});
-	};
-	const startEditing = (site) => {
-		if (!modulePermission.edit) return;
-		setEditingRow(site.rowNumber);
-		setEditForm({
-			siteCode: site.siteCode,
-			siteName: site.siteName,
-			developer: site.developer,
-			location: site.location,
-			createdAt: site.createdAt
-		});
-	};
-	const editDuplicateSiteName = (0, import_react.useMemo)(() => {
-		if (!editForm) return null;
-		const cleanName = editForm.siteName.trim().toLowerCase();
-		if (!cleanName) return null;
-		return sites.find((s) => s.rowNumber !== editingRow && s.siteName.trim().toLowerCase() === cleanName) || null;
 	}, [
-		sites,
-		editForm,
-		editingRow
+		filteredSites,
+		sortBy,
+		sortDir,
+		projectCountBySite
 	]);
-	const handleSaveEdit = (rowNumber) => {
-		if (!modulePermission.edit || !editForm || !editForm.siteName.trim() || !editForm.developer.trim() || editDuplicateSiteName) return;
-		requestConfirmation({
-			title: `Update Site Row #${rowNumber}`,
-			description: `This will update row ${rowNumber} in the "${SHEET_NAMES.SITES}" sheet of your Google Spreadsheet.`,
-			sheetName: `${SHEET_NAMES.SITES}!A${rowNumber}:E${rowNumber}`,
-			details: [
-				{
-					label: "Site Code",
-					value: editForm.siteCode
-				},
-				{
-					label: "Site Name",
-					value: editForm.siteName.trim()
-				},
-				{
-					label: "Developer",
-					value: editForm.developer.trim()
-				},
-				{
-					label: "Location",
-					value: editForm.location.trim() || "—"
-				}
-			],
-			confirmLabel: "Confirm & Update Row",
-			onConfirm: async () => {
-				await onUpdateSite(rowNumber, {
-					...editForm,
-					siteName: editForm.siteName.trim(),
-					developer: editForm.developer.trim(),
-					location: editForm.location.trim()
-				});
-				setEditingRow(null);
-				setEditForm(null);
-			}
-		});
+	const totalPages = Math.max(1, Math.ceil(sortedSites.length / PAGE_SIZE));
+	const safePage = Math.min(page, totalPages);
+	const paginatedSites = (0, import_react.useMemo)(() => {
+		const start = (safePage - 1) * PAGE_SIZE;
+		return sortedSites.slice(start, start + PAGE_SIZE);
+	}, [sortedSites, safePage]);
+	const toggleSort = (col) => {
+		if (sortBy === col) setSortDir((prev) => prev === "asc" ? "desc" : "asc");
+		else {
+			setSortBy(col);
+			setSortDir("asc");
+		}
+		setPage(1);
 	};
-	const handleDeleteSite = (site) => {
-		if (!modulePermission.edit) return;
+	if (!modulePermission.view) return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ModuleViewRestrictedState, {
+		moduleTitle: "Sites Directory",
+		activeUser,
+		onOpenProfileModal,
+		onOpenAdminAccounts
+	});
+	const openAddDrawer = () => {
+		setEditingSite(null);
+		setSiteCode("");
+		setSiteName("");
+		setDeveloper("");
+		setLocation("");
+		setFormError(null);
+		setIsDrawerOpen(true);
+	};
+	const openEditDrawer = (site) => {
+		setEditingSite(site);
+		setSiteCode(site.siteCode);
+		setSiteName(site.siteName);
+		setDeveloper(site.developer);
+		setLocation(site.location);
+		setFormError(null);
+		setIsDrawerOpen(true);
+	};
+	const closeDrawer = () => {
+		setIsDrawerOpen(false);
+		setEditingSite(null);
+		setFormError(null);
+	};
+	const normalizedCode = siteCode.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, "");
+	const duplicateCodeSite = !editingSite ? sites.find((s) => s.siteCode.trim().toUpperCase() === normalizedCode) : void 0;
+	const duplicateNameSite = sites.find((s) => s.siteName.trim().toLowerCase() === siteName.trim().toLowerCase() && (!editingSite || s.siteCode !== editingSite.siteCode));
+	const handleSubmitForm = (e) => {
+		e.preventDefault();
+		setFormError(null);
+		if (!editingSite && !modulePermission.add) {
+			setFormError("Your active profile does not have permission to add sites.");
+			return;
+		}
+		if (editingSite && !modulePermission.edit) {
+			setFormError("Your active profile does not have permission to edit sites.");
+			return;
+		}
+		if (!normalizedCode) {
+			setFormError("Site Code is required (letters and numbers, e.g. SITE01).");
+			return;
+		}
+		if (!siteName.trim()) {
+			setFormError("Site Name is required.");
+			return;
+		}
+		if (duplicateCodeSite) {
+			setFormError(`Site Code "${normalizedCode}" already exists (${duplicateCodeSite.siteName}).`);
+			return;
+		}
+		if (duplicateNameSite) {
+			setFormError(`Site Name "${siteName.trim()}" is already registered under ${duplicateNameSite.siteCode}.`);
+			return;
+		}
+		if (editingSite) {
+			const updatedPayload = {
+				siteCode: editingSite.siteCode,
+				siteName: siteName.trim(),
+				developer: developer.trim(),
+				location: location.trim(),
+				createdAt: editingSite.createdAt
+			};
+			requestConfirmation({
+				title: `Update Site — ${editingSite.siteCode}`,
+				description: `Save updates for site ${editingSite.siteCode} (${updatedPayload.siteName}) to the Sites worksheet.`,
+				sheetName: SHEET_NAMES.SITES,
+				details: [
+					{
+						label: "Site Code",
+						value: editingSite.siteCode
+					},
+					{
+						label: "Site Name",
+						value: updatedPayload.siteName
+					},
+					{
+						label: "Developer",
+						value: updatedPayload.developer || "—"
+					},
+					{
+						label: "Location",
+						value: updatedPayload.location || "—"
+					}
+				],
+				confirmLabel: "Save Site Changes",
+				onConfirm: async () => {
+					await onUpdateSite(editingSite.rowNumber, updatedPayload);
+					closeDrawer();
+				}
+			});
+		} else {
+			const newPayload = {
+				siteCode: normalizedCode,
+				siteName: siteName.trim(),
+				developer: developer.trim(),
+				location: location.trim()
+			};
+			requestConfirmation({
+				title: `Register New Site — ${normalizedCode}`,
+				description: `Append a new project site record to the Sites worksheet.`,
+				sheetName: SHEET_NAMES.SITES,
+				details: [
+					{
+						label: "Site Code",
+						value: newPayload.siteCode
+					},
+					{
+						label: "Site Name",
+						value: newPayload.siteName
+					},
+					{
+						label: "Developer",
+						value: newPayload.developer || "—"
+					},
+					{
+						label: "Location",
+						value: newPayload.location || "—"
+					}
+				],
+				confirmLabel: "Register Site",
+				onConfirm: async () => {
+					await onAddSite(newPayload);
+					closeDrawer();
+				}
+			});
+		}
+	};
+	const handleRequestDelete = (site) => {
+		const linkedCount = projectCountBySite[site.siteCode.trim().toUpperCase()] || 0;
 		requestConfirmation({
 			title: `Delete Site — ${site.siteCode}`,
-			description: `This will permanently delete "${site.siteCode} (${site.siteName})" from the "${SHEET_NAMES.SITES}" sheet. Deletion is blocked if any Main Projects still reference this Site.`,
-			sheetName: `${SHEET_NAMES.SITES}!A${site.rowNumber}:E${site.rowNumber}`,
-			isDestructive: true,
+			description: linkedCount > 0 ? `Site ${site.siteCode} is referenced by ${linkedCount} Main Project(s). Referential integrity prevents deletion until linked projects are removed.` : `Permanently delete site "${site.siteName}" (${site.siteCode}) from the Sites worksheet.`,
+			sheetName: SHEET_NAMES.SITES,
 			details: [
 				{
 					label: "Site Code",
@@ -26171,421 +27948,350 @@ var SitesSheetView = ({ sites, projects, modulePermission, activeUser, onSelectA
 					value: site.siteName
 				},
 				{
-					label: "Developer",
-					value: site.developer
-				},
-				{
 					label: "Linked Projects",
-					value: String(projectCountBySite[site.siteCode] || 0)
+					value: String(linkedCount)
 				}
 			],
-			confirmLabel: "Confirm & Delete Site",
+			confirmLabel: "Delete Site",
 			onConfirm: async () => {
 				await onDeleteSite(site);
-				if (editingRow === site.rowNumber) {
-					setEditingRow(null);
-					setEditForm(null);
-				}
 			}
 		});
 	};
-	if (!modulePermission.view) return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-		className: "space-y-6",
-		children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(ModulePermissionBanner, {
-			moduleKey: "sites",
-			moduleLabel: "Sites Directory",
-			permission: modulePermission,
-			activeUser,
-			onOpenProfileModal,
-			onOpenAdminAccounts
-		}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ModuleViewRestrictedState, {
-			moduleLabel: "Sites Directory",
-			activeUser,
-			onSwitchToAdmin: () => onSelectActiveUser("USR-0001"),
-			onOpenProfileModal
-		})]
-	});
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-		className: "space-y-6",
+		className: "space-y-5",
 		children: [
-			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(ModulePermissionBanner, {
-				moduleKey: "sites",
-				moduleLabel: "Sites Directory",
-				permission: modulePermission,
-				activeUser,
-				onOpenProfileModal,
-				onOpenAdminAccounts
+			(!modulePermission.add || !modulePermission.edit) && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: "rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-900",
+				children: [
+					"Active profile ",
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: activeUser.fullName }),
+					" has limited write access on Sites (Add: ",
+					modulePermission.add ? "Yes" : "No",
+					" · Edit: ",
+					modulePermission.edit ? "Yes" : "No",
+					")."
+				]
 			}),
 			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				className: "flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-b border-slate-200 pb-5",
-				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h1", {
-					className: "text-xl font-bold tracking-tight text-slate-900",
-					children: "Sites Directory"
-				}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
-					className: "mt-1 text-sm text-slate-600",
+				className: "flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4",
+				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+					className: "flex flex-wrap flex-1 items-center gap-2.5",
+					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+						type: "button",
+						disabled: !modulePermission.add,
+						onClick: openAddDrawer,
+						className: "inline-flex items-center justify-center gap-1.5 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50 transition-colors shrink-0",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Plus, { className: "h-4 w-4" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Register Site" })]
+					}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "relative flex-1 min-w-[220px] max-w-md",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Search, { className: "pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+							type: "text",
+							value: searchQuery,
+							onChange: (e) => setSearchQuery(e.target.value),
+							placeholder: "Search sites by code, name, developer, or location...",
+							className: "w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 py-2 text-sm text-slate-900 focus:border-slate-900 focus:outline-none"
+						})]
+					})]
+				}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+					className: "text-xs font-medium text-slate-500 shrink-0",
 					children: [
-						"Synced directly with the ",
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-							className: "font-mono font-medium text-slate-800",
-							children: SHEET_NAMES.SITES
+						"Showing ",
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", {
+							className: "text-slate-900",
+							children: filteredSites.length
 						}),
-						" sheet tab (Site Code, Site Name, and Developer)."
-					]
-				})] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-					className: "flex items-center gap-3 text-xs text-slate-500",
-					children: [
-						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { children: [
-							"Total Registered Sites:",
-							" ",
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", {
-								className: "font-mono font-semibold text-slate-900 tabular-nums",
-								children: sites.length
-							})
-						] }),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-							"aria-hidden": "true",
-							children: "·"
+						" of",
+						" ",
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", {
+							className: "text-slate-900",
+							children: sites.length
 						}),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { children: [
-							"Developers:",
-							" ",
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", {
-								className: "font-mono font-semibold text-slate-900 tabular-nums",
-								children: new Set(sites.map((s) => s.developer)).size
-							})
-						] })
+						" site",
+						sites.length === 1 ? "" : "s"
 					]
 				})]
 			}),
 			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				className: "grid grid-cols-1 lg:grid-cols-12 gap-8 items-start",
-				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-					className: "lg:col-span-4 rounded-lg border border-slate-200 bg-white p-6",
-					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "flex items-center gap-2.5 pb-4 border-b border-slate-200",
-						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Building2, { className: "h-4 w-4 text-slate-700" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", {
-							className: "text-sm font-semibold text-slate-900",
-							children: "Register New Site"
-						})]
-					}), !modulePermission.add ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "mt-5 rounded-md border border-amber-200 bg-amber-50/70 p-4 text-xs text-amber-900",
-						children: [
-							"Adding new Sites is disabled for your active user profile (",
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: activeUser.fullName }),
-							")."
-						]
-					}) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("form", {
-						onSubmit: handleCreateSubmit,
-						className: "mt-5 space-y-4",
-						children: [
-							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
-								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
-									htmlFor: "site-code-input",
-									className: "block text-xs font-medium text-slate-700",
-									children: ["Site Code ", /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-										className: "text-red-600",
-										children: "*"
-									})]
+				className: "rounded-xl border border-slate-200 bg-white overflow-hidden",
+				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+					className: "overflow-x-auto",
+					children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("table", {
+						className: "w-full text-left text-sm border-collapse",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("thead", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", {
+							className: "border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-600",
+							children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+									className: "px-4 py-3",
+									children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+										type: "button",
+										onClick: () => toggleSort("code"),
+										className: "inline-flex items-center gap-1 hover:text-slate-900",
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Site Code" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ArrowUpDown, { className: "h-3 w-3 opacity-60" })]
+									})
 								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-									id: "site-code-input",
-									type: "text",
-									value: siteCode,
-									onChange: (e) => setSiteCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "")),
-									placeholder: "e.g. MNL01, BGC02",
-									maxLength: 12,
-									required: true,
-									className: `mt-1.5 w-full rounded-md border px-3 py-2 text-sm font-mono uppercase focus:outline-none ${duplicateSite ? "border-red-400 bg-red-50/40 text-red-900 focus:border-red-600" : "border-slate-300 bg-white text-slate-900 focus:border-slate-900"}`
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+									className: "px-4 py-3",
+									children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+										type: "button",
+										onClick: () => toggleSort("name"),
+										className: "inline-flex items-center gap-1 hover:text-slate-900",
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Site Name" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ArrowUpDown, { className: "h-3 w-3 opacity-60" })]
+									})
 								}),
-								normalizedInputCode && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-									className: "mt-1.5 flex items-start gap-1.5 text-xs",
-									children: duplicateSite ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CircleAlert, { className: "h-3.5 w-3.5 text-red-600 shrink-0 mt-0.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-										className: "text-red-600",
-										children: [
-											"Duplicate Site Code: ",
-											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: duplicateSite.siteCode }),
-											" already exists (",
-											duplicateSite.siteName,
-											", Row #",
-											duplicateSite.rowNumber,
-											")."
-										]
-									})] }) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CircleCheck, { className: "h-3.5 w-3.5 text-emerald-600 shrink-0 mt-0.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-										className: "text-emerald-700",
-										children: [
-											"Site code ",
-											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", {
-												className: "font-mono",
-												children: normalizedInputCode
-											}),
-											" is available."
-										]
-									})] })
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+									className: "px-4 py-3",
+									children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+										type: "button",
+										onClick: () => toggleSort("developer"),
+										className: "inline-flex items-center gap-1 hover:text-slate-900",
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Developer / Owner" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ArrowUpDown, { className: "h-3 w-3 opacity-60" })]
+									})
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+									className: "px-4 py-3",
+									children: "Location"
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+									className: "px-4 py-3 text-right",
+									children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+										type: "button",
+										onClick: () => toggleSort("projects"),
+										className: "inline-flex items-center gap-1 hover:text-slate-900",
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Projects" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ArrowUpDown, { className: "h-3 w-3 opacity-60" })]
+									})
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+									className: "px-4 py-3 text-right",
+									children: "Actions"
 								})
-							] }),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
-								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
-									htmlFor: "site-name-input",
-									className: "block text-xs font-medium text-slate-700",
-									children: ["Site Name ", /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-										className: "text-red-600",
-										children: "*"
-									})]
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-									id: "site-name-input",
-									type: "text",
-									value: siteName,
-									onChange: (e) => setSiteName(e.target.value),
-									placeholder: "e.g. Vertis North Central",
-									required: true,
-									className: `mt-1.5 w-full rounded-md border px-3 py-2 text-sm focus:outline-none ${duplicateSiteName ? "border-red-400 bg-red-50/40 text-red-900 focus:border-red-600" : "border-slate-300 bg-white text-slate-900 focus:border-slate-900"}`
-								}),
-								duplicateSiteName && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
-									className: "mt-1.5 flex items-center gap-1.5 text-xs text-red-600",
+							]
+						}) }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tbody", {
+							className: "divide-y divide-slate-100",
+							children: paginatedSites.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tr", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+								colSpan: 6,
+								className: "px-4 py-10 text-center text-sm text-slate-500",
+								children: sites.length === 0 ? "No sites registered yet. Click \"Register Site\" to add your first location." : "No sites match your search filter."
+							}) }) : paginatedSites.map((site) => {
+								const linkedCount = projectCountBySite[site.siteCode.trim().toUpperCase()] || 0;
+								return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", {
+									className: "hover:bg-slate-50/80 transition-colors",
 									children: [
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CircleAlert, { className: "h-3.5 w-3.5 shrink-0" }),
-										"Site Name already registered under code ",
-										duplicateSiteName.siteCode,
-										"."
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+											className: "px-4 py-3 font-mono font-semibold text-slate-900 whitespace-nowrap",
+											children: site.siteCode
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+											className: "px-4 py-3 font-medium text-slate-900",
+											children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+												className: "flex items-center gap-2",
+												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Building2, { className: "h-4 w-4 text-slate-400 shrink-0" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: site.siteName })]
+											})
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+											className: "px-4 py-3 text-slate-700",
+											children: site.developer || "—"
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+											className: "px-4 py-3 text-slate-600",
+											children: site.location ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+												className: "inline-flex items-center gap-1",
+												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(MapPin, { className: "h-3.5 w-3.5 text-slate-400 shrink-0" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: site.location })]
+											}) : "—"
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+											className: "px-4 py-3 text-right font-mono text-slate-700 tabular-nums",
+											children: linkedCount
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+											className: "px-4 py-3 text-right whitespace-nowrap",
+											children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+												className: "inline-flex items-center gap-1.5",
+												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+													type: "button",
+													disabled: !modulePermission.edit,
+													onClick: () => openEditDrawer(site),
+													className: "inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40",
+													children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(PenLine, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Edit" })]
+												}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+													type: "button",
+													disabled: !modulePermission.edit || linkedCount > 0,
+													onClick: () => handleRequestDelete(site),
+													title: linkedCount > 0 ? `Referenced by ${linkedCount} project(s)` : `Delete ${site.siteCode}`,
+													className: "inline-flex items-center rounded-md border border-slate-200 bg-white p-1.5 text-slate-500 hover:border-red-200 hover:bg-red-50 hover:text-red-600 disabled:opacity-35",
+													children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Trash2, { className: "h-3.5 w-3.5" })
+												})]
+											})
+										})
 									]
-								})
-							] }),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
-								htmlFor: "site-developer-input",
-								className: "block text-xs font-medium text-slate-700",
-								children: ["Developer ", /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-									className: "text-red-600",
+								}, site.siteCode);
+							})
+						})]
+					})
+				}), sortedSites.length > PAGE_SIZE && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+					className: "flex items-center justify-between border-t border-slate-200 bg-slate-50 px-4 py-2.5 text-xs text-slate-600",
+					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { children: [
+						"Page ",
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: safePage }),
+						" of ",
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: totalPages }),
+						" ",
+						"(",
+						sortedSites.length,
+						" sites)"
+					] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "flex items-center gap-1.5",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+							type: "button",
+							disabled: safePage <= 1,
+							onClick: () => setPage((p) => Math.max(1, p - 1)),
+							className: "rounded-md border border-slate-300 bg-white px-2.5 py-1 font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-40",
+							children: "Previous"
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+							type: "button",
+							disabled: safePage >= totalPages,
+							onClick: () => setPage((p) => Math.min(totalPages, p + 1)),
+							className: "rounded-md border border-slate-300 bg-white px-2.5 py-1 font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-40",
+							children: "Next"
+						})]
+					})]
+				})]
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(FormDrawerModal, {
+				isOpen: isDrawerOpen,
+				title: editingSite ? `Edit Site — ${editingSite.siteCode}` : "Register New Project Site",
+				subtitle: editingSite ? "Update site details. Site Code is locked once created to keep project codes consistent." : "Add a construction site code and developer details for use across new projects.",
+				size: "md",
+				onClose: closeDrawer,
+				children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("form", {
+					onSubmit: handleSubmitForm,
+					className: "space-y-4",
+					children: [
+						formError && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-xs text-red-800",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CircleAlert, { className: "h-4 w-4 text-red-600 shrink-0 mt-0.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: formError })]
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
+								className: "block text-xs font-semibold text-slate-700 mb-1",
+								children: ["Site Code ", /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+									className: "text-red-500",
 									children: "*"
 								})]
-							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-								id: "site-developer-input",
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
 								type: "text",
-								value: developer,
-								onChange: (e) => setDeveloper(e.target.value),
-								placeholder: "e.g. Ayala Land Premier",
-								required: true,
-								className: "mt-1.5 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-slate-900 focus:outline-none"
-							})] }),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", {
-								htmlFor: "site-location-input",
-								className: "block text-xs font-medium text-slate-700",
-								children: "Location / Region"
-							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-								id: "site-location-input",
-								type: "text",
-								value: location,
-								onChange: (e) => setLocation(e.target.value),
-								placeholder: "e.g. Quezon City, Metro Manila",
-								className: "mt-1.5 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-slate-900 focus:outline-none"
-							})] }),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-								className: "pt-2",
-								children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-									type: "submit",
-									disabled: !normalizedInputCode || !siteName.trim() || !developer.trim() || Boolean(duplicateSite) || Boolean(duplicateSiteName),
-									className: "flex w-full items-center justify-center gap-2 rounded-md bg-slate-900 px-4 py-2.5 text-xs font-medium text-white hover:bg-slate-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap shrink-0",
-									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Plus, { className: "h-4 w-4" }), "Add Site to Sheet"]
-								})
-							})
-						]
-					})]
-				}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-					className: "lg:col-span-8 rounded-lg border border-slate-200 bg-white",
-					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 px-6 py-4",
-						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", {
-							className: "text-sm font-semibold text-slate-900",
-							children: "Registered Sites List"
-						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
-							className: "text-xs text-slate-500",
-							children: [
-								"Used as the primary site prefix (",
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-									className: "font-mono",
-									children: "SITECODE-TYPE-UNIQUEID"
-								}),
-								") for main projects."
-							]
-						})] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-							className: "relative w-full sm:w-64",
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Search, { className: "pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-								type: "text",
-								value: searchQuery,
-								onChange: (e) => setSearchQuery(e.target.value),
-								placeholder: "Search code, site, developer...",
-								className: "w-full rounded-md border border-slate-300 bg-slate-50/50 pl-8 pr-3 py-1.5 text-xs text-slate-900 focus:border-slate-900 focus:bg-white focus:outline-none"
-							})]
-						})]
-					}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-						className: "overflow-x-auto",
-						children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("table", {
-							className: "w-full text-left border-collapse",
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("thead", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", {
-								className: "border-b border-slate-200 bg-slate-50/70 text-[11px] font-semibold text-slate-500",
+								value: siteCode,
+								disabled: Boolean(editingSite),
+								onChange: (e) => setSiteCode(e.target.value.toUpperCase()),
+								placeholder: "e.g. SITE04",
+								className: "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 font-mono text-sm text-slate-900 focus:border-slate-900 focus:outline-none disabled:bg-slate-100 disabled:text-slate-500"
+							}),
+							!editingSite && duplicateCodeSite && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
+								className: "mt-1 text-xs text-red-600",
 								children: [
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-										className: "py-2.5 px-4 font-mono",
-										children: "Row"
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-										className: "py-2.5 px-4",
-										children: "Site Code"
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-										className: "py-2.5 px-4",
-										children: "Site Name"
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-										className: "py-2.5 px-4",
-										children: "Developer"
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-										className: "py-2.5 px-4",
-										children: "Location"
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-										className: "py-2.5 px-4 text-right",
-										children: "Linked Projects"
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-										className: "py-2.5 px-4 text-right",
-										children: "Actions"
-									})
+									"Code \"",
+									normalizedCode,
+									"\" is already used by",
+									" ",
+									duplicateCodeSite.siteName,
+									"."
 								]
-							}) }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tbody", {
-								className: "divide-y divide-slate-200 text-xs",
-								children: filteredSites.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tr", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
-									colSpan: 7,
-									className: "py-10 px-6 text-center text-slate-500",
-									children: [
-										"No sites found in the ",
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-											className: "font-mono",
-											children: SHEET_NAMES.SITES
-										}),
-										" sheet matching your filter."
-									]
-								}) }) : filteredSites.map((site) => {
-									const isEditing = editingRow === site.rowNumber && editForm;
-									const linkedCount = projectCountBySite[site.siteCode] || 0;
-									return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", {
-										className: "hover:bg-slate-50/80 transition-colors",
-										children: [
-											/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
-												className: "py-3 px-4 font-mono text-slate-400 tabular-nums",
-												children: ["#", site.rowNumber]
-											}),
-											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-												className: "py-3 px-4 font-mono font-semibold text-slate-900",
-												children: site.siteCode
-											}),
-											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-												className: "py-3 px-4 font-medium text-slate-900",
-												children: isEditing ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-													className: "space-y-1",
-													children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-														type: "text",
-														value: editForm.siteName,
-														onChange: (e) => setEditForm({
-															...editForm,
-															siteName: e.target.value
-														}),
-														className: `w-full rounded border px-2 py-1 text-xs ${editDuplicateSiteName ? "border-red-400 bg-red-50/50 text-red-900" : "border-slate-300"}`
-													}), editDuplicateSiteName && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
-														className: "text-[11px] text-red-600",
-														children: [
-															"Duplicate name (",
-															editDuplicateSiteName.siteCode,
-															")"
-														]
-													})]
-												}) : site.siteName
-											}),
-											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-												className: "py-3 px-4 text-slate-700",
-												children: isEditing ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-													type: "text",
-													value: editForm.developer,
-													onChange: (e) => setEditForm({
-														...editForm,
-														developer: e.target.value
-													}),
-													className: "w-full rounded border border-slate-300 px-2 py-1 text-xs"
-												}) : site.developer
-											}),
-											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-												className: "py-3 px-4 text-slate-500",
-												children: isEditing ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-													type: "text",
-													value: editForm.location,
-													onChange: (e) => setEditForm({
-														...editForm,
-														location: e.target.value
-													}),
-													className: "w-full rounded border border-slate-300 px-2 py-1 text-xs"
-												}) : site.location || "—"
-											}),
-											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-												className: "py-3 px-4 text-right font-mono text-slate-700 tabular-nums",
-												children: linkedCount
-											}),
-											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-												className: "py-3 px-4 text-right",
-												children: !modulePermission.edit ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-													className: "text-[11px] font-mono text-slate-400",
-													children: "Read-Only"
-												}) : isEditing ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-													className: "flex items-center justify-end gap-1.5",
-													children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-														type: "button",
-														onClick: () => handleSaveEdit(site.rowNumber),
-														disabled: !editForm.siteName.trim() || !editForm.developer.trim() || Boolean(editDuplicateSiteName),
-														className: "rounded bg-slate-900 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-slate-800 disabled:opacity-40 whitespace-nowrap",
-														children: "Save"
-													}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-														type: "button",
-														onClick: () => {
-															setEditingRow(null);
-															setEditForm(null);
-														},
-														className: "rounded border border-slate-300 p-1 text-slate-500 hover:bg-slate-100",
-														title: "Cancel edit",
-														children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(X, { className: "h-3.5 w-3.5" })
-													})]
-												}) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-													className: "flex items-center justify-end gap-1.5",
-													children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-														type: "button",
-														onClick: () => startEditing(site),
-														className: "inline-flex items-center gap-1 rounded border border-slate-200 px-2 py-1 text-[11px] font-medium text-slate-600 hover:border-slate-300 hover:bg-slate-100 whitespace-nowrap",
-														children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(PenLine, { className: "h-3 w-3" }), "Edit"]
-													}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-														type: "button",
-														onClick: () => handleDeleteSite(site),
-														disabled: linkedCount > 0,
-														title: linkedCount > 0 ? `Cannot delete: ${linkedCount} linked project(s) reference this site` : `Delete site ${site.siteCode}`,
-														className: "inline-flex items-center gap-1 rounded border border-red-200 bg-red-50/60 px-2 py-1 text-[11px] font-medium text-red-700 hover:bg-red-100 disabled:opacity-35 disabled:cursor-not-allowed whitespace-nowrap",
-														children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Trash2, { className: "h-3 w-3" }), "Delete"]
-													})]
-												})
-											})
-										]
-									}, `${site.siteCode}-${site.rowNumber}`);
-								})
+							})
+						] }),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
+								className: "block text-xs font-semibold text-slate-700 mb-1",
+								children: ["Site Name ", /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+									className: "text-red-500",
+									children: "*"
+								})]
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+								type: "text",
+								value: siteName,
+								onChange: (e) => setSiteName(e.target.value),
+								placeholder: "e.g. Northgate Residential Phase 2",
+								className: "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-slate-900 focus:outline-none"
+							}),
+							duplicateNameSite && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
+								className: "mt-1 text-xs text-red-600",
+								children: [
+									"A site with this name already exists (",
+									duplicateNameSite.siteCode,
+									")."
+								]
+							})
+						] }),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", {
+							className: "block text-xs font-semibold text-slate-700 mb-1",
+							children: "Developer / Client Organization"
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+							type: "text",
+							value: developer,
+							onChange: (e) => setDeveloper(e.target.value),
+							placeholder: "e.g. Horizon Land Development Corp.",
+							className: "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-slate-900 focus:outline-none"
+						})] }),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", {
+							className: "block text-xs font-semibold text-slate-700 mb-1",
+							children: "Location / Address"
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+							type: "text",
+							value: location,
+							onChange: (e) => setLocation(e.target.value),
+							placeholder: "e.g. North Business District, Metro City",
+							className: "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-slate-900 focus:outline-none"
+						})] }),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "flex items-center justify-end gap-2 pt-4 border-t border-slate-200",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+								type: "button",
+								onClick: closeDrawer,
+								className: "rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50",
+								children: "Cancel"
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+								type: "submit",
+								disabled: Boolean(duplicateCodeSite || duplicateNameSite),
+								className: "rounded-lg bg-slate-900 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-50",
+								children: editingSite ? "Review & Save Changes" : "Review & Register Site"
 							})]
 						})
-					})]
-				})]
+					]
+				})
 			})
 		]
 	});
 };
 // src/components/HostingPackagesPanel.tsx
-var HostingPackagesPanel = ({ spreadsheetId, sheetData }) => {
+var TARGET_META = [
+	{
+		id: "github-pages",
+		title: "GitHub Pages",
+		zipName: "app-github-pages.zip",
+		subtitle: "Static repo subpath ready (.nojekyll + 404.html)",
+		icon: GitBranch
+	},
+	{
+		id: "netlify",
+		title: "Netlify",
+		zipName: "app-netlify.zip",
+		subtitle: "Netlify Drop or Git publish (netlify.toml + _redirects)",
+		icon: Server
+	},
+	{
+		id: "google-sites-embed",
+		title: "Google Sites Embed",
+		zipName: "app-google-sites-embed.zip",
+		subtitle: "Compact responsive iframe layout + CSP frame headers",
+		icon: Globe
+	}
+];
+var HostingPackagesPanel = ({ spreadsheetId, appsScriptUrl, connectionMode, sheetData }) => {
 	const [selectedTarget, setSelectedTarget] = (0, import_react.useState)("github-pages");
 	const [assetBundle, setAssetBundle] = (0, import_react.useState)(null);
 	const [isLoadingBundle, setIsLoadingBundle] = (0, import_react.useState)(true);
+	const [includeSheetConfig, setIncludeSheetConfig] = (0, import_react.useState)(false);
 	const [includeCurrentLocalEdits, setIncludeCurrentLocalEdits] = (0, import_react.useState)(false);
 	const [copiedId, setCopiedId] = (0, import_react.useState)(null);
 	(0, import_react.useEffect)(() => {
@@ -26606,12 +28312,25 @@ var HostingPackagesPanel = ({ spreadsheetId, sheetData }) => {
 			mounted = false;
 		};
 	}, [spreadsheetId]);
+	const connectionBootstrap = (0, import_react.useMemo)(() => {
+		if (!includeSheetConfig) return null;
+		return {
+			spreadsheetId,
+			appsScriptUrl: isValidAppsScriptUrl(appsScriptUrl) ? appsScriptUrl : "",
+			preferredMode: isValidAppsScriptUrl(appsScriptUrl) ? "apps_script" : connectionMode === "dev_sandbox" ? "dev_sandbox" : "public_gviz"
+		};
+	}, [
+		includeSheetConfig,
+		spreadsheetId,
+		appsScriptUrl,
+		connectionMode
+	]);
 	const packageReports = (0, import_react.useMemo)(() => {
 		if (!assetBundle) return null;
 		const dataToInclude = includeCurrentLocalEdits ? sheetData : null;
-		const ghEntries = buildPortablePackageEntries("github-pages", assetBundle, dataToInclude);
-		const netlifyEntries = buildPortablePackageEntries("netlify", assetBundle, dataToInclude);
-		const gsitesEntries = buildPortablePackageEntries("google-sites-embed", assetBundle, dataToInclude);
+		const ghEntries = buildPortablePackageEntries("github-pages", assetBundle, dataToInclude, connectionBootstrap);
+		const netlifyEntries = buildPortablePackageEntries("netlify", assetBundle, dataToInclude, connectionBootstrap);
+		const gsitesEntries = buildPortablePackageEntries("google-sites-embed", assetBundle, dataToInclude, connectionBootstrap);
 		return {
 			"github-pages": validatePortablePackageEntries("github-pages", ghEntries),
 			netlify: validatePortablePackageEntries("netlify", netlifyEntries),
@@ -26620,570 +28339,253 @@ var HostingPackagesPanel = ({ spreadsheetId, sheetData }) => {
 	}, [
 		assetBundle,
 		includeCurrentLocalEdits,
-		sheetData
+		sheetData,
+		connectionBootstrap
 	]);
 	const activeReport = packageReports ? packageReports[selectedTarget] : null;
 	const activeReadme = (0, import_react.useMemo)(() => buildPackageReadme(selectedTarget), [selectedTarget]);
-	const handleCopyText = (id, content) => {
-		navigator.clipboard.writeText(content);
+	const shareableLink = (0, import_react.useMemo)(() => buildShareableConnectionUrl({
+		spreadsheetId,
+		appsScriptUrl,
+		preferredMode: connectionMode
+	}), [
+		spreadsheetId,
+		appsScriptUrl,
+		connectionMode
+	]);
+	const handleCopy = (id, value) => {
+		navigator.clipboard.writeText(value);
 		setCopiedId(id);
 		window.setTimeout(() => {
 			setCopiedId((prev) => prev === id ? null : prev);
 		}, 2200);
 	};
-	const triggerBlobDownload = (blob, filename) => {
+	const handleDownloadZip = (target) => {
+		if (!assetBundle) return;
+		const zipBuffer = buildZipArchive(buildPortablePackageEntries(target, assetBundle, includeCurrentLocalEdits ? sheetData : null, connectionBootstrap));
+		const blob = new Blob([zipBuffer], { type: "application/zip" });
 		const url = URL.createObjectURL(blob);
-		const link = document.createElement("a");
-		link.href = url;
-		link.download = filename;
-		document.body.appendChild(link);
-		link.click();
-		document.body.removeChild(link);
+		const anchor = document.createElement("a");
+		anchor.href = url;
+		anchor.download = target === "github-pages" ? "app-github-pages.zip" : target === "netlify" ? "app-netlify.zip" : "app-google-sites-embed.zip";
+		document.body.appendChild(anchor);
+		anchor.click();
+		document.body.removeChild(anchor);
 		URL.revokeObjectURL(url);
 	};
-	const handleDownloadPackageZip = (target) => {
-		if (!assetBundle) return;
-		const zipBuffer = buildZipArchive(buildPortablePackageEntries(target, assetBundle, includeCurrentLocalEdits ? sheetData : null));
-		const filename = target === "github-pages" ? "app-github-pages.zip" : target === "netlify" ? "app-netlify.zip" : "app-google-sites-embed.zip";
-		const blob = new Blob([zipBuffer], { type: "application/zip" });
-		triggerBlobDownload(blob, filename);
-	};
-	const handleDownloadDataJsonOnly = () => {
-		if (!sheetData) return;
-		const jsonStr = JSON.stringify(sheetData, null, 2);
-		const blob = new Blob([jsonStr], { type: "application/json;charset=utf-8" });
-		triggerBlobDownload(blob, "data.json");
-	};
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-		className: "rounded-lg border border-slate-200 bg-white p-6 space-y-6",
+		className: "space-y-5",
 		children: [
 			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				className: "flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-200 pb-4",
+				className: "rounded-xl border border-slate-200 bg-white p-5 space-y-4",
 				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-					className: "flex items-start gap-3",
-					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-						className: "flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-slate-900 text-white",
-						children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Package, { className: "h-4 w-4" })
-					}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "flex flex-wrap items-center gap-2",
-						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", {
-							className: "text-sm font-bold text-slate-900",
-							children: "Self-Contained Web Application & Multi-Platform ZIP Exports"
-						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-							className: "rounded border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-[10px] font-mono font-bold text-emerald-800",
-							children: "100% PORTABLE · ZERO EXTERNAL CDNs"
-						})]
+					className: "flex flex-col md:flex-row md:items-center justify-between gap-3",
+					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", {
+						className: "text-base font-bold text-slate-900",
+						children: "Self-Contained Deployment Packages"
 					}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
-						className: "text-xs text-slate-500 mt-0.5",
+						className: "mt-0.5 text-xs text-slate-500",
 						children: [
-							"Download complete, validated, self-contained ZIP deployment packages with all file links in the main directory (",
+							"Export 100% portable ZIP packages with zero external CDNs, local relative ",
 							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", {
 								className: "font-mono",
-								children: "./index.html"
+								children: "./"
 							}),
-							",",
-							" ",
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", {
-								className: "font-mono",
-								children: "./style.css"
-							}),
-							",",
-							" ",
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", {
-								className: "font-mono",
-								children: "./app.js"
-							}),
-							",",
-							" ",
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", {
-								className: "font-mono",
-								children: "./fonts.css"
-							}),
-							",",
-							" ",
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", {
-								className: "font-mono",
-								children: "./data.json"
-							}),
-							",",
-							" ",
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", {
-								className: "font-mono",
-								children: "./logo.svg"
-							}),
-							",",
-							" ",
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", {
-								className: "font-mono",
-								children: "./favicon.svg"
-							}),
-							") and zero root (",
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", {
-								className: "font-mono",
-								children: "/"
-							}),
-							") links."
-						]
-					})] })]
-				}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-					className: "flex flex-wrap items-center gap-2 shrink-0",
-					children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-						type: "button",
-						onClick: handleDownloadDataJsonOnly,
-						className: "inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800 hover:bg-slate-50",
-						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Database, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Export data.json" })]
-					})
-				})]
-			}),
-			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				className: "grid grid-cols-1 md:grid-cols-3 gap-4",
-				children: [
-					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: `rounded-lg border p-4 flex flex-col justify-between gap-4 transition-colors ${selectedTarget === "github-pages" ? "border-slate-900 bg-slate-50/80" : "border-slate-200 bg-white"}`,
-						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-							className: "space-y-2",
-							children: [
-								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-									className: "flex items-center justify-between",
-									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-										className: "inline-flex items-center gap-1.5 text-xs font-bold text-slate-900",
-										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(GitBranch, { className: "h-4 w-4 text-slate-800" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "PACKAGE 1: GITHUB PAGES" })]
-									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-										className: "rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-mono font-bold text-emerald-900",
-										children: "QA PASSED"
-									})]
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-									className: "font-mono text-xs font-bold text-slate-900",
-									children: "app-github-pages.zip"
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
-									className: "text-[11px] text-slate-600 leading-relaxed",
-									children: [
-										"Static GitHub Pages site with all file links in the main folder (",
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", {
-											className: "font-mono",
-											children: "./style.css"
-										}),
-										",",
-										" ",
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", {
-											className: "font-mono",
-											children: "./app.js"
-										}),
-										",",
-										" ",
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", {
-											className: "font-mono",
-											children: "./fonts.css"
-										}),
-										",",
-										" ",
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", {
-											className: "font-mono",
-											children: "./data.json"
-										}),
-										",",
-										" ",
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", {
-											className: "font-mono",
-											children: "./logo.svg"
-										}),
-										",",
-										" ",
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", {
-											className: "font-mono",
-											children: "./favicon.svg"
-										}),
-										",",
-										" ",
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", {
-											className: "font-mono",
-											children: ".nojekyll"
-										}),
-										",",
-										" ",
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", {
-											className: "font-mono",
-											children: "404.html"
-										}),
-										",",
-										" ",
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", {
-											className: "font-mono",
-											children: "README.md"
-										}),
-										"). Works under any repository subpath or main branch with zero Node.js required."
-									]
-								})
-							]
-						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-							className: "flex flex-col gap-2 pt-1",
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-								type: "button",
-								disabled: isLoadingBundle || !assetBundle,
-								onClick: () => handleDownloadPackageZip("github-pages"),
-								className: "w-full inline-flex items-center justify-center gap-1.5 rounded-md bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-40",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Download, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Download app-github-pages.zip" })]
-							}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								className: "flex items-center justify-between text-[11px]",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-									type: "button",
-									onClick: () => setSelectedTarget("github-pages"),
-									className: "font-semibold text-slate-700 hover:text-slate-900 underline",
-									children: "Inspect Files & README"
-								}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("a", {
-									href: "./app-github-pages.zip",
-									download: "app-github-pages.zip",
-									className: "font-mono text-slate-500 hover:text-slate-900 underline",
-									children: "Direct Static Link"
-								})]
-							})]
-						})]
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: `rounded-lg border p-4 flex flex-col justify-between gap-4 transition-colors ${selectedTarget === "netlify" ? "border-slate-900 bg-slate-50/80" : "border-slate-200 bg-white"}`,
-						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-							className: "space-y-2",
-							children: [
-								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-									className: "flex items-center justify-between",
-									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-										className: "inline-flex items-center gap-1.5 text-xs font-bold text-slate-900",
-										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Server, { className: "h-4 w-4 text-slate-800" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "PACKAGE 2: NETLIFY" })]
-									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-										className: "rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-mono font-bold text-emerald-900",
-										children: "QA PASSED"
-									})]
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-									className: "font-mono text-xs font-bold text-slate-900",
-									children: "app-netlify.zip"
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
-									className: "text-[11px] text-slate-600 leading-relaxed",
-									children: [
-										"Ready for instant drag-and-drop on ",
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Netlify Drop" }),
-										" ",
-										"or Git-based deployment with zero build command. All file links live in the main folder (",
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", {
-											className: "font-mono",
-											children: "./index.html"
-										}),
-										",",
-										" ",
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", {
-											className: "font-mono",
-											children: "./style.css"
-										}),
-										",",
-										" ",
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", {
-											className: "font-mono",
-											children: "./app.js"
-										}),
-										",",
-										" ",
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", {
-											className: "font-mono",
-											children: "./fonts.css"
-										}),
-										",",
-										" ",
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", {
-											className: "font-mono",
-											children: "./data.json"
-										}),
-										",",
-										" ",
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", {
-											className: "font-mono",
-											children: "netlify.toml"
-										}),
-										",",
-										" ",
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", {
-											className: "font-mono",
-											children: "_redirects"
-										}),
-										",",
-										" ",
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", {
-											className: "font-mono",
-											children: "README.md"
-										}),
-										")."
-									]
-								})
-							]
-						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-							className: "flex flex-col gap-2 pt-1",
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-								type: "button",
-								disabled: isLoadingBundle || !assetBundle,
-								onClick: () => handleDownloadPackageZip("netlify"),
-								className: "w-full inline-flex items-center justify-center gap-1.5 rounded-md bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-40",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Download, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Download app-netlify.zip" })]
-							}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								className: "flex items-center justify-between text-[11px]",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-									type: "button",
-									onClick: () => setSelectedTarget("netlify"),
-									className: "font-semibold text-slate-700 hover:text-slate-900 underline",
-									children: "Inspect Files & README"
-								}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("a", {
-									href: "./app-netlify.zip",
-									download: "app-netlify.zip",
-									className: "font-mono text-slate-500 hover:text-slate-900 underline",
-									children: "Direct Static Link"
-								})]
-							})]
-						})]
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: `rounded-lg border p-4 flex flex-col justify-between gap-4 transition-colors ${selectedTarget === "google-sites-embed" ? "border-slate-900 bg-slate-50/80" : "border-slate-200 bg-white"}`,
-						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-							className: "space-y-2",
-							children: [
-								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-									className: "flex items-center justify-between",
-									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-										className: "inline-flex items-center gap-1.5 text-xs font-bold text-slate-900",
-										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Globe, { className: "h-4 w-4 text-slate-800" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "PACKAGE 3: GOOGLE SITES" })]
-									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-										className: "rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-mono font-bold text-emerald-900",
-										children: "QA PASSED"
-									})]
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-									className: "font-mono text-xs font-bold text-slate-900",
-									children: "app-google-sites-embed.zip"
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
-									className: "text-[11px] text-slate-600 leading-relaxed",
-									children: [
-										"Standalone responsive embed-ready build for desktop & mobile Google Sites containers. Includes",
-										" ",
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", {
-											className: "font-mono",
-											children: "frame-ancestors"
-										}),
-										" CSP headers, all local HTML/CSS/JS/SVG/Font/JSON files, and step-by-step",
-										" ",
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", {
-											className: "font-mono",
-											children: "README.md"
-										}),
-										" explaining how to publish to Netlify first and embed the HTTPS URL in Google Sites."
-									]
-								})
-							]
-						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-							className: "flex flex-col gap-2 pt-1",
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-								type: "button",
-								disabled: isLoadingBundle || !assetBundle,
-								onClick: () => handleDownloadPackageZip("google-sites-embed"),
-								className: "w-full inline-flex items-center justify-center gap-1.5 rounded-md bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-40",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Download, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Download app-google-sites-embed.zip" })]
-							}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								className: "flex items-center justify-between text-[11px]",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-									type: "button",
-									onClick: () => setSelectedTarget("google-sites-embed"),
-									className: "font-semibold text-slate-700 hover:text-slate-900 underline",
-									children: "Inspect Files & README"
-								}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("a", {
-									href: "./app-google-sites-embed.zip",
-									download: "app-google-sites-embed.zip",
-									className: "font-mono text-slate-500 hover:text-slate-900 underline",
-									children: "Direct Static Link"
-								})]
-							})]
-						})]
-					})
-				]
-			}),
-			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-				className: "flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-xs",
-				children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
-					className: "flex items-start gap-2.5 cursor-pointer",
-					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-						type: "checkbox",
-						checked: includeCurrentLocalEdits,
-						onChange: (e) => setIncludeCurrentLocalEdits(e.target.checked),
-						className: "mt-0.5 h-4 w-4 rounded border-slate-300 text-slate-900"
-					}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "font-semibold text-slate-900",
-						children: [
-							"Embed Active Session Snapshot in",
-							" ",
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", {
-								className: "font-mono",
-								children: "./data.json"
-							}),
-							" (Off by default to keep public ZIPs sanitized)"
-						]
-					}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
-						className: "text-[11px] text-slate-600",
-						children: [
-							"Leave unchecked to bundle strictly synthetic placeholder records in ",
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", {
-								className: "font-mono",
-								children: "./data.json"
-							}),
-							" so real company/employee data is never published in static GitHub Pages files. Live data is loaded dynamically from Google Sheets via",
-							" ",
+							" asset paths, and bundled ",
 							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", {
 								className: "font-mono",
 								children: "google-apps-script/Code.gs"
 							}),
 							"."
 						]
-					})] })]
-				})
-			}),
-			activeReport && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				className: "grid grid-cols-1 lg:grid-cols-12 gap-6 pt-2",
-				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-					className: "lg:col-span-5 space-y-4",
-					children: [
-						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-							className: "rounded-md border border-slate-200 overflow-hidden",
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								className: "flex items-center justify-between bg-slate-100 px-3.5 py-2.5 border-b border-slate-200",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-									className: "inline-flex items-center gap-1.5 text-xs font-bold text-slate-900",
-									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(FolderTree, { className: "h-3.5 w-3.5 text-slate-700" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { children: ["Files Inside ", activeReport.packageName] })]
-								}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-									className: "font-mono text-[11px] font-semibold text-slate-700",
-									children: [
-										activeReport.totalFiles,
-										" files ·",
-										" ",
-										Math.round(activeReport.totalBytes / 1024),
-										" KB"
-									]
-								})]
-							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-								className: "divide-y divide-slate-200 text-xs",
-								children: activeReport.fileList.map((f) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-									className: "flex items-center justify-between px-3.5 py-2 hover:bg-slate-50",
-									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-										className: "font-mono font-medium text-slate-900",
-										children: f.path
-									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-										className: "font-mono text-[11px] text-slate-500",
-										children: f.sizeBytes >= 1024 ? `${(f.sizeBytes / 1024).toFixed(1)} KB` : `${f.sizeBytes} B`
-									})]
-								}, f.path))
-							})]
-						}),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-							className: "rounded-md border border-slate-200 overflow-hidden",
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								className: "flex items-center justify-between bg-slate-100 px-3.5 py-2.5 border-b border-slate-200",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-									className: "inline-flex items-center gap-1.5 text-xs font-bold text-slate-900",
-									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(ShieldCheck, { className: "h-3.5 w-3.5 text-emerald-700" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Quality Assurance (QA) Validation Report" })]
-								}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-									className: "rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-mono font-bold text-emerald-900",
-									children: [
-										activeReport.checks.filter((c) => c.passed).length,
-										"/",
-										activeReport.checks.length,
-										" PASSED"
-									]
-								})]
-							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-								className: "divide-y divide-slate-200 text-xs",
-								children: activeReport.checks.map((chk) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-									className: "p-3 space-y-1",
-									children: [
-										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-											className: "flex items-center justify-between gap-2",
-											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-												className: "font-semibold text-slate-900 flex items-center gap-1.5",
-												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CircleCheck, { className: "h-3.5 w-3.5 text-emerald-600 shrink-0" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: chk.category })]
-											}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-												className: "font-mono text-[10px] font-bold text-emerald-800",
-												children: "VERIFIED"
-											})]
-										}),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-											className: "text-[11px] text-slate-600",
-											children: chk.description
-										}),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-											className: "font-mono text-[10px] text-slate-500",
-											children: chk.detail
-										})
-									]
-								}, chk.id))
-							})]
-						}),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-							className: "rounded-md border border-slate-200 bg-slate-50 p-3.5 space-y-1.5 text-xs",
+					})] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+						type: "button",
+						onClick: () => handleCopy("share-link", shareableLink),
+						className: "inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 shrink-0",
+						title: "Copy a link with your Sheet ID & Apps Script URL so teammates connect automatically on first open",
+						children: [copiedId === "share-link" ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Check, { className: "h-3.5 w-3.5 text-emerald-600" }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Link2, { className: "h-3.5 w-3.5 text-slate-500" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: copiedId === "share-link" ? "Setup Link Copied" : "Copy Auto-Connect Link" })]
+					})]
+				}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+					className: "grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 border-t border-slate-100",
+					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
+						className: "flex items-start gap-2.5 rounded-lg border border-slate-200 bg-slate-50/70 p-3 cursor-pointer",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+							type: "checkbox",
+							checked: includeSheetConfig,
+							onChange: (e) => setIncludeSheetConfig(e.target.checked),
+							className: "mt-0.5 h-4 w-4 rounded border-slate-300 accent-slate-900"
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "text-xs",
 							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-								className: "font-bold text-slate-900",
-								children: "Google Sheets Bridge & Separation Summary"
+								className: "font-semibold text-slate-900",
+								children: "Pre-configure active Google Sheet & Apps Script URL"
 							}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
-								className: "text-[11px] text-slate-600 leading-relaxed",
+								className: "mt-0.5 text-slate-500 leading-relaxed",
 								children: [
-									"Every ZIP includes",
-									" ",
+									"Embeds your current Spreadsheet ID (",
+									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("code", {
+										className: "font-mono",
+										children: [spreadsheetId.slice(0, 12), "…"]
+									}),
+									") and Apps Script ",
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", {
 										className: "font-mono",
-										children: "google-apps-script/Code.gs"
+										children: "/exec"
 									}),
-									" ",
-									"for full Read & Write connectivity to Spreadsheet ID",
-									" ",
+									" URL into ",
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", {
 										className: "font-mono",
-										children: spreadsheetId
+										children: "index.html"
 									}),
-									" without Firebase Auth popups, plus a sanitized synthetic",
+									" so deployed packages sync immediately with zero manual setup."
+								]
+							})]
+						})]
+					}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
+						className: "flex items-start gap-2.5 rounded-lg border border-slate-200 bg-slate-50/70 p-3 cursor-pointer",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+							type: "checkbox",
+							checked: includeCurrentLocalEdits,
+							onChange: (e) => setIncludeCurrentLocalEdits(e.target.checked),
+							className: "mt-0.5 h-4 w-4 rounded border-slate-300 accent-slate-900"
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "text-xs",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "font-semibold text-slate-900",
+								children: [
+									"Snapshot current dataset into fallback",
 									" ",
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", {
 										className: "font-mono",
 										children: "./data.json"
-									}),
-									" for explicit Dev Sandbox testing. Zero credentials or API secrets are stored in client-side code."
+									})
 								]
-							})]
-						})
-					]
-				}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-					className: "lg:col-span-7 flex flex-col rounded-md border border-slate-200 overflow-hidden",
-					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "flex items-center justify-between bg-slate-100 px-4 py-2.5 border-b border-slate-200",
-						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-							className: "inline-flex items-center gap-1.5 text-xs font-bold text-slate-900",
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(FileText, { className: "h-3.5 w-3.5 text-slate-700" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { children: [
-								"Included README.md (",
-								activeReport.packageName,
-								")"
-							] })]
-						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-							className: "flex items-center gap-2",
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-								type: "button",
-								onClick: () => handleCopyText(`readme-${selectedTarget}`, activeReadme),
-								className: "inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-800 hover:bg-slate-50",
-								children: copiedId === `readme-${selectedTarget}` ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Check, { className: "h-3 w-3 text-emerald-700" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Copied README.md" })] }) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Copy, { className: "h-3 w-3" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Copy README.md" })] })
-							}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-								type: "button",
-								onClick: () => handleDownloadPackageZip(selectedTarget),
-								className: "inline-flex items-center gap-1 rounded bg-slate-900 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-slate-800",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(FileArchive, { className: "h-3 w-3" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { children: ["Download ", activeReport.packageName] })]
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+								className: "mt-0.5 text-slate-500 leading-relaxed",
+								children: "Leave unchecked (recommended) for clean synthetic Dev Sandbox fixtures with zero live/confidential records baked into static files."
 							})]
 						})]
-					}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("pre", {
-						className: "flex-1 overflow-auto bg-white p-4 font-mono text-[11px] leading-relaxed text-slate-800 whitespace-pre-wrap max-h-[680px]",
-						children: activeReadme
 					})]
+				})]
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+				className: "grid grid-cols-1 md:grid-cols-3 gap-4",
+				children: TARGET_META.map((pkg) => {
+					const Icon = pkg.icon;
+					const report = packageReports ? packageReports[pkg.id] : null;
+					const isSelected = selectedTarget === pkg.id;
+					return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						onClick: () => setSelectedTarget(pkg.id),
+						className: `rounded-xl border p-4 transition-colors cursor-pointer ${isSelected ? "border-slate-900 bg-white ring-1 ring-slate-900" : "border-slate-200 bg-white hover:border-slate-300"}`,
+						children: [
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "flex items-start justify-between gap-2",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "flex items-center gap-2",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Icon, { className: "h-4 w-4 text-slate-700" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h3", {
+										className: "text-sm font-bold text-slate-900",
+										children: pkg.title
+									})]
+								}), report && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+									className: `rounded px-1.5 py-0.5 text-[11px] font-semibold ${report.allPassed ? "bg-emerald-50 text-emerald-800 border border-emerald-200" : "bg-red-50 text-red-700 border border-red-200"}`,
+									children: report.allPassed ? "QA Passed" : "Check Failed"
+								})]
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+								className: "mt-1.5 text-xs text-slate-500",
+								children: pkg.subtitle
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "mt-3 flex items-center justify-between text-xs text-slate-500 font-mono",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: pkg.zipName }), report && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { children: [
+									report.totalFiles,
+									" files ·",
+									" ",
+									Math.round(report.totalBytes / 1024),
+									" KB"
+								] })]
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+								type: "button",
+								disabled: isLoadingBundle || !assetBundle,
+								onClick: (e) => {
+									e.stopPropagation();
+									handleDownloadZip(pkg.id);
+								},
+								className: "mt-4 w-full inline-flex items-center justify-center gap-1.5 rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-50 transition-colors",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Download, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: isLoadingBundle ? "Preparing Bundle..." : `Download ZIP` })]
+							})
+						]
+					}, pkg.id);
+				})
+			}),
+			activeReport && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: "grid grid-cols-1 lg:grid-cols-12 gap-5",
+				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+					className: "lg:col-span-6 rounded-xl border border-slate-200 bg-white p-5 space-y-3",
+					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "flex items-center justify-between",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "flex items-center gap-2",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(ShieldCheck, { className: "h-4 w-4 text-emerald-600" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("h3", {
+								className: "text-sm font-bold text-slate-900",
+								children: [
+									"Pre-Export QA Verification (",
+									activeReport.packageName,
+									")"
+								]
+							})]
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+							className: "font-mono text-xs text-slate-500",
+							children: [activeReport.totalFiles, " files"]
+						})]
+					}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+						className: "divide-y divide-slate-100",
+						children: activeReport.checks.map((check) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "py-2.5 flex items-start gap-2.5 text-xs",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CircleCheck, { className: `h-4 w-4 shrink-0 mt-0.5 ${check.passed ? "text-emerald-600" : "text-red-600"}` }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "min-w-0",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+									className: "font-semibold text-slate-800",
+									children: check.category
+								}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+									className: "text-slate-500 mt-0.5",
+									children: check.detail
+								})]
+							})]
+						}, check.id))
+					})]
+				}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+					className: "lg:col-span-6 rounded-xl border border-slate-200 bg-white p-5 flex flex-col",
+					children: [
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "flex items-center justify-between mb-3",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "flex items-center gap-2",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(FileArchive, { className: "h-4 w-4 text-slate-600" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h3", {
+									className: "text-sm font-bold text-slate-900",
+									children: "Included README.md Instructions"
+								})]
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+								type: "button",
+								onClick: () => handleCopy("readme", activeReadme),
+								className: "inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50",
+								children: [copiedId === "readme" ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Check, { className: "h-3.5 w-3.5 text-emerald-600" }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Copy, { className: "h-3.5 w-3.5 text-slate-500" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: copiedId === "readme" ? "Copied" : "Copy README" })]
+							})]
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("pre", {
+							className: "flex-1 max-h-[340px] overflow-auto rounded-lg border border-slate-200 bg-slate-50 p-3 text-[11px] leading-relaxed text-slate-800 whitespace-pre-wrap font-mono",
+							children: activeReadme
+						}),
+						assetBundle && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "mt-3 flex items-center gap-2 text-[11px] text-slate-500",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Database, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { children: [
+								"Bundle compiled:",
+								" ",
+								new Date(assetBundle.generatedAt).toLocaleString()
+							] })]
+						})
+					]
 				})]
 			})
 		]
@@ -27191,309 +28593,218 @@ var HostingPackagesPanel = ({ spreadsheetId, sheetData }) => {
 };
 // src/components/MaintenanceTabView.tsx
 var MaintenanceTabView = ({ projectTypes, projects, sites, subProjects, contractors, contractsTCP, contractPaymentsCount, userAccounts, activeUser, adminPermission, initialSubSection = "accounts_dashboard", spreadsheetId, sheetData, spreadsheetTitle, spreadsheetUrl, existingSheets, missingSheets, lastSyncedAt, connectionMode, appsScriptUrl, isLoadingSheet, onForceSync, onOpenConnectionModal, onInitializeSchema, onAddProjectType, onUpdateProjectType, onDeleteProjectType, onSelectActiveUser, onCreateUserAccount, onUpdateUserAccount, onDeleteUserAccount, onOpenProfileModal, requestConfirmation }) => {
-	const [activeAdminSection, setActiveAdminSection] = (0, import_react.useState)(initialSubSection);
-	import_react.useEffect(() => {
-		setActiveAdminSection(initialSubSection);
+	const [activeSubSection, setActiveSubSection] = (0, import_react.useState)(initialSubSection);
+	(0, import_react.useEffect)(() => {
+		setActiveSubSection(initialSubSection);
 	}, [initialSubSection]);
+	const [isTypeDrawerOpen, setIsTypeDrawerOpen] = (0, import_react.useState)(false);
+	const [editingType, setEditingType] = (0, import_react.useState)(null);
 	const [typeCode, setTypeCode] = (0, import_react.useState)("");
 	const [typeName, setTypeName] = (0, import_react.useState)("");
-	const [description, setDescription] = (0, import_react.useState)("");
-	const [active, setActive] = (0, import_react.useState)(true);
-	const [editingRow, setEditingRow] = (0, import_react.useState)(null);
-	const [editForm, setEditForm] = (0, import_react.useState)(null);
-	const normalizedTypeCode = typeCode.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
-	const duplicateType = (0, import_react.useMemo)(() => {
-		if (!normalizedTypeCode) return null;
-		return projectTypes.find((t) => t.typeCode.toUpperCase() === normalizedTypeCode) || null;
-	}, [projectTypes, normalizedTypeCode]);
-	const duplicateTypeName = (0, import_react.useMemo)(() => {
-		const cleanName = typeName.trim().toLowerCase();
-		if (!cleanName) return null;
-		return projectTypes.find((t) => t.typeName.trim().toLowerCase() === cleanName) || null;
-	}, [projectTypes, typeName]);
-	const usageByType = (0, import_react.useMemo)(() => {
-		const counts = {};
-		for (const p of projects) counts[p.typeCode] = (counts[p.typeCode] || 0) + 1;
-		return counts;
+	const [typeDescription, setTypeDescription] = (0, import_react.useState)("");
+	const [typeActive, setTypeActive] = (0, import_react.useState)(true);
+	const [typeError, setTypeError] = (0, import_react.useState)(null);
+	const projectCountByType = (0, import_react.useMemo)(() => {
+		const map = {};
+		for (const p of projects) {
+			const k = p.typeCode.trim().toUpperCase();
+			map[k] = (map[k] || 0) + 1;
+		}
+		return map;
 	}, [projects]);
-	const handleAddSubmit = (e) => {
+	if (!adminPermission.view) return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ModuleViewRestrictedState, {
+		moduleTitle: "Administration & Maintenance",
+		activeUser,
+		onOpenProfileModal,
+		onOpenAdminAccounts: () => setActiveSubSection("accounts_dashboard")
+	});
+	const openAddTypeDrawer = () => {
+		setEditingType(null);
+		setTypeCode("");
+		setTypeName("");
+		setTypeDescription("");
+		setTypeActive(true);
+		setTypeError(null);
+		setIsTypeDrawerOpen(true);
+	};
+	const openEditTypeDrawer = (pt) => {
+		setEditingType(pt);
+		setTypeCode(pt.typeCode);
+		setTypeName(pt.typeName);
+		setTypeDescription(pt.description);
+		setTypeActive(pt.active);
+		setTypeError(null);
+		setIsTypeDrawerOpen(true);
+	};
+	const normalizedTypeCode = typeCode.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, "");
+	const duplicateType = !editingType ? projectTypes.find((t) => t.typeCode.trim().toUpperCase() === normalizedTypeCode) : void 0;
+	const handleSubmitType = (e) => {
 		e.preventDefault();
-		if (!adminPermission.add || !normalizedTypeCode || !typeName.trim() || duplicateType || duplicateTypeName) return;
-		requestConfirmation({
-			title: "Add Project Type Option to Maintenance Sheet",
-			description: "This will append a new project type option to the \"ProjectTypes\" maintenance sheet in Google Sheets. Active options immediately populate the Project Type dropdown during Project Creation.",
-			sheetName: SHEET_NAMES.PROJECT_TYPES,
-			details: [
-				{
-					label: "Type Code (Main Code Segment)",
-					value: normalizedTypeCode
-				},
-				{
-					label: "Dropdown Label (Type Name)",
-					value: typeName.trim()
-				},
-				{
-					label: "Description",
-					value: description.trim() || "—"
-				},
-				{
-					label: "Dropdown Status",
-					value: active ? "Active (Enabled)" : "Inactive (Hidden)"
+		setTypeError(null);
+		if (!normalizedTypeCode) {
+			setTypeError("Type Code is required (e.g. CIV, MEPF, ST7).");
+			return;
+		}
+		if (!typeName.trim()) {
+			setTypeError("Type Name is required.");
+			return;
+		}
+		if (duplicateType) {
+			setTypeError(`Project Type "${normalizedTypeCode}" already exists (${duplicateType.typeName}).`);
+			return;
+		}
+		if (editingType) {
+			const payload = {
+				typeCode: editingType.typeCode,
+				typeName: typeName.trim(),
+				description: typeDescription.trim(),
+				active: typeActive,
+				createdAt: editingType.createdAt
+			};
+			requestConfirmation({
+				title: `Update Project Type — ${editingType.typeCode}`,
+				description: `Save updates for ${editingType.typeCode} (${payload.typeName}).`,
+				sheetName: SHEET_NAMES.PROJECT_TYPES,
+				details: [
+					{
+						label: "Type Code",
+						value: payload.typeCode
+					},
+					{
+						label: "Type Name",
+						value: payload.typeName
+					},
+					{
+						label: "Active",
+						value: payload.active ? "Yes" : "Disabled"
+					}
+				],
+				confirmLabel: "Save Project Type",
+				onConfirm: async () => {
+					await onUpdateProjectType(editingType.rowNumber, payload);
+					setIsTypeDrawerOpen(false);
+					setEditingType(null);
 				}
-			],
-			confirmLabel: "Confirm & Add Option",
-			onConfirm: async () => {
-				await onAddProjectType({
-					typeCode: normalizedTypeCode,
-					typeName: typeName.trim(),
-					description: description.trim(),
-					active
-				});
-				setTypeCode("");
-				setTypeName("");
-				setDescription("");
-				setActive(true);
-			}
-		});
-	};
-	const handleToggleActive = (pt) => {
-		if (!adminPermission.edit) return;
-		const nextActive = !pt.active;
-		requestConfirmation({
-			title: `${nextActive ? "Enable" : "Disable"} Dropdown Option "${pt.typeCode}"`,
-			description: `This will update row ${pt.rowNumber} in the "${SHEET_NAMES.PROJECT_TYPES}" sheet to ${nextActive ? "include this type in the Project Creation dropdown menu" : "hide this type from new project entries while preserving historical records"}.`,
-			sheetName: `${SHEET_NAMES.PROJECT_TYPES}!A${pt.rowNumber}:E${pt.rowNumber}`,
-			details: [
-				{
-					label: "Type Code",
-					value: pt.typeCode
-				},
-				{
-					label: "Type Name",
-					value: pt.typeName
-				},
-				{
-					label: "New Dropdown State",
-					value: nextActive ? "Active" : "Inactive"
+			});
+		} else {
+			const payload = {
+				typeCode: normalizedTypeCode,
+				typeName: typeName.trim(),
+				description: typeDescription.trim(),
+				active: typeActive
+			};
+			requestConfirmation({
+				title: `Add Project Type — ${payload.typeCode}`,
+				description: `Append new classification "${payload.typeName}" to ProjectTypes.`,
+				sheetName: SHEET_NAMES.PROJECT_TYPES,
+				details: [
+					{
+						label: "Type Code",
+						value: payload.typeCode
+					},
+					{
+						label: "Type Name",
+						value: payload.typeName
+					},
+					{
+						label: "Active",
+						value: payload.active ? "Yes" : "Disabled"
+					}
+				],
+				confirmLabel: "Add Project Type",
+				onConfirm: async () => {
+					await onAddProjectType(payload);
+					setIsTypeDrawerOpen(false);
 				}
-			],
-			confirmLabel: `Confirm & ${nextActive ? "Enable" : "Disable"}`,
-			onConfirm: async () => {
-				await onUpdateProjectType(pt.rowNumber, {
-					typeCode: pt.typeCode,
-					typeName: pt.typeName,
-					description: pt.description,
-					active: nextActive,
-					createdAt: pt.createdAt
-				});
-			}
-		});
+			});
+		}
 	};
-	const startEditing = (pt) => {
-		if (!adminPermission.edit) return;
-		setEditingRow(pt.rowNumber);
-		setEditForm({
-			typeCode: pt.typeCode,
-			typeName: pt.typeName,
-			description: pt.description,
-			active: pt.active,
-			createdAt: pt.createdAt
-		});
-	};
-	const editDuplicateTypeName = (0, import_react.useMemo)(() => {
-		if (!editForm) return null;
-		const cleanName = editForm.typeName.trim().toLowerCase();
-		if (!cleanName) return null;
-		return projectTypes.find((t) => t.rowNumber !== editingRow && t.typeName.trim().toLowerCase() === cleanName) || null;
-	}, [
-		projectTypes,
-		editForm,
-		editingRow
-	]);
-	const handleSaveEdit = (rowNumber) => {
-		if (!adminPermission.edit || !editForm || !editForm.typeName.trim() || editDuplicateTypeName) return;
-		requestConfirmation({
-			title: `Update Project Type Row #${rowNumber}`,
-			description: `This will update row ${rowNumber} in the "${SHEET_NAMES.PROJECT_TYPES}" maintenance sheet.`,
-			sheetName: `${SHEET_NAMES.PROJECT_TYPES}!A${rowNumber}:E${rowNumber}`,
-			details: [
-				{
-					label: "Type Code",
-					value: editForm.typeCode
-				},
-				{
-					label: "Type Name",
-					value: editForm.typeName.trim()
-				},
-				{
-					label: "Description",
-					value: editForm.description.trim() || "—"
-				},
-				{
-					label: "Active in Dropdown",
-					value: editForm.active ? "Yes" : "No"
-				}
-			],
-			confirmLabel: "Confirm & Update Option",
-			onConfirm: async () => {
-				await onUpdateProjectType(rowNumber, {
-					...editForm,
-					typeName: editForm.typeName.trim(),
-					description: editForm.description.trim()
-				});
-				setEditingRow(null);
-				setEditForm(null);
-			}
-		});
-	};
-	const handleDeleteProjectType = (pt) => {
-		if (!adminPermission.edit) return;
+	const handleDeleteType = (pt) => {
+		const usedCount = projectCountByType[pt.typeCode.trim().toUpperCase()] || 0;
 		requestConfirmation({
 			title: `Delete Project Type — ${pt.typeCode}`,
-			description: `This will permanently delete "${pt.typeCode} (${pt.typeName})" from the "${SHEET_NAMES.PROJECT_TYPES}" sheet. Types referenced by existing Main Projects cannot be deleted (disable them instead).`,
-			sheetName: `${SHEET_NAMES.PROJECT_TYPES}!A${pt.rowNumber}:E${pt.rowNumber}`,
-			isDestructive: true,
-			details: [
-				{
-					label: "Type Code",
-					value: pt.typeCode
-				},
-				{
-					label: "Dropdown Label",
-					value: pt.typeName
-				},
-				{
-					label: "Projects Using",
-					value: String(usageByType[pt.typeCode] || 0)
-				}
-			],
-			confirmLabel: "Confirm & Delete Project Type",
+			description: usedCount > 0 ? `Project Type ${pt.typeCode} is used by ${usedCount} project(s) and cannot be deleted. Disable it instead.` : `Permanently delete Project Type "${pt.typeName}" (${pt.typeCode}).`,
+			sheetName: SHEET_NAMES.PROJECT_TYPES,
+			details: [{
+				label: "Type Code",
+				value: pt.typeCode
+			}, {
+				label: "Linked Projects",
+				value: String(usedCount)
+			}],
+			confirmLabel: "Delete Type",
 			onConfirm: async () => {
 				await onDeleteProjectType(pt);
-				if (editingRow === pt.rowNumber) {
-					setEditingRow(null);
-					setEditForm(null);
-				}
 			}
 		});
 	};
-	const tableDefinitions = [
+	const worksheetCounts = [
 		{
 			name: SHEET_NAMES.SITES,
-			purpose: "Site Code, Site Name, Developer, Region/Location",
-			rowCount: sites.length
+			count: sites.length
 		},
 		{
 			name: SHEET_NAMES.PROJECT_TYPES,
-			purpose: "Dropdown Maintenance Options (Type Code, Label, Active)",
-			rowCount: projectTypes.length
+			count: projectTypes.length
 		},
 		{
 			name: SHEET_NAMES.PROJECTS,
-			purpose: "Main Projects Registry (SITECODE-TYPE-UNIQUEID)",
-			rowCount: projects.length
+			count: projects.length
 		},
 		{
 			name: SHEET_NAMES.SUB_PROJECTS,
-			purpose: "Mandatory Linked Sub-Projects (1-to-Many with Project ID)",
-			rowCount: subProjects.length
+			count: subProjects.length
 		},
 		{
 			name: SHEET_NAMES.CONTRACTORS,
-			purpose: "Contractor List & Trade Accreditation Directory",
-			rowCount: contractors.length
+			count: contractors.length
 		},
 		{
 			name: SHEET_NAMES.CONTRACTS_TCP,
-			purpose: "Sub-Project TCP, Contractor Awards (OPEN/CLOSED/CANCEL) & Payment Terms (DP, Progress, Retention, WHT)",
-			rowCount: contractsTCP.length
+			count: contractsTCP.length
 		},
 		{
 			name: SHEET_NAMES.CONTRACT_PAYMENTS,
-			purpose: "Contract Payment Lifecycle: RFP Request -> Cheque Release (CV & Withheld) -> Contractor Receipt (OR/CR/Invoice) & Cancellation",
-			rowCount: contractPaymentsCount
+			count: contractPaymentsCount
 		},
 		{
 			name: SHEET_NAMES.USER_ACCOUNTS,
-			purpose: "User Accounts, Role Profiles, Status (ACTIVE/SUSPENDED) & Module Access Matrix (View/Add/Edit)",
-			rowCount: userAccounts.length
+			count: userAccounts.length
 		}
 	];
-	if (!adminPermission.view) return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-		className: "space-y-6",
-		children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(ModulePermissionBanner, {
-			moduleKey: "admin",
-			moduleLabel: "Admin, Schema & Account Management",
-			permission: adminPermission,
-			activeUser,
-			onOpenProfileModal,
-			onOpenAdminAccounts: () => setActiveAdminSection("accounts_dashboard")
-		}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ModuleViewRestrictedState, {
-			moduleLabel: "Admin, Schema & Account Management",
-			activeUser,
-			onSwitchToAdmin: () => onSelectActiveUser("USR-0001"),
-			onOpenProfileModal
-		})]
-	});
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-		className: "space-y-6",
+		className: "space-y-5",
 		children: [
-			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(ModulePermissionBanner, {
-				moduleKey: "admin",
-				moduleLabel: "Admin, Schema & Account Management",
-				permission: adminPermission,
-				activeUser,
-				onOpenProfileModal,
-				onOpenAdminAccounts: () => setActiveAdminSection("accounts_dashboard")
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+				className: "flex flex-wrap items-center gap-2 border-b border-slate-200 pb-3",
+				children: [
+					{
+						id: "accounts_dashboard",
+						label: "Users & Access Matrix",
+						icon: Shield
+					},
+					{
+						id: "backend_and_maintenance",
+						label: "Google Sheet, Schema & Project Types",
+						icon: SlidersVertical
+					},
+					{
+						id: "hosting_packages",
+						label: "Export Deployment ZIPs",
+						icon: Globe
+					}
+				].map((tab) => {
+					const Icon = tab.icon;
+					const active = activeSubSection === tab.id;
+					return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+						type: "button",
+						onClick: () => setActiveSubSection(tab.id),
+						className: `inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-semibold transition-colors ${active ? "bg-slate-900 text-white" : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"}`,
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Icon, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: tab.label })]
+					}, tab.id);
+				})
 			}),
-			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				className: "flex flex-col lg:flex-row lg:items-end justify-between gap-4 border-b border-slate-200 pb-5",
-				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h1", {
-					className: "text-xl font-bold tracking-tight text-slate-900",
-					children: "Admin Account Management, Backend Schema & Dropdown Maintenance"
-				}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
-					className: "mt-1 text-sm text-slate-600",
-					children: [
-						"Manage user accounts and per-module ",
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-							className: "font-mono",
-							children: "View / Add / Edit"
-						}),
-						" permissions, provision all 8 Google Sheet tabs, and maintain Project Type dropdown options."
-					]
-				})] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-					className: "flex flex-wrap items-center gap-1 rounded-lg bg-slate-100 p-1 shrink-0",
-					children: [
-						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-							type: "button",
-							onClick: () => setActiveAdminSection("accounts_dashboard"),
-							className: `inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors whitespace-nowrap ${activeAdminSection === "accounts_dashboard" ? "bg-white text-slate-900 shadow-xs" : "text-slate-600 hover:text-slate-900"}`,
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Shield, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { children: [
-								"Admin Account Management (",
-								userAccounts.length,
-								")"
-							] })]
-						}),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-							type: "button",
-							onClick: () => setActiveAdminSection("backend_and_maintenance"),
-							className: `inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors whitespace-nowrap ${activeAdminSection === "backend_and_maintenance" ? "bg-white text-slate-900 shadow-xs" : "text-slate-600 hover:text-slate-900"}`,
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Database, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { children: [
-								"Backend Schema & Dropdown Maintenance (",
-								8 - missingSheets.length,
-								"/8 Tabs)"
-							] })]
-						}),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-							type: "button",
-							onClick: () => setActiveAdminSection("hosting_packages"),
-							className: `inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors whitespace-nowrap ${activeAdminSection === "hosting_packages" ? "bg-white text-slate-900 shadow-xs" : "text-slate-600 hover:text-slate-900"}`,
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Globe, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Multi-Platform ZIP Exports (GitHub Pages · Netlify · Google Sites)" })]
-						})
-					]
-				})]
-			}),
-			activeAdminSection === "accounts_dashboard" ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(AdminAccountManagementDashboard, {
+			activeSubSection === "accounts_dashboard" && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(AdminAccountManagementDashboard, {
 				userAccounts,
 				activeUser,
 				canAddAccount: adminPermission.add,
@@ -27503,517 +28814,318 @@ var MaintenanceTabView = ({ projectTypes, projects, sites, subProjects, contract
 				onUpdateUserAccount,
 				onDeleteUserAccount,
 				requestConfirmation
-			}) : activeAdminSection === "hosting_packages" ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(HostingPackagesPanel, {
-				spreadsheetId,
-				sheetData,
-				activeUser,
-				onSelectActiveUser
-			}) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				className: "space-y-8",
+			}),
+			activeSubSection === "backend_and_maintenance" && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: "space-y-5",
 				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-					className: "grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch",
-					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "lg:col-span-5 rounded-lg border border-slate-200 bg-white p-6 flex flex-col justify-between space-y-5",
-						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-							className: "space-y-4",
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								className: "flex items-center justify-between border-b border-slate-200 pb-3.5",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-									className: "flex items-center gap-2.5",
-									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Server, { className: "h-4 w-4 text-slate-800" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", {
-										className: "text-sm font-bold text-slate-900",
-										children: "Panel 1 · Google Sheets Connection & Apps Script Bridge"
-									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-										className: "text-xs text-slate-500",
-										children: "Persistent spreadsheet link & Apps Script Web App Read/Write bridge"
-									})] })]
-								}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("a", {
-									href: spreadsheetUrl,
-									target: "_blank",
-									rel: "noopener noreferrer",
-									className: "inline-flex items-center gap-1 rounded border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-800 hover:bg-slate-100 whitespace-nowrap",
-									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Open Google Sheet" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ExternalLink, { className: "h-3 w-3" })]
+					className: "rounded-xl border border-slate-200 bg-white p-5 space-y-4",
+					children: [
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "flex flex-col md:flex-row md:items-center justify-between gap-3",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "flex items-center gap-2",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Database, { className: "h-4 w-4 text-slate-600" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", {
+									className: "text-base font-bold text-slate-900",
+									children: "Google Sheet Database Status"
 								})]
-							}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								className: "space-y-2.5 text-xs",
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
+								className: "mt-1 text-xs text-slate-500",
 								children: [
-									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-										className: "flex items-baseline justify-between gap-4 py-1 border-b border-slate-100",
-										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-											className: "text-slate-500",
-											children: "Connection Mode"
-										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-											className: "font-semibold text-slate-900 text-right",
-											children: connectionMode === "apps_script" ? "Apps Script Bridge (Read & Write)" : connectionMode === "public_gviz" ? "Public Sheet CSV (Read-Only)" : "Dev Sandbox (Browser Local Only)"
-										})]
+									spreadsheetTitle,
+									" · Spreadsheet ID:",
+									" ",
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", {
+										className: "font-mono font-semibold text-slate-700",
+										children: spreadsheetId
 									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-										className: "flex items-baseline justify-between gap-4 py-1 border-b border-slate-100",
-										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-											className: "text-slate-500",
-											children: "Spreadsheet Title"
-										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-											className: "font-semibold text-slate-900 text-right",
-											children: spreadsheetTitle
-										})]
+									" ",
+									"· Last Synced: ",
+									formatSyncTimestamp(lastSyncedAt)
+								]
+							})] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "flex flex-wrap items-center gap-2 shrink-0",
+								children: [
+									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+										type: "button",
+										onClick: onOpenConnectionModal,
+										className: "inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50",
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Link2, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Sheet Connection" })]
 									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-										className: "flex items-baseline justify-between gap-4 py-1 border-b border-slate-100",
-										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-											className: "text-slate-500",
-											children: "Spreadsheet ID"
-										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-											className: "font-mono text-[11px] font-medium text-slate-800 select-all text-right",
-											children: spreadsheetId
-										})]
+									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+										type: "button",
+										disabled: isLoadingSheet,
+										onClick: onForceSync,
+										className: "inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-50",
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(RefreshCw, { className: `h-3.5 w-3.5 ${isLoadingSheet ? "animate-spin" : ""}` }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Sync Now" })]
 									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-										className: "flex items-baseline justify-between gap-4 py-1 border-b border-slate-100",
-										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-											className: "text-slate-500",
-											children: "Apps Script Endpoint"
-										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-											className: "font-mono text-[11px] text-slate-700 text-right truncate max-w-[240px]",
-											children: appsScriptUrl || "Not configured"
-										})]
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-										className: "flex items-baseline justify-between gap-4 py-1",
-										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-											className: "text-slate-500",
-											children: "Last Sync"
-										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-											className: "font-mono text-slate-700 tabular-nums text-right",
-											children: lastSyncedAt ? new Date(lastSyncedAt).toLocaleTimeString() : "—"
-										})]
+									spreadsheetUrl.startsWith("https://") && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("a", {
+										href: spreadsheetUrl,
+										target: "_blank",
+										rel: "noreferrer",
+										className: "inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50",
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Open Sheet" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ExternalLink, { className: "h-3.5 w-3.5" })]
 									})
 								]
 							})]
-						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-							className: "flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-4",
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-								type: "button",
-								onClick: onForceSync,
-								disabled: isLoadingSheet,
-								className: "inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3.5 py-2 text-xs font-medium text-slate-800 hover:bg-slate-50 transition-colors disabled:opacity-50",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(RefreshCw, { className: `h-3.5 w-3.5 ${isLoadingSheet ? "animate-spin" : ""}` }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: isLoadingSheet ? "Syncing Data..." : "Sync Sheet Now" })]
-							}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-								type: "button",
-								onClick: onOpenConnectionModal,
-								className: "inline-flex items-center gap-1.5 rounded-md bg-slate-900 px-3.5 py-2 text-xs font-semibold text-white hover:bg-slate-800 transition-colors",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Link2, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Configure Sheet & Apps Script" })]
-							})]
-						})]
-					}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "lg:col-span-7 rounded-lg border border-slate-200 bg-white p-6 flex flex-col justify-between space-y-5",
-						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-							className: "space-y-4",
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								className: "flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200 pb-3.5",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-									className: "flex items-center gap-2.5",
-									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Database, { className: "h-4 w-4 text-slate-800" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", {
-										className: "text-sm font-bold text-slate-900",
-										children: "Panel 2 · Database Schema & Table Provisioning"
-									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-										className: "text-xs text-slate-500",
-										children: "Verify, initialize, or repair the 8 required Google Sheet tabs and starter lookup records"
-									})] })]
-								}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-									className: `text-xs font-mono font-semibold ${missingSheets.length === 0 ? "text-emerald-700" : "text-amber-700"}`,
-									children: missingSheets.length === 0 ? "All 8 Tables Active" : `${missingSheets.length} Missing Table(s)`
-								})]
-							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-								className: "overflow-x-auto",
-								children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("table", {
-									className: "w-full text-left border-collapse",
-									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("thead", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", {
-										className: "border-b border-slate-200 bg-slate-50/70 text-[11px] font-semibold text-slate-500",
-										children: [
-											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-												className: "py-2 px-3",
-												children: "Sheet Tab Name"
-											}),
-											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-												className: "py-2 px-3",
-												children: "Schema Role & Fields"
-											}),
-											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-												className: "py-2 px-3 text-right",
-												children: "Records"
-											}),
-											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-												className: "py-2 px-3 text-right",
-												children: "Status"
-											})
-										]
-									}) }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tbody", {
-										className: "divide-y divide-slate-100 text-xs",
-										children: tableDefinitions.map((tb) => {
-											const exists = existingSheets.includes(tb.name);
-											return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [
-												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-													className: "py-2 px-3 font-mono font-semibold text-slate-900 whitespace-nowrap",
-													children: tb.name
-												}),
-												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-													className: "py-2 px-3 text-slate-600",
-													children: tb.purpose
-												}),
-												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-													className: "py-2 px-3 text-right font-mono text-slate-800 tabular-nums",
-													children: tb.rowCount
-												}),
-												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-													className: "py-2 px-3 text-right font-mono whitespace-nowrap",
-													children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-														className: exists ? "text-emerald-700 font-semibold" : "text-amber-700 font-semibold",
-														children: exists ? "Ready" : "Missing"
-													})
-												})
-											] }, tb.name);
-										})
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+							className: "grid grid-cols-2 sm:grid-cols-4 gap-2.5",
+							children: worksheetCounts.map((ws) => {
+								const exists = existingSheets.includes(ws.name);
+								return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: `rounded-lg border px-3 py-2.5 text-xs ${exists ? "border-slate-200 bg-slate-50/70" : "border-amber-200 bg-amber-50"}`,
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+										className: "flex items-center justify-between gap-1",
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+											className: "font-mono font-semibold text-slate-900 truncate",
+											children: ws.name
+										}), exists ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(CircleCheck, { className: "h-3.5 w-3.5 text-emerald-600 shrink-0" }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)(CircleAlert, { className: "h-3.5 w-3.5 text-amber-600 shrink-0" })]
+									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+										className: "mt-1 text-slate-500 tabular-nums",
+										children: exists ? `${ws.count} rows` : "Missing tab"
 									})]
-								})
-							})]
-						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-							className: "flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-4",
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-								className: "text-xs text-slate-500",
-								children: "Backend Actions write column headers to all 8 tabs and optionally seed starter lookup & user account rows if empty."
+								}, ws.name);
+							})
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4 text-xs",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "text-slate-600",
+								children: [
+									"Mode:",
+									" ",
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", {
+										className: "text-slate-900",
+										children: connectionMode === "apps_script" ? "Apps Script Bridge (Read & Write)" : connectionMode === "dev_sandbox" ? "Dev Sandbox (Browser Local)" : "Read-Only CSV Feed"
+									}),
+									missingSheets.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+										className: "ml-2 text-amber-700 font-medium",
+										children: ["· Missing: ", missingSheets.join(", ")]
+									})
+								]
 							}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								className: "flex flex-wrap items-center gap-2.5",
+								className: "flex flex-wrap items-center gap-2",
 								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
 									type: "button",
-									onClick: () => onInitializeSchema(true),
-									disabled: !adminPermission.edit,
-									className: "inline-flex items-center gap-1.5 rounded-md bg-slate-900 px-3.5 py-2 text-xs font-semibold text-white hover:bg-slate-800 transition-colors disabled:opacity-40 whitespace-nowrap",
-									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Wrench, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Provision Tables & Seed Starter Data" })]
-								}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-									type: "button",
 									onClick: () => onInitializeSchema(false),
-									disabled: !adminPermission.edit,
-									className: "rounded-md border border-slate-300 bg-white px-3.5 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-40 whitespace-nowrap",
-									children: "Verify / Repair Headers Only"
+									className: "inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Wrench, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Provision Headers Only" })]
+								}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+									type: "button",
+									onClick: () => onInitializeSchema(true),
+									className: "inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Wrench, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Provision & Seed Empty Tabs" })]
 								})]
 							})]
-						})]
-					})]
+						})
+					]
 				}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-					className: "grid grid-cols-1 lg:grid-cols-12 gap-8 items-start",
+					className: "rounded-xl border border-slate-200 bg-white overflow-hidden",
 					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "lg:col-span-4 rounded-lg border border-slate-200 bg-white p-6",
-						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-							className: "flex items-center gap-2.5 pb-4 border-b border-slate-200",
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(SlidersVertical, { className: "h-4 w-4 text-slate-700" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", {
-								className: "text-sm font-bold text-slate-900",
-								children: "Panel 3A · Add Project Type Option"
-							}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
-								className: "text-xs text-slate-500",
-								children: ["Maintains dropdown menu consistency for ", /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-									className: "font-mono",
-									children: "SITECODE-TYPE-UNIQUEID"
-								})]
-							})] })]
-						}), !adminPermission.add ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-							className: "mt-5 rounded-md border border-amber-200 bg-amber-50/70 p-4 text-xs text-amber-900",
+						className: "flex items-center justify-between border-b border-slate-200 bg-slate-50 px-5 py-3.5",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("h3", {
+							className: "text-sm font-bold text-slate-900",
 							children: [
-								"Adding new Project Type options is disabled for your current active profile (",
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: activeUser.fullName }),
-								")."
+								"Project Types Classification (",
+								projectTypes.length,
+								")"
 							]
-						}) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("form", {
-							onSubmit: handleAddSubmit,
-							className: "mt-5 space-y-4",
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
+							className: "text-xs text-slate-500",
 							children: [
-								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
-									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
-										htmlFor: "type-code-input",
-										className: "block text-xs font-medium text-slate-700",
-										children: ["Type Code (Code Segment) ", /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-											className: "text-red-600",
-											children: "*"
-										})]
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-										id: "type-code-input",
-										type: "text",
-										value: typeCode,
-										onChange: (e) => setTypeCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "")),
-										placeholder: "e.g. RES, COM, OFC, INF",
-										maxLength: 8,
-										required: true,
-										className: `mt-1.5 w-full rounded-md border px-3 py-2 text-sm font-mono uppercase focus:outline-none ${duplicateType ? "border-red-400 bg-red-50/40 text-red-900 focus:border-red-600" : "border-slate-300 bg-white text-slate-900 focus:border-slate-900"}`
-									}),
-									normalizedTypeCode && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-										className: "mt-1.5 flex items-start gap-1.5 text-xs",
-										children: duplicateType ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CircleAlert, { className: "h-3.5 w-3.5 text-red-600 shrink-0 mt-0.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-											className: "text-red-600",
-											children: [
-												"Duplicate Type Code:",
-												" ",
-												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: duplicateType.typeCode }),
-												" already exists (",
-												duplicateType.typeName,
-												")."
-											]
-										})] }) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CircleCheck, { className: "h-3.5 w-3.5 text-emerald-600 shrink-0 mt-0.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-											className: "text-emerald-700",
-											children: [
-												"Code",
-												" ",
-												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", {
-													className: "font-mono",
-													children: normalizedTypeCode
-												}),
-												" ",
-												"is unique. Format:",
-												" ",
-												/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-													className: "font-mono font-semibold",
-													children: [
-														"SITE-",
-														normalizedTypeCode,
-														"-UNIT"
-													]
-												})
-											]
-										})] })
-									})
-								] }),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
-									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
-										htmlFor: "type-name-input",
-										className: "block text-xs font-medium text-slate-700",
-										children: ["Dropdown Menu Label ", /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-											className: "text-red-600",
-											children: "*"
-										})]
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-										id: "type-name-input",
-										type: "text",
-										value: typeName,
-										onChange: (e) => setTypeName(e.target.value),
-										placeholder: "e.g. Residential Tower",
-										required: true,
-										className: `mt-1.5 w-full rounded-md border px-3 py-2 text-sm focus:outline-none ${duplicateTypeName ? "border-red-400 bg-red-50/40 text-red-900 focus:border-red-600" : "border-slate-300 bg-white text-slate-900 focus:border-slate-900"}`
-									}),
-									duplicateTypeName && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
-										className: "mt-1.5 flex items-center gap-1.5 text-xs text-red-600",
-										children: [
-											/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CircleAlert, { className: "h-3.5 w-3.5 shrink-0" }),
-											"Label already used by type code ",
-											duplicateTypeName.typeCode,
-											"."
-										]
-									})
-								] }),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", {
-									htmlFor: "type-desc-input",
-									className: "block text-xs font-medium text-slate-700",
-									children: "Scope / Standard Description"
-								}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("textarea", {
-									id: "type-desc-input",
-									rows: 2,
-									value: description,
-									onChange: (e) => setDescription(e.target.value),
-									placeholder: "Describe what projects fall under this classification...",
-									className: "mt-1.5 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-slate-900 focus:outline-none"
-								})] }),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-									className: "flex items-center justify-between pt-1",
-									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", {
-										htmlFor: "type-active-toggle",
-										className: "text-xs font-medium text-slate-700",
-										children: "Enable in Project Creation Dropdown"
-									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-										id: "type-active-toggle",
-										type: "checkbox",
-										checked: active,
-										onChange: (e) => setActive(e.target.checked),
-										className: "h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-900"
-									})]
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-									className: "pt-2",
-									children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-										type: "submit",
-										disabled: !normalizedTypeCode || !typeName.trim() || Boolean(duplicateType) || Boolean(duplicateTypeName),
-										className: "flex w-full items-center justify-center gap-2 rounded-md bg-slate-900 px-4 py-2.5 text-xs font-medium text-white hover:bg-slate-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap shrink-0",
-										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Plus, { className: "h-4 w-4" }), "Save Dropdown Option"]
-									})
-								})
+								"Controls the middle segment of Main Project Codes (e.g. SITE-",
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "ST7" }),
+								"-UNIT)."
 							]
+						})] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+							type: "button",
+							disabled: !adminPermission.add,
+							onClick: openAddTypeDrawer,
+							className: "inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3.5 py-2 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-50",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Plus, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Add Project Type" })]
 						})]
-					}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "lg:col-span-8 rounded-lg border border-slate-200 bg-white",
-						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-							className: "border-b border-slate-200 px-6 py-4",
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("h2", {
-								className: "text-sm font-bold text-slate-900",
+					}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+						className: "overflow-x-auto",
+						children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("table", {
+							className: "w-full text-left text-sm border-collapse",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("thead", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", {
+								className: "border-b border-slate-200 bg-white text-xs font-semibold uppercase tracking-wide text-slate-500",
 								children: [
-									"Panel 3B · Configured Project Type Dropdown Options (",
-									SHEET_NAMES.PROJECT_TYPES,
-									" Sheet)"
-								]
-							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-								className: "text-xs text-slate-500",
-								children: "Only active types appear in the Project Creation dropdown menu to guarantee consistent classification codes across all entries."
-							})]
-						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-							className: "overflow-x-auto",
-							children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("table", {
-								className: "w-full text-left border-collapse",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("thead", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", {
-									className: "border-b border-slate-200 bg-slate-50/70 text-[11px] font-semibold text-slate-500",
-									children: [
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-											className: "py-2.5 px-4 font-mono",
-											children: "Row"
-										}),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-											className: "py-2.5 px-4",
-											children: "Type Code"
-										}),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-											className: "py-2.5 px-4",
-											children: "Dropdown Label"
-										}),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-											className: "py-2.5 px-4",
-											children: "Description"
-										}),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-											className: "py-2.5 px-4",
-											children: "Dropdown State"
-										}),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-											className: "py-2.5 px-4 text-right",
-											children: "Projects Using"
-										}),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-											className: "py-2.5 px-4 text-right",
-											children: "Actions"
-										})
-									]
-								}) }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tbody", {
-									className: "divide-y divide-slate-200 text-xs",
-									children: projectTypes.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tr", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-										colSpan: 7,
-										className: "py-10 px-6 text-center text-slate-500",
-										children: "No project types configured yet. Add your first dropdown option in Panel 3A or click \"Provision Tables & Seed Starter Data\" in Panel 2."
-									}) }) : projectTypes.map((pt) => {
-										const isEditing = editingRow === pt.rowNumber && editForm;
-										const count = usageByType[pt.typeCode] || 0;
-										return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", {
-											className: "hover:bg-slate-50/80 transition-colors",
-											children: [
-												/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
-													className: "py-3 px-4 font-mono text-slate-400 tabular-nums",
-													children: ["#", pt.rowNumber]
-												}),
-												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-													className: "py-3 px-4 font-mono font-semibold text-slate-900",
-													children: pt.typeCode
-												}),
-												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-													className: "py-3 px-4 font-medium text-slate-900",
-													children: isEditing ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-														className: "space-y-1",
-														children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-															type: "text",
-															value: editForm.typeName,
-															onChange: (e) => setEditForm({
-																...editForm,
-																typeName: e.target.value
-															}),
-															className: `w-full rounded border px-2 py-1 text-xs ${editDuplicateTypeName ? "border-red-400 bg-red-50/50 text-red-900" : "border-slate-300"}`
-														}), editDuplicateTypeName && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
-															className: "text-[11px] text-red-600",
-															children: [
-																"Duplicate label (",
-																editDuplicateTypeName.typeCode,
-																")"
-															]
-														})]
-													}) : pt.typeName
-												}),
-												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-													className: "py-3 px-4 text-slate-600 max-w-xs",
-													children: isEditing ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-														type: "text",
-														value: editForm.description,
-														onChange: (e) => setEditForm({
-															...editForm,
-															description: e.target.value
-														}),
-														className: "w-full rounded border border-slate-300 px-2 py-1 text-xs"
-													}) : pt.description || "—"
-												}),
-												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-													className: "py-3 px-4",
-													children: adminPermission.edit ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-														type: "button",
-														onClick: () => handleToggleActive(pt),
-														className: `font-medium underline-offset-2 hover:underline whitespace-nowrap ${pt.active ? "text-emerald-700" : "text-slate-400"}`,
-														children: pt.active ? "Active in Dropdown" : "Disabled"
-													}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-														className: pt.active ? "text-emerald-700 font-medium" : "text-slate-400",
-														children: pt.active ? "Active in Dropdown" : "Disabled"
-													})
-												}),
-												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-													className: "py-3 px-4 text-right font-mono text-slate-700 tabular-nums",
-													children: count
-												}),
-												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-													className: "py-3 px-4 text-right",
-													children: !adminPermission.edit ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-														className: "text-[11px] font-mono text-slate-400",
-														children: "Read-Only"
-													}) : isEditing ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-														className: "flex items-center justify-end gap-1.5",
-														children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-															type: "button",
-															onClick: () => handleSaveEdit(pt.rowNumber),
-															disabled: !editForm.typeName.trim() || Boolean(editDuplicateTypeName),
-															className: "rounded bg-slate-900 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-slate-800 disabled:opacity-40 whitespace-nowrap",
-															children: "Save"
-														}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-															type: "button",
-															onClick: () => {
-																setEditingRow(null);
-																setEditForm(null);
-															},
-															className: "rounded border border-slate-300 p-1 text-slate-500 hover:bg-slate-100",
-															children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(X, { className: "h-3.5 w-3.5" })
-														})]
-													}) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-														className: "flex items-center justify-end gap-1.5",
-														children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-															type: "button",
-															onClick: () => startEditing(pt),
-															className: "inline-flex items-center gap-1 rounded border border-slate-200 px-2 py-1 text-[11px] font-medium text-slate-600 hover:border-slate-300 hover:bg-slate-100 whitespace-nowrap",
-															children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(PenLine, { className: "h-3 w-3" }), "Edit"]
-														}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-															type: "button",
-															onClick: () => handleDeleteProjectType(pt),
-															disabled: count > 0,
-															title: count > 0 ? `Cannot delete: ${count} project(s) use this type; disable it instead` : `Delete project type ${pt.typeCode}`,
-															className: "inline-flex items-center gap-1 rounded border border-red-200 bg-red-50/60 px-2 py-1 text-[11px] font-medium text-red-700 hover:bg-red-100 disabled:opacity-35 disabled:cursor-not-allowed whitespace-nowrap",
-															children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Trash2, { className: "h-3 w-3" }), "Delete"]
-														})]
-													})
-												})
-											]
-										}, `${pt.typeCode}-${pt.rowNumber}`);
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+										className: "px-4 py-2.5",
+										children: "Type Code"
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+										className: "px-4 py-2.5",
+										children: "Type Name"
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+										className: "px-4 py-2.5",
+										children: "Description"
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+										className: "px-4 py-2.5 text-right",
+										children: "Projects"
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+										className: "px-4 py-2.5",
+										children: "Status"
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+										className: "px-4 py-2.5 text-right",
+										children: "Actions"
 									})
-								})]
-							})
-						})]
+								]
+							}) }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tbody", {
+								className: "divide-y divide-slate-100",
+								children: projectTypes.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tr", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+									colSpan: 6,
+									className: "px-4 py-8 text-center text-xs text-slate-500",
+									children: "No project types configured yet."
+								}) }) : projectTypes.map((pt) => {
+									const used = projectCountByType[pt.typeCode.trim().toUpperCase()] || 0;
+									return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", {
+										className: "hover:bg-slate-50/80 transition-colors",
+										children: [
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+												className: "px-4 py-3 font-mono font-bold text-slate-900",
+												children: pt.typeCode
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+												className: "px-4 py-3 font-medium text-slate-900",
+												children: pt.typeName
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+												className: "px-4 py-3 text-xs text-slate-600",
+												children: pt.description || "—"
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+												className: "px-4 py-3 text-right font-mono text-xs text-slate-700 tabular-nums",
+												children: used
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+												className: "px-4 py-3",
+												children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+													className: `inline-block rounded px-2 py-0.5 text-xs font-semibold ${pt.active ? "bg-emerald-50 text-emerald-800 border border-emerald-200" : "bg-slate-100 text-slate-600 border border-slate-200"}`,
+													children: pt.active ? "Active" : "Disabled"
+												})
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+												className: "px-4 py-3 text-right whitespace-nowrap",
+												children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+													className: "inline-flex items-center gap-1.5",
+													children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+														type: "button",
+														disabled: !adminPermission.edit,
+														onClick: () => openEditTypeDrawer(pt),
+														className: "inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40",
+														children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(PenLine, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Edit" })]
+													}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+														type: "button",
+														disabled: !adminPermission.edit || used > 0,
+														onClick: () => handleDeleteType(pt),
+														title: used > 0 ? `Used by ${used} project(s)` : "Delete type",
+														className: "inline-flex items-center rounded-md border border-slate-200 bg-white p-1.5 text-slate-500 hover:border-red-200 hover:bg-red-50 hover:text-red-600 disabled:opacity-35",
+														children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Trash2, { className: "h-3.5 w-3.5" })
+													})]
+												})
+											})
+										]
+									}, pt.typeCode);
+								})
+							})]
+						})
 					})]
 				})]
+			}),
+			activeSubSection === "hosting_packages" && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(HostingPackagesPanel, {
+				spreadsheetId,
+				appsScriptUrl,
+				connectionMode,
+				sheetData
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(FormDrawerModal, {
+				isOpen: isTypeDrawerOpen,
+				title: editingType ? `Edit Project Type — ${editingType.typeCode}` : "Add Project Type",
+				subtitle: "Define a reusable classification code for Main Projects.",
+				size: "md",
+				onClose: () => {
+					setIsTypeDrawerOpen(false);
+					setEditingType(null);
+				},
+				children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("form", {
+					onSubmit: handleSubmitType,
+					className: "space-y-4",
+					children: [
+						typeError && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-xs text-red-800",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CircleAlert, { className: "h-4 w-4 text-red-600 shrink-0 mt-0.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: typeError })]
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
+							className: "block text-xs font-semibold text-slate-700 mb-1",
+							children: ["Type Code ", /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+								className: "text-red-500",
+								children: "*"
+							})]
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+							type: "text",
+							value: typeCode,
+							disabled: Boolean(editingType),
+							onChange: (e) => setTypeCode(e.target.value.toUpperCase()),
+							placeholder: "e.g. MEPF, CIV, ST7",
+							className: "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 font-mono text-sm text-slate-900 disabled:bg-slate-100 disabled:text-slate-500"
+						})] }),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
+							className: "block text-xs font-semibold text-slate-700 mb-1",
+							children: ["Type Name ", /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+								className: "text-red-500",
+								children: "*"
+							})]
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+							type: "text",
+							value: typeName,
+							onChange: (e) => setTypeName(e.target.value),
+							placeholder: "e.g. Mechanical, Electrical & Plumbing Works",
+							className: "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+						})] }),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", {
+							className: "block text-xs font-semibold text-slate-700 mb-1",
+							children: "Description"
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("textarea", {
+							rows: 3,
+							value: typeDescription,
+							onChange: (e) => setTypeDescription(e.target.value),
+							placeholder: "Scope guidelines for this project classification",
+							className: "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+						})] }),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
+							className: "flex items-center gap-2 text-xs font-medium text-slate-700 cursor-pointer",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+								type: "checkbox",
+								checked: typeActive,
+								onChange: (e) => setTypeActive(e.target.checked),
+								className: "h-4 w-4 rounded border-slate-300 accent-slate-900"
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Active (available in New Project dropdown)" })]
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "flex items-center justify-end gap-2 pt-4 border-t border-slate-200",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+								type: "button",
+								onClick: () => {
+									setIsTypeDrawerOpen(false);
+									setEditingType(null);
+								},
+								className: "rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50",
+								children: "Cancel"
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+								type: "submit",
+								disabled: Boolean(duplicateType),
+								className: "rounded-lg bg-slate-900 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-50",
+								children: editingType ? "Review & Save Changes" : "Review & Add Project Type"
+							})]
+						})
+					]
+				})
 			})
 		]
 	});
@@ -28024,10 +29136,37 @@ var MaintenanceTabView = ({ projectTypes, projects, sites, subProjects, contract
 * SPDX-License-Identifier: Apache-2.0
 */
 var SANDBOX_STORAGE_KEY = "sitetrack_dev_sandbox_data_v2";
+var LAST_SYNCED_SHEET_CACHE_KEY = "sitetrack_last_synced_sheet_cache_v2";
+var SIDEBAR_COLLAPSED_KEY = "sitetrack_sidebar_collapsed_v1";
+function loadCachedSheetState(config) {
+	if (config.preferredMode === "dev_sandbox") return {
+		data: loadSavedSandboxDataset(),
+		hasCachedRecords: false
+	};
+	try {
+		const raw = window.localStorage.getItem(LAST_SYNCED_SHEET_CACHE_KEY);
+		if (raw) {
+			const parsed = JSON.parse(raw);
+			if (parsed && parsed.spreadsheetId === config.spreadsheetId && Array.isArray(parsed.projects) && Boolean(parsed.lastSyncedAt)) return {
+				data: parsed,
+				hasCachedRecords: true
+			};
+		}
+	} catch {}
+	return {
+		data: createEmptyInspection(config.spreadsheetId),
+		hasCachedRecords: false
+	};
+}
+function saveSyncedSheetCache(data) {
+	try {
+		window.localStorage.setItem(LAST_SYNCED_SHEET_CACHE_KEY, JSON.stringify(data));
+	} catch {}
+}
 function createEmptyInspection(spreadsheetId) {
 	return {
 		spreadsheetId,
-		title: "SiteTrack Pro — Awaiting Google Sheet Sync",
+		title: "SiteTrack Pro — Awaiting Google Sheet Verification",
 		spreadsheetUrl: `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`,
 		existingSheets: [],
 		missingSheets: Object.values(SHEET_NAMES),
@@ -28055,12 +29194,46 @@ function loadSavedSandboxDataset() {
 	} catch {}
 	return DEFAULT_PORTABLE_DATASET;
 }
+var SECTION_META = {
+	dashboard: {
+		title: "Dashboard & Printable Ledger",
+		subtitle: "Operational project KPIs, payment activity, and formal printable reports"
+	},
+	projects: {
+		title: "Projects",
+		subtitle: "Manage main projects, sub-project progress, and related contracts & payments"
+	},
+	contracts: {
+		title: "Contracts & Payments",
+		subtitle: "Award TCPs, track BIR taxes, and manage chronological payment history"
+	},
+	contractors: {
+		title: "Contractors Registry",
+		subtitle: "Accredited contractors, specialties, active contracts, and summary attachments"
+	},
+	sites: {
+		title: "Sites Directory",
+		subtitle: "Project locations, site codes, and developers"
+	},
+	admin: {
+		title: "Administration",
+		subtitle: "User access matrix, Google Sheet schema, and portable hosting packages"
+	}
+};
 function App() {
 	const [connectionConfig, setConnectionConfig] = (0, import_react.useState)(() => loadSheetConnectionConfig());
 	const [activeMode, setActiveMode] = (0, import_react.useState)(() => connectionConfig.preferredMode);
 	const [activeTab, setActiveTab] = (0, import_react.useState)("dashboard");
 	const [adminInitialSection, setAdminInitialSection] = (0, import_react.useState)("accounts_dashboard");
 	const [preselectedSubProjectId, setPreselectedSubProjectId] = (0, import_react.useState)(null);
+	const [isMobileSidebarOpen, setIsMobileSidebarOpen] = (0, import_react.useState)(false);
+	const [isSidebarCollapsed, setIsSidebarCollapsed] = (0, import_react.useState)(() => {
+		try {
+			return window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "true";
+		} catch {
+			return false;
+		}
+	});
 	const [activeUserId, setActiveUserId] = (0, import_react.useState)("USR-0001");
 	const [isProfileModalOpen, setIsProfileModalOpen] = (0, import_react.useState)(false);
 	const [themeMode, setThemeMode] = (0, import_react.useState)(() => {
@@ -28072,27 +29245,50 @@ function App() {
 	});
 	(0, import_react.useEffect)(() => {
 		const root = document.documentElement;
-		if (themeMode === "dark-grey") root.classList.add("theme-dark-grey");
-		else root.classList.remove("theme-dark-grey");
+		if (themeMode === "dark-grey") root.classList.add("dark");
+		else root.classList.remove("dark");
 		try {
 			window.localStorage.setItem("sitetrack_theme_mode", themeMode);
 		} catch {}
 	}, [themeMode]);
-	const [sheetData, setSheetData] = (0, import_react.useState)(() => connectionConfig.preferredMode === "dev_sandbox" ? loadSavedSandboxDataset() : createEmptyInspection(connectionConfig.spreadsheetId));
+	const toggleSidebarCollapse = () => {
+		setIsSidebarCollapsed((prev) => {
+			const next = !prev;
+			try {
+				window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(next));
+			} catch {}
+			return next;
+		});
+	};
+	const initialCache = (0, import_react.useMemo)(() => loadCachedSheetState(connectionConfig), []);
+	const [sheetData, setSheetData] = (0, import_react.useState)(initialCache.data);
+	const [hasCachedData, setHasCachedData] = (0, import_react.useState)(initialCache.hasCachedRecords);
+	const [healthState, setHealthState] = (0, import_react.useState)(() => {
+		if (typeof navigator !== "undefined" && navigator.onLine === false) return "OFFLINE";
+		if (!validateConnectionConfig(connectionConfig).isValid) return "CONFIGURATION_REQUIRED";
+		return "CONNECTING";
+	});
 	const [isLoadingSheet, setIsLoadingSheet] = (0, import_react.useState)(false);
-	const [connectionError, setConnectionError] = (0, import_react.useState)(null);
+	const [connectionError, setConnectionError] = (0, import_react.useState)(() => {
+		const validation = validateConnectionConfig(connectionConfig);
+		return validation.isValid ? null : validation.reason || null;
+	});
 	const [toastMessage, setToastMessage] = (0, import_react.useState)(null);
 	const [isConnectionModalOpen, setIsConnectionModalOpen] = (0, import_react.useState)(false);
 	const [confirmConfig, setConfirmConfig] = (0, import_react.useState)(null);
 	const [confirmError, setConfirmError] = (0, import_react.useState)(null);
 	const [isExecutingMutation, setIsExecutingMutation] = (0, import_react.useState)(false);
+	const syncInFlightRef = (0, import_react.useRef)(false);
+	const syncSeqRef = (0, import_react.useRef)(0);
+	const lastSyncEpochRef = (0, import_react.useRef)(0);
+	const hasVerifiedConnectionRef = (0, import_react.useRef)(false);
 	const spreadsheetId = connectionConfig.spreadsheetId;
 	const appsScriptUrl = connectionConfig.appsScriptUrl;
 	const showToast = (0, import_react.useCallback)((msg) => {
 		setToastMessage(msg);
 		window.setTimeout(() => {
 			setToastMessage((prev) => prev === msg ? null : prev);
-		}, 5e3);
+		}, 4500);
 	}, []);
 	const updateSandboxData = (0, import_react.useCallback)((updater) => {
 		setSheetData((prev) => {
@@ -28106,10 +29302,39 @@ function App() {
 			return next;
 		});
 	}, []);
+	/**
+	* 9-Step Verified Google Sheets Connection Lifecycle:
+	* 1. Validate saved Spreadsheet ID & Apps Script URL.
+	* 2. Check browser online state.
+	* 3. Display CONNECTING (or SYNCING if already verified).
+	* 4. Test Apps Script endpoint via healthCheck/ping.
+	* 5. Verify returned Spreadsheet ID matches requested ID.
+	* 6. Verify worksheet presence.
+	* 7. Load actual Google Sheets tables.
+	* 8. Validate returned data structure.
+	* 9. Display CONNECTED and persist verified metadata ONLY after full verification.
+	*/
 	const syncFromConnection = (0, import_react.useCallback)(async (configToUse, options = {}) => {
-		const { silent = false, notifySuccess = false } = options;
+		const { silent = false, notifySuccess = false, force = false } = options;
+		if (syncInFlightRef.current && !force) return false;
+		const validation = validateConnectionConfig(configToUse);
+		if (!validation.isValid) {
+			setActiveMode(configToUse.preferredMode);
+			setHealthState("CONFIGURATION_REQUIRED");
+			setConnectionError(validation.reason || "Google Apps Script Web App URL is required. Open Connection Settings to configure.");
+			return false;
+		}
+		if (configToUse.preferredMode !== "dev_sandbox" && typeof navigator !== "undefined" && navigator.onLine === false) {
+			setActiveMode(configToUse.preferredMode);
+			setHealthState("OFFLINE");
+			setConnectionError("No internet connection detected. Previously loaded records remain readable below; editing is disabled until you are back online.");
+			return false;
+		}
+		const seq = ++syncSeqRef.current;
+		syncInFlightRef.current = true;
 		if (!silent) setIsLoadingSheet(true);
-		setConnectionError(null);
+		setHealthState(hasVerifiedConnectionRef.current ? "SYNCING" : "CONNECTING");
+		if (!silent) setConnectionError(null);
 		try {
 			if (configToUse.preferredMode === "dev_sandbox") {
 				let sandboxData = loadSavedSandboxDataset();
@@ -28120,59 +29345,133 @@ function App() {
 						if (json && Array.isArray(json.projects)) sandboxData = json;
 					}
 				} catch {}
+				if (seq !== syncSeqRef.current) return false;
 				setSheetData({
 					...sandboxData,
 					spreadsheetId: configToUse.spreadsheetId
 				});
+				setHasCachedData(false);
 				setActiveMode("dev_sandbox");
+				setHealthState("CONNECTED");
+				setConnectionError(null);
+				hasVerifiedConnectionRef.current = true;
+				lastSyncEpochRef.current = Date.now();
 				if (notifySuccess) showToast("Loaded Dev Sandbox dataset (Browser local only — not connected to Google Sheets).");
 				return true;
 			}
-			if (configToUse.preferredMode === "apps_script" && isValidAppsScriptUrl(configToUse.appsScriptUrl)) {
-				const result = await inspectAndLoadViaAppsScript(configToUse.appsScriptUrl, configToUse.spreadsheetId);
-				setSheetData(result);
+			if (configToUse.preferredMode === "apps_script") {
+				const { inspection, health } = await verifyAndLoadViaAppsScript(configToUse.appsScriptUrl, configToUse.spreadsheetId);
+				if (seq !== syncSeqRef.current) return false;
+				setSheetData(inspection);
+				saveSyncedSheetCache(inspection);
+				setHasCachedData(true);
 				setActiveMode("apps_script");
-				if (notifySuccess) showToast(`Synced ${result.existingSheets.length}/8 worksheets from Google Sheets via Apps Script Bridge (Read & Write).`);
+				setHealthState("CONNECTED");
+				setConnectionError(null);
+				hasVerifiedConnectionRef.current = true;
+				lastSyncEpochRef.current = Date.now();
+				const updatedConfig = saveLastConnectedMetadata({
+					spreadsheetId: inspection.spreadsheetId,
+					spreadsheetTitle: inspection.title,
+					spreadsheetUrl: inspection.spreadsheetUrl,
+					lastConnectedAt: (/* @__PURE__ */ new Date()).toISOString(),
+					lastSyncedAt: inspection.lastSyncedAt,
+					apiVersion: health.apiVersion,
+					mode: "apps_script"
+				});
+				setConnectionConfig(updatedConfig);
+				if (notifySuccess) showToast(`Connected to "${inspection.title}" (${inspection.existingSheets.length}/8 worksheets verified).`);
 				return true;
 			}
 			const result = await inspectAndLoadSpreadsheetPublicGviz(configToUse.spreadsheetId);
+			if (seq !== syncSeqRef.current) return false;
 			setSheetData(result);
+			saveSyncedSheetCache(result);
+			setHasCachedData(true);
 			setActiveMode("public_gviz");
-			if (notifySuccess) showToast(`Synced ${result.existingSheets.length}/8 worksheets from Google Sheet (Read-Only CSV feed).`);
+			setHealthState("CONNECTED");
+			setConnectionError(null);
+			hasVerifiedConnectionRef.current = true;
+			lastSyncEpochRef.current = Date.now();
+			const updatedConfig = saveLastConnectedMetadata({
+				spreadsheetId: result.spreadsheetId,
+				spreadsheetTitle: result.title,
+				spreadsheetUrl: result.spreadsheetUrl,
+				lastConnectedAt: (/* @__PURE__ */ new Date()).toISOString(),
+				lastSyncedAt: result.lastSyncedAt,
+				mode: "public_gviz"
+			});
+			setConnectionConfig(updatedConfig);
+			if (notifySuccess) showToast(`Synced ${result.existingSheets.length}/8 worksheets from Google Sheet (Read-Only CSV).`);
 			return true;
 		} catch (err) {
-			const message = err instanceof Error ? err.message : "Unable to sync with Google Sheets.";
-			setConnectionError(message);
+			if (seq !== syncSeqRef.current) return false;
+			const isBrowserOffline = typeof navigator !== "undefined" && navigator.onLine === false;
+			const message = err instanceof Error ? err.message : "Unable to verify connection with Google Sheets.";
 			setActiveMode(configToUse.preferredMode);
+			setHealthState(isBrowserOffline ? "OFFLINE" : "CONNECTION_ERROR");
+			setConnectionError(message);
 			return false;
 		} finally {
-			if (!silent) setIsLoadingSheet(false);
+			if (seq === syncSeqRef.current) {
+				syncInFlightRef.current = false;
+				if (!silent) setIsLoadingSheet(false);
+			}
 		}
 	}, [showToast]);
 	(0, import_react.useEffect)(() => {
 		syncFromConnection(connectionConfig, { silent: false });
 	}, []);
 	(0, import_react.useEffect)(() => {
-		if (activeMode === "dev_sandbox" || confirmConfig || isProfileModalOpen || isConnectionModalOpen || Boolean(connectionError)) return;
+		const handleOffline = () => {
+			if (connectionConfig.preferredMode !== "dev_sandbox") {
+				setHealthState("OFFLINE");
+				setConnectionError("Internet connection lost. Cached records remain visible below; editing is disabled until reconnected.");
+			}
+		};
+		const handleOnline = () => {
+			if (connectionConfig.preferredMode !== "dev_sandbox") syncFromConnection(connectionConfig, {
+				silent: false,
+				notifySuccess: true
+			});
+		};
+		window.addEventListener("offline", handleOffline);
+		window.addEventListener("online", handleOnline);
+		return () => {
+			window.removeEventListener("offline", handleOffline);
+			window.removeEventListener("online", handleOnline);
+		};
+	}, [connectionConfig, syncFromConnection]);
+	(0, import_react.useEffect)(() => {
+		if (activeMode === "dev_sandbox" || healthState === "CONFIGURATION_REQUIRED" || healthState === "OFFLINE" || confirmConfig || isProfileModalOpen || isConnectionModalOpen) return;
 		const timer = window.setInterval(() => {
-			syncFromConnection(connectionConfig, { silent: true });
-		}, 3e4);
-		return () => window.clearInterval(timer);
+			if (document.visibilityState === "visible" && navigator.onLine !== false && !syncInFlightRef.current) syncFromConnection(connectionConfig, { silent: true });
+		}, 6e4);
+		const handleVisibility = () => {
+			if (document.visibilityState === "visible" && navigator.onLine !== false && Date.now() - lastSyncEpochRef.current > 6e4) syncFromConnection(connectionConfig, { silent: true });
+		};
+		document.addEventListener("visibilitychange", handleVisibility);
+		return () => {
+			window.clearInterval(timer);
+			document.removeEventListener("visibilitychange", handleVisibility);
+		};
 	}, [
 		activeMode,
+		healthState,
 		connectionConfig,
 		confirmConfig,
 		isProfileModalOpen,
 		isConnectionModalOpen,
-		connectionError,
 		syncFromConnection
 	]);
 	const handleApplyConnection = async (nextConfig) => {
 		const saved = saveSheetConnectionConfig(nextConfig);
 		setConnectionConfig(saved);
+		hasVerifiedConnectionRef.current = false;
 		if (await syncFromConnection(saved, {
 			silent: false,
-			notifySuccess: true
+			notifySuccess: true,
+			force: true
 		})) setIsConnectionModalOpen(false);
 	};
 	const handleQuickSwitchToSandbox = async () => {
@@ -28183,7 +29482,8 @@ function App() {
 		setConnectionConfig(saved);
 		await syncFromConnection(saved, {
 			silent: false,
-			notifySuccess: true
+			notifySuccess: true,
+			force: true
 		});
 	};
 	const effectiveUserAccounts = (0, import_react.useMemo)(() => {
@@ -28198,11 +29498,13 @@ function App() {
 	}, [effectiveUserAccounts, activeUserId]);
 	const getAppsScriptTargetOrThrow = () => {
 		if (activeMode === "dev_sandbox") return null;
+		if (healthState === "OFFLINE") throw new Error("Cannot save changes while offline. Reconnect to the internet and click Retry Connection first.");
+		if (healthState === "CONNECTION_ERROR" || healthState === "CONFIGURATION_REQUIRED") throw new Error("Google Sheets is not verified as connected right now. Click Retry Connection or open Connection Settings before saving.");
 		if (activeMode === "apps_script" && isValidAppsScriptUrl(connectionConfig.appsScriptUrl)) return {
 			appsScriptUrl: connectionConfig.appsScriptUrl,
 			spreadsheetId: connectionConfig.spreadsheetId
 		};
-		throw new Error("Cannot save changes in Read-Only Sheet CSV mode. Click the connection badge in the header to deploy and link the Apps Script Web App (Code.gs) for real Google Sheets Read & Write — or explicitly switch to Dev Sandbox Mode for local browser testing.");
+		throw new Error("Cannot save changes in Read-Only Sheet CSV mode. Open Connection Settings to connect your Apps Script Web App (Code.gs) for full Read & Write — or switch to Dev Sandbox for local testing.");
 	};
 	const requestConfirmation = (config) => {
 		setConfirmError(null);
@@ -28216,9 +29518,12 @@ function App() {
 					setConfirmConfig(null);
 					setConfirmError(null);
 					if (activeMode === "apps_script") {
-						await syncFromConnection(connectionConfig, { silent: true });
-						showToast("Changes written to Google Sheets and re-synced successfully.");
-					} else showToast("Saved in Dev Sandbox (Browser Local Only — not written to Google Sheets).");
+						await syncFromConnection(connectionConfig, {
+							silent: true,
+							force: true
+						});
+						showToast("Saved to Google Sheets and verified.");
+					} else showToast("Saved in Dev Sandbox (Browser Local Only).");
 				} catch (err) {
 					const msg = err instanceof Error ? err.message : "Failed to save changes. Please verify your Google Sheet connection.";
 					setConfirmError(msg);
@@ -28232,7 +29537,7 @@ function App() {
 		const missing = sheetData.missingSheets;
 		requestConfirmation({
 			title: seedStarterData ? "Provision Missing Worksheets & Seed Starter Lookups" : "Provision Missing Worksheets & Column Headers",
-			description: activeMode === "dev_sandbox" ? "Reset Dev Sandbox data in your browser to the clean synthetic starter dataset." : `This will run initializeSchema via your Apps Script Web App on Spreadsheet ${spreadsheetId}: creating missing tabs (${missing.length > 0 ? missing.join(", ") : "All 8 tabs verified"}), writing standard headers only on empty tabs, ${seedStarterData ? "and seeding placeholder Sites, Project Types, Contractors, and User Accounts only if those sheets have zero data rows." : "without inserting starter rows."}`,
+			description: activeMode === "dev_sandbox" ? "Reset Dev Sandbox data in your browser to the clean synthetic starter dataset." : `Run initializeSchema on Spreadsheet ${spreadsheetId}: creating missing tabs (${missing.length > 0 ? missing.join(", ") : "All 8 verified"})${seedStarterData ? " and seeding empty lookup tabs without overwriting existing rows." : " with column headers only."}`,
 			sheetName: Object.values(SHEET_NAMES).join(", "),
 			details: [
 				{
@@ -28241,11 +29546,11 @@ function App() {
 				},
 				{
 					label: "Connection Mode",
-					value: activeMode === "apps_script" ? "Apps Script Web App (Read & Write)" : activeMode === "dev_sandbox" ? "Dev Sandbox (Browser Local Only)" : "Read-Only CSV (Requires Apps Script for Writes)"
+					value: activeMode === "apps_script" ? "Apps Script Web App (Read & Write)" : activeMode === "dev_sandbox" ? "Dev Sandbox (Browser Local Only)" : "Read-Only CSV"
 				},
 				{
 					label: "Starter Seed Data",
-					value: seedStarterData ? "Seed empty lookup tabs only (existing rows untouched)" : "Headers only"
+					value: seedStarterData ? "Seed empty lookup tabs only" : "Headers only"
 				}
 			],
 			confirmLabel: "Confirm & Run Provisioning",
@@ -28254,6 +29559,7 @@ function App() {
 				if (target) {
 					const updated = await initializeSchemaViaAppsScript(target.appsScriptUrl, target.spreadsheetId, seedStarterData);
 					setSheetData(updated);
+					saveSyncedSheetCache(updated);
 				} else {
 					try {
 						window.localStorage.removeItem(SANDBOX_STORAGE_KEY);
@@ -28271,742 +29577,988 @@ function App() {
 		setPreselectedSubProjectId(subProjectId);
 		setActiveTab("contracts");
 	};
-	const handleOpenAdminAccounts = () => {
-		setAdminInitialSection("accounts_dashboard");
-		setActiveTab("admin");
-	};
-	const handleOpenMultiPlatformExports = () => {
-		setAdminInitialSection("hosting_packages");
-		setActiveTab("admin");
+	const navigateTo = (tab, adminSub) => {
+		if (adminSub) setAdminInitialSection(adminSub);
+		setActiveTab(tab);
+		setIsMobileSidebarOpen(false);
 	};
 	const isGoogleSitesEmbedMode = typeof document !== "undefined" && document.documentElement.getAttribute("data-embed-mode") === "google-sites";
-	const connectionBadge = (0, import_react.useMemo)(() => {
-		if (activeMode === "apps_script") return {
-			label: "Google Sheet (R/W)",
-			icon: Cloud,
-			className: "border-emerald-300 bg-emerald-50 text-emerald-900 hover:bg-emerald-100"
-		};
-		if (activeMode === "dev_sandbox") return {
-			label: "Dev Sandbox (Local)",
-			icon: FlaskConical,
-			className: "border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100"
-		};
-		return {
-			label: "Sheet CSV (Read-Only)",
-			icon: Database,
-			className: "border-blue-300 bg-blue-50 text-blue-900 hover:bg-blue-100"
-		};
-	}, [activeMode]);
-	const BadgeIcon = connectionBadge.icon;
-	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-		className: "min-h-screen flex flex-col bg-[#F8FAFC] text-slate-900",
+	const healthBadge = (0, import_react.useMemo)(() => {
+		switch (healthState) {
+			case "CONNECTING": return {
+				label: "Connecting…",
+				dotClass: "bg-amber-500 animate-pulse",
+				icon: LoaderCircle,
+				spin: true,
+				className: "border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100"
+			};
+			case "SYNCING": return {
+				label: "Syncing…",
+				dotClass: "bg-blue-500 animate-pulse",
+				icon: RefreshCw,
+				spin: true,
+				className: "border-blue-300 bg-blue-50 text-blue-900 hover:bg-blue-100"
+			};
+			case "OFFLINE": return {
+				label: "Offline",
+				dotClass: "bg-slate-500",
+				icon: WifiOff,
+				spin: false,
+				className: "border-slate-300 bg-slate-100 text-slate-800 hover:bg-slate-200"
+			};
+			case "CONNECTION_ERROR": return {
+				label: "Connection Error",
+				dotClass: "bg-red-600",
+				icon: CircleAlert,
+				spin: false,
+				className: "border-red-300 bg-red-50 text-red-900 hover:bg-red-100"
+			};
+			case "CONFIGURATION_REQUIRED": return {
+				label: "Config Required",
+				dotClass: "bg-amber-600",
+				icon: Settings2,
+				spin: false,
+				className: "border-amber-300 bg-amber-50 text-amber-950 hover:bg-amber-100"
+			};
+			default:
+				if (activeMode === "dev_sandbox") return {
+					label: "Dev Sandbox",
+					dotClass: "bg-amber-500",
+					icon: FlaskConical,
+					spin: false,
+					className: "border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100"
+				};
+				if (activeMode === "public_gviz") return {
+					label: "Connected (Read-Only)",
+					dotClass: "bg-blue-600",
+					icon: Database,
+					spin: false,
+					className: "border-blue-300 bg-blue-50 text-blue-900 hover:bg-blue-100"
+				};
+				return {
+					label: "Connected (R/W)",
+					dotClass: "bg-emerald-600",
+					icon: Cloud,
+					spin: false,
+					className: "border-emerald-300 bg-emerald-50 text-emerald-900 hover:bg-emerald-100"
+				};
+		}
+	}, [healthState, activeMode]);
+	const BadgeIcon = healthBadge.icon;
+	const activeSectionMeta = SECTION_META[activeTab];
+	const displaySpreadsheetTitle = sheetData.title && !sheetData.title.includes("Awaiting") ? sheetData.title : connectionConfig.lastConnectedMeta?.spreadsheetTitle || "Google Sheet";
+	const lastVerifiedSyncDisplay = sheetData.lastSyncedAt || connectionConfig.lastConnectedMeta?.lastSyncedAt || "";
+	const isShowingStaleCache = hasCachedData && activeMode !== "dev_sandbox" && (healthState === "CONNECTION_ERROR" || healthState === "OFFLINE" || healthState === "CONFIGURATION_REQUIRED");
+	const activeUsersList = (0, import_react.useMemo)(() => effectiveUserAccounts.filter((u) => u.status === "ACTIVE" || u.userId === activeUser.userId), [effectiveUserAccounts, activeUser.userId]);
+	const renderSidebar = (collapsed) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+		className: "flex h-full flex-col bg-white border-r border-slate-200 select-none",
 		children: [
 			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				className: "no-print sticky top-0 z-30 bg-white border-b border-slate-200",
-				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("header", {
-					className: `flex flex-wrap items-center justify-between gap-3 ${isGoogleSitesEmbedMode ? "px-4 py-2" : "px-6 py-3"} border-b border-slate-200 bg-white`,
-					children: [
-						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("a", {
-							href: "#top",
-							onClick: (e) => {
-								e.preventDefault();
-								setActiveTab("dashboard");
-							},
-							className: "inline-flex items-center gap-2 text-lg font-bold tracking-tight text-slate-900 whitespace-nowrap shrink-0",
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("img", {
-								src: "./logo.svg",
-								alt: "SiteTrack Pro",
-								width: 26,
-								height: 26,
-								className: "h-6 w-6 rounded shrink-0"
-							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "SiteTrack Pro" })]
-						}),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(ActiveUserWorkspaceBar, {
-							activeUser,
-							allUsers: effectiveUserAccounts,
-							onSelectUser: (uid) => {
-								setActiveUserId(uid);
-								const selected = effectiveUserAccounts.find((u) => u.userId === uid);
-								if (selected) showToast(`Switched active workspace profile to ${selected.fullName} (${selected.roleTitle}).`);
-							},
-							onOpenProfileModal: () => setIsProfileModalOpen(true),
-							onOpenAdminAccounts: handleOpenAdminAccounts,
-							themeMode,
-							onChangeTheme: (newTheme) => setThemeMode(newTheme)
-						}),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-							className: "flex flex-wrap items-center gap-2 shrink-0",
-							children: [
-								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-									type: "button",
-									onClick: handleOpenMultiPlatformExports,
-									className: "inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-800 hover:bg-slate-50 transition-colors whitespace-nowrap",
-									title: "Download Self-Contained ZIP Exports (GitHub Pages, Netlify, Google Sites)",
-									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Download, { className: "h-3.5 w-3.5 text-slate-700" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Export ZIP" })]
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-									type: "button",
-									onClick: () => setIsConnectionModalOpen(true),
-									className: `inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-semibold transition-colors whitespace-nowrap ${connectionBadge.className}`,
-									title: `Configure Google Sheet ID (${spreadsheetId}), Apps Script Bridge (Code.gs), or Dev Sandbox`,
-									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(BadgeIcon, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: connectionBadge.label })]
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-									type: "button",
-									onClick: () => void syncFromConnection(connectionConfig, {
-										silent: false,
-										notifySuccess: true
-									}),
-									disabled: isLoadingSheet,
-									className: "inline-flex items-center gap-1.5 rounded-md bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-800 transition-colors disabled:opacity-50 whitespace-nowrap shrink-0",
-									title: `Reload data from active source (Sheet ID: ${spreadsheetId})`,
-									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(RefreshCw, { className: `h-3.5 w-3.5 ${isLoadingSheet ? "animate-spin" : ""}` }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: isLoadingSheet ? "Syncing..." : "Sync Sheet" })]
-								})
-							]
-						})
-					]
-				}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-					className: `bg-slate-100/80 ${isGoogleSitesEmbedMode ? "px-4 py-1.5" : "px-6 py-2"}`,
-					children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-						className: "mx-auto flex max-w-[1360px] items-center justify-between gap-4",
-						children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("nav", {
-							className: "flex items-center gap-6 text-sm font-medium text-slate-600 overflow-x-auto",
-							children: [
-								["dashboard", "Dashboard"],
-								["projects", "Projects & Sub-Projects"],
-								["contracts", "Contracts & Payments"],
-								["contractors", "Contractors"],
-								["sites", "Sites"],
-								["admin", "Admin & Accounts"]
-							].map(([tabKey, tabLabel]) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-								type: "button",
-								onClick: () => setActiveTab(tabKey),
-								className: `py-1 transition-colors whitespace-nowrap shrink-0 ${activeTab === tabKey ? "text-slate-900 font-semibold underline underline-offset-8 decoration-2" : "hover:text-slate-900"}`,
-								children: tabLabel
-							}, tabKey))
-						})
-					})
+				className: `flex h-14 items-center border-b border-slate-200 shrink-0 ${collapsed ? "justify-center px-2" : "justify-between px-4"}`,
+				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+					type: "button",
+					onClick: () => navigateTo("dashboard"),
+					className: "inline-flex items-center gap-2.5 text-base font-bold tracking-tight text-slate-900 min-w-0",
+					title: "SiteTrack Pro",
+					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("img", {
+						src: "./logo.svg",
+						alt: "SiteTrack Pro",
+						width: 24,
+						height: 24,
+						className: "h-6 w-6 rounded shrink-0"
+					}), !collapsed && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+						className: "truncate",
+						children: "SiteTrack Pro"
+					})]
+				}), !collapsed && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+					className: "flex items-center gap-1",
+					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+						type: "button",
+						onClick: toggleSidebarCollapse,
+						className: "hidden lg:inline-flex rounded-md p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-800",
+						title: "Collapse sidebar",
+						"aria-label": "Collapse sidebar",
+						children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(PanelLeftClose, { className: "h-4 w-4" })
+					}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+						type: "button",
+						onClick: () => setIsMobileSidebarOpen(false),
+						className: "lg:hidden rounded-md p-1 text-slate-500 hover:bg-slate-100",
+						"aria-label": "Close navigation",
+						children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(X, { className: "h-4 w-4" })
+					})]
 				})]
 			}),
-			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("main", {
-				className: `flex-1 mx-auto w-full max-w-[1360px] ${isGoogleSitesEmbedMode ? "px-4 py-4" : "px-6 py-8"}`,
+			collapsed && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+				className: "flex justify-center border-b border-slate-100 py-2",
+				children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+					type: "button",
+					onClick: toggleSidebarCollapse,
+					className: "rounded-md p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-800",
+					title: "Expand sidebar",
+					"aria-label": "Expand sidebar",
+					children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(PanelLeftOpen, { className: "h-4 w-4" })
+				})
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("nav", {
+				className: `flex-1 overflow-y-auto py-4 space-y-5 ${collapsed ? "px-2" : "px-3"}`,
 				children: [
-					activeMode === "dev_sandbox" && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "no-print mb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-2.5 text-xs text-amber-950",
-						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-							className: "flex items-center gap-2",
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(FlaskConical, { className: "h-4 w-4 text-amber-700 shrink-0" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { children: [
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Dev Sandbox Mode (Browser Local Only):" }),
-								" Viewing synthetic placeholder data in browser storage. Changes here are",
-								" ",
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "not" }),
-								" written to Google Sheets."
-							] })]
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [!collapsed && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+						className: "px-2.5 mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400",
+						children: "Overview"
+					}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+						type: "button",
+						onClick: () => navigateTo("dashboard"),
+						title: "Dashboard & Printable Ledger",
+						className: `w-full flex items-center rounded-lg py-2 text-sm font-medium transition-colors ${collapsed ? "justify-center px-2" : "gap-2.5 px-2.5"} ${activeTab === "dashboard" ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-slate-100"}`,
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(LayoutDashboard, { className: "h-4 w-4 shrink-0" }), !collapsed && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Dashboard" })]
+					})] }),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [!collapsed && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+						className: "px-2.5 mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400",
+						children: "Operations"
+					}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "space-y-1",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+							type: "button",
+							onClick: () => navigateTo("projects"),
+							title: `Projects (${sheetData.projects.length})`,
+							className: `w-full flex items-center rounded-lg py-2 text-sm font-medium transition-colors ${collapsed ? "justify-center px-2" : "justify-between gap-2 px-2.5"} ${activeTab === "projects" ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-slate-100"}`,
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+								className: "flex items-center gap-2.5 min-w-0",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(FolderKanban, { className: "h-4 w-4 shrink-0" }), !collapsed && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+									className: "truncate",
+									children: "Projects"
+								})]
+							}), !collapsed && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+								className: "font-mono text-xs opacity-70 tabular-nums",
+								children: sheetData.projects.length
+							})]
 						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
 							type: "button",
-							onClick: () => setIsConnectionModalOpen(true),
-							className: "inline-flex items-center gap-1.5 rounded bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800 whitespace-nowrap shrink-0",
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Link2, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Connect Google Sheet" })]
+							onClick: () => navigateTo("contracts"),
+							title: `Contracts & Payments (${sheetData.contractsTCP.length})`,
+							className: `w-full flex items-center rounded-lg py-2 text-sm font-medium transition-colors ${collapsed ? "justify-center px-2" : "justify-between gap-2 px-2.5"} ${activeTab === "contracts" ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-slate-100"}`,
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+								className: "flex items-center gap-2.5 min-w-0",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(FileSpreadsheet, { className: "h-4 w-4 shrink-0" }), !collapsed && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+									className: "truncate",
+									children: "Contracts & Payments"
+								})]
+							}), !collapsed && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+								className: "font-mono text-xs opacity-70 tabular-nums",
+								children: sheetData.contractsTCP.length
+							})]
 						})]
-					}),
-					activeMode === "public_gviz" && !connectionError && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "no-print mb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-lg border border-blue-200 bg-blue-50/80 px-4 py-2.5 text-xs text-blue-950",
-						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-							className: "flex items-center gap-2",
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Database, { className: "h-4 w-4 text-blue-700 shrink-0" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { children: [
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Google Sheet Read-Only Mode (CSV Feed):" }),
-								" Reading live records from Sheet",
+					})] }),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [!collapsed && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+						className: "px-2.5 mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400",
+						children: "Directories"
+					}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "space-y-1",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+							type: "button",
+							onClick: () => navigateTo("contractors"),
+							title: `Contractors (${sheetData.contractors.length})`,
+							className: `w-full flex items-center rounded-lg py-2 text-sm font-medium transition-colors ${collapsed ? "justify-center px-2" : "justify-between gap-2 px-2.5"} ${activeTab === "contractors" ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-slate-100"}`,
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+								className: "flex items-center gap-2.5 min-w-0",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(HardHat, { className: "h-4 w-4 shrink-0" }), !collapsed && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+									className: "truncate",
+									children: "Contractors"
+								})]
+							}), !collapsed && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+								className: "font-mono text-xs opacity-70 tabular-nums",
+								children: sheetData.contractors.length
+							})]
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+							type: "button",
+							onClick: () => navigateTo("sites"),
+							title: `Sites (${sheetData.sites.length})`,
+							className: `w-full flex items-center rounded-lg py-2 text-sm font-medium transition-colors ${collapsed ? "justify-center px-2" : "justify-between gap-2 px-2.5"} ${activeTab === "sites" ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-slate-100"}`,
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+								className: "flex items-center gap-2.5 min-w-0",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Building2, { className: "h-4 w-4 shrink-0" }), !collapsed && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+									className: "truncate",
+									children: "Sites"
+								})]
+							}), !collapsed && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+								className: "font-mono text-xs opacity-70 tabular-nums",
+								children: sheetData.sites.length
+							})]
+						})]
+					})] }),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [!collapsed && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+						className: "px-2.5 mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400",
+						children: "Administration"
+					}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "space-y-1",
+						children: [
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+								type: "button",
+								onClick: () => navigateTo("admin", "accounts_dashboard"),
+								title: "Users & Access",
+								className: `w-full flex items-center rounded-lg py-2 text-sm font-medium transition-colors ${collapsed ? "justify-center px-2" : "gap-2.5 px-2.5"} ${activeTab === "admin" && adminInitialSection === "accounts_dashboard" ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-slate-100"}`,
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Shield, { className: "h-4 w-4 shrink-0" }), !collapsed && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+									className: "truncate",
+									children: "Users & Access"
+								})]
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+								type: "button",
+								onClick: () => navigateTo("admin", "backend_and_maintenance"),
+								title: "Sheet & Schema",
+								className: `w-full flex items-center rounded-lg py-2 text-sm font-medium transition-colors ${collapsed ? "justify-center px-2" : "gap-2.5 px-2.5"} ${activeTab === "admin" && adminInitialSection === "backend_and_maintenance" ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-slate-100"}`,
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(SlidersVertical, { className: "h-4 w-4 shrink-0" }), !collapsed && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+									className: "truncate",
+									children: "Sheet & Schema"
+								})]
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+								type: "button",
+								onClick: () => navigateTo("admin", "hosting_packages"),
+								title: "Export Packages",
+								className: `w-full flex items-center rounded-lg py-2 text-sm font-medium transition-colors ${collapsed ? "justify-center px-2" : "gap-2.5 px-2.5"} ${activeTab === "admin" && adminInitialSection === "hosting_packages" ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-slate-100"}`,
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Download, { className: "h-4 w-4 shrink-0" }), !collapsed && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+									className: "truncate",
+									children: "Export Packages"
+								})]
+							})
+						]
+					})] })
+				]
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: `border-t border-slate-200 shrink-0 bg-slate-50/70 ${collapsed ? "p-2 space-y-2" : "p-3 space-y-2.5"}`,
+				children: [!collapsed && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", {
+					htmlFor: "sidebar-user-select",
+					className: "block text-[11px] font-medium text-slate-500 mb-1",
+					children: "Active Profile"
+				}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("select", {
+					id: "sidebar-user-select",
+					value: activeUser.userId,
+					onChange: (e) => {
+						const uid = e.target.value;
+						setActiveUserId(uid);
+						const selected = effectiveUserAccounts.find((u) => u.userId === uid);
+						if (selected) showToast(`Switched active profile to ${selected.fullName} (${selected.roleTitle}).`);
+					},
+					className: "w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs font-medium text-slate-900 focus:border-slate-900 focus:outline-none",
+					children: activeUsersList.map((u) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("option", {
+						value: u.userId,
+						children: [
+							u.fullName,
+							" (",
+							u.roleTitle,
+							")"
+						]
+					}, u.userId))
+				})] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+					className: collapsed ? "flex flex-col gap-1.5" : "grid grid-cols-2 gap-1.5",
+					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+						type: "button",
+						onClick: () => setIsProfileModalOpen(true),
+						title: `Profile: ${activeUser.fullName}`,
+						className: "inline-flex items-center justify-center gap-1.5 rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(UserCog, { className: "h-3.5 w-3.5 shrink-0" }), !collapsed && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Profile" })]
+					}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+						type: "button",
+						onClick: () => setThemeMode((prev) => prev === "dark-grey" ? "light" : "dark-grey"),
+						className: "inline-flex items-center justify-center gap-1.5 rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100",
+						title: "Toggle Light / Dark theme",
+						children: themeMode === "dark-grey" ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Sun, { className: "h-3.5 w-3.5 text-amber-500 shrink-0" }), !collapsed && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Light" })] }) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Moon, { className: "h-3.5 w-3.5 text-slate-600 shrink-0" }), !collapsed && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Dark" })] })
+					})]
+				})]
+			})
+		]
+	});
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+		className: "min-h-screen flex bg-[#F6F8FA] text-slate-900",
+		children: [
+			!isGoogleSitesEmbedMode && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("aside", {
+				className: `no-print hidden lg:block shrink-0 sticky top-0 h-screen transition-[width] duration-200 ${isSidebarCollapsed ? "w-16" : "w-60"}`,
+				children: renderSidebar(isSidebarCollapsed)
+			}),
+			isMobileSidebarOpen && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+				className: "no-print fixed inset-0 z-40 flex bg-slate-950/50 lg:hidden",
+				onClick: (e) => {
+					if (e.target === e.currentTarget) setIsMobileSidebarOpen(false);
+				},
+				children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+					className: "w-64 max-w-[85vw] h-full",
+					children: renderSidebar(false)
+				})
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: "flex-1 min-w-0 flex flex-col",
+				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("header", {
+					className: "no-print sticky top-0 z-30 min-h-14 border-b border-slate-200 bg-white px-4 sm:px-6 py-2 flex items-center justify-between gap-3",
+					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "flex items-center gap-3 min-w-0",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+							type: "button",
+							onClick: () => setIsMobileSidebarOpen(true),
+							className: `${isGoogleSitesEmbedMode ? "inline-flex" : "inline-flex lg:hidden"} items-center justify-center rounded-md border border-slate-200 p-1.5 text-slate-700 hover:bg-slate-100`,
+							"aria-label": "Open menu",
+							children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Menu, { className: "h-4 w-4" })
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "min-w-0",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h1", {
+								className: "text-sm sm:text-base font-bold text-slate-900 truncate",
+								children: activeSectionMeta.title
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+								className: "hidden md:block text-[11px] text-slate-500 truncate",
+								children: activeSectionMeta.subtitle
+							})]
+						})]
+					}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "flex items-center gap-2 shrink-0",
+						children: [
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "hidden xl:flex flex-col items-end text-right mr-1 max-w-[230px]",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+									className: "text-[11px] font-semibold text-slate-800 truncate w-full",
+									title: `${displaySpreadsheetTitle} (${spreadsheetId})`,
+									children: displaySpreadsheetTitle
+								}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+									className: "text-[10px] font-mono text-slate-500",
+									children: lastVerifiedSyncDisplay ? `Synced ${formatSyncTimestamp(lastVerifiedSyncDisplay)}` : "Not yet synced"
+								})]
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+								type: "button",
+								onClick: () => setIsConnectionModalOpen(true),
+								className: `inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors whitespace-nowrap ${healthBadge.className}`,
+								title: `Connection Status: ${healthBadge.label} · Sheet: ${displaySpreadsheetTitle} (${spreadsheetId})`,
+								children: [
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: `h-2 w-2 rounded-full shrink-0 ${healthBadge.dotClass}` }),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)(BadgeIcon, { className: `h-3.5 w-3.5 shrink-0 ${healthBadge.spin ? "animate-spin" : ""}` }),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+										className: "hidden sm:inline",
+										children: healthBadge.label
+									})
+								]
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+								type: "button",
+								onClick: () => void syncFromConnection(connectionConfig, {
+									silent: false,
+									notifySuccess: true,
+									force: true
+								}),
+								disabled: isLoadingSheet || healthState === "CONNECTING",
+								className: "inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-50 transition-colors whitespace-nowrap",
+								title: lastVerifiedSyncDisplay ? `Last verified sync: ${formatSyncTimestamp(lastVerifiedSyncDisplay)}` : "Sync with Google Sheets",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(RefreshCw, { className: `h-3.5 w-3.5 ${isLoadingSheet || healthState === "SYNCING" ? "animate-spin" : ""}` }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: healthState === "CONNECTION_ERROR" || healthState === "OFFLINE" ? "Retry" : isLoadingSheet ? "Syncing..." : "Sync Now" })]
+							})
+						]
+					})]
+				}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("main", {
+					className: `flex-1 w-full mx-auto max-w-[1440px] ${isGoogleSitesEmbedMode ? "p-3 sm:p-4" : "p-4 sm:p-6"} space-y-4`,
+					children: [
+						toastMessage && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "no-print flex items-center justify-between rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-xs text-emerald-900",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "flex items-center gap-2",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CircleCheck, { className: "h-4 w-4 text-emerald-600 shrink-0" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+									className: "font-medium",
+									children: toastMessage
+								})]
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+								type: "button",
+								onClick: () => setToastMessage(null),
+								className: "text-emerald-700 hover:underline font-medium",
+								children: "Dismiss"
+							})]
+						}),
+						(healthState === "CONNECTION_ERROR" || healthState === "OFFLINE" || healthState === "CONFIGURATION_REQUIRED") && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: `no-print flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-lg border px-4 py-3 text-xs ${healthState === "CONFIGURATION_REQUIRED" ? "border-amber-300 bg-amber-50 text-amber-950" : healthState === "OFFLINE" ? "border-slate-300 bg-slate-100 text-slate-900" : "border-red-200 bg-red-50 text-red-900"}`,
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "flex items-start gap-2.5",
+								children: [healthState === "OFFLINE" ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(WifiOff, { className: "h-4 w-4 text-slate-700 shrink-0 mt-0.5" }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)(CircleAlert, { className: `h-4 w-4 shrink-0 mt-0.5 ${healthState === "CONFIGURATION_REQUIRED" ? "text-amber-700" : "text-red-600"}` }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "space-y-0.5",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", {
+										className: "font-bold",
+										children: healthState === "CONFIGURATION_REQUIRED" ? "Google Sheets Configuration Required: " : healthState === "OFFLINE" ? "Offline Mode: " : "Google Sheets Connection Error: "
+									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: connectionError || "Unable to verify connection to Google Sheets." })] }), isShowingStaleCache && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+										className: "text-[11px] font-medium opacity-90",
+										children: [
+											"Showing cached data from",
+											" ",
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+												className: "font-mono font-semibold",
+												children: formatSyncTimestamp(lastVerifiedSyncDisplay)
+											}),
+											". Records remain readable, but edits are paused until a live connection is verified."
+										]
+									})]
+								})]
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "flex flex-wrap items-center gap-2 shrink-0",
+								children: [
+									healthState !== "CONFIGURATION_REQUIRED" && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+										type: "button",
+										disabled: isLoadingSheet,
+										onClick: () => void syncFromConnection(connectionConfig, {
+											silent: false,
+											notifySuccess: true,
+											force: true
+										}),
+										className: "inline-flex items-center gap-1.5 rounded-md bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-50",
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(RefreshCw, { className: `h-3.5 w-3.5 ${isLoadingSheet ? "animate-spin" : ""}` }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Retry Connection" })]
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+										type: "button",
+										onClick: () => setIsConnectionModalOpen(true),
+										className: "inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-900 hover:bg-slate-50",
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Link2, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Connection Settings" })]
+									}),
+									healthState === "CONFIGURATION_REQUIRED" && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+										type: "button",
+										onClick: () => void handleQuickSwitchToSandbox(),
+										className: "rounded-md border border-amber-300 bg-amber-100/70 px-2.5 py-1.5 text-xs font-semibold text-amber-950 hover:bg-amber-100",
+										children: "Try Dev Sandbox"
+									})
+								]
+							})]
+						}),
+						healthState === "CONNECTED" && activeMode === "dev_sandbox" && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "no-print flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-950",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Dev Sandbox (Browser Local Only):" }), " Viewing synthetic sample data — changes are not written to Google Sheets."] }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+								type: "button",
+								onClick: () => setIsConnectionModalOpen(true),
+								className: "font-semibold text-slate-900 underline underline-offset-2 hover:text-slate-700",
+								children: "Connect Live Google Sheet"
+							})]
+						}),
+						healthState === "CONNECTED" && activeMode === "public_gviz" && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "no-print flex flex-wrap items-center justify-between gap-2 rounded-lg border border-blue-200 bg-blue-50/80 px-4 py-2 text-xs text-blue-950",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Read-Only CSV Feed:" }),
+								" Viewing Sheet",
 								" ",
 								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", {
 									className: "font-mono font-semibold",
 									children: spreadsheetId
 								}),
-								". Deploy the included ",
+								". Connect your Apps Script Web App (",
 								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", {
 									className: "font-mono",
 									children: "Code.gs"
 								}),
-								" ",
-								"Apps Script Web App to enable Create, Update, and Delete writes."
-							] })]
-						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-							type: "button",
-							onClick: () => setIsConnectionModalOpen(true),
-							className: "inline-flex items-center gap-1.5 rounded border border-blue-300 bg-white px-3 py-1.5 text-xs font-semibold text-blue-900 hover:bg-blue-100 whitespace-nowrap shrink-0",
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Link2, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Enable Write Access (Apps Script)" })]
-						})]
-					}),
-					toastMessage && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "no-print mb-6 flex items-center justify-between rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs text-emerald-900",
-						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-							className: "flex items-center gap-2",
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CircleCheck, { className: "h-4 w-4 text-emerald-600 shrink-0" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-								className: "font-medium",
-								children: toastMessage
+								") for full Read & Write access."
+							] }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+								type: "button",
+								onClick: () => setIsConnectionModalOpen(true),
+								className: "font-semibold text-blue-900 underline underline-offset-2 hover:text-blue-700",
+								children: "Switch to Apps Script (R/W)"
 							})]
-						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-							type: "button",
-							onClick: () => setToastMessage(null),
-							className: "text-emerald-700 hover:underline",
-							children: "Dismiss"
-						})]
-					}),
-					connectionError && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "no-print mb-6 flex flex-col sm:flex-row sm:items-start justify-between gap-4 rounded-md border border-red-200 bg-red-50 px-4 py-3.5 text-xs text-red-900",
-						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-							className: "flex items-start gap-2.5",
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CircleAlert, { className: "h-4 w-4 text-red-600 shrink-0 mt-0.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-								className: "font-semibold",
-								children: "Google Sheet Connection Notice"
-							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-								className: "mt-0.5 text-red-800 leading-relaxed",
-								children: connectionError
-							})] })]
-						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-							className: "flex flex-wrap items-center gap-2 shrink-0",
-							children: [
-								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-									type: "button",
-									onClick: () => setIsConnectionModalOpen(true),
-									className: "inline-flex items-center gap-1 rounded bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800 whitespace-nowrap",
-									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Link2, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Configure Apps Script Bridge" })]
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-									type: "button",
-									onClick: () => void handleQuickSwitchToSandbox(),
-									className: "inline-flex items-center gap-1 rounded border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100 whitespace-nowrap",
-									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(FlaskConical, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Use Dev Sandbox" })]
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-									type: "button",
-									onClick: () => setConnectionError(null),
-									className: "text-red-700 hover:underline px-1",
-									children: "Dismiss"
-								})
-							]
-						})]
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "space-y-6",
-						children: [
-							activeMode === "apps_script" && !connectionError && sheetData.missingSheets.length > 0 && activeTab !== "admin" && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								className: "no-print flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50/80 px-4 py-3 text-xs text-amber-900",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-									className: "flex items-center gap-2",
-									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Wrench, { className: "h-4 w-4 text-amber-700 shrink-0" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { children: [
-										"Missing worksheet tabs detected in Google Spreadsheet:",
-										" ",
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", {
-											className: "font-mono",
-											children: sheetData.missingSheets.join(", ")
-										}),
-										". Run schema provisioning to create them with standard column headers."
-									] })]
-								}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-									className: "flex items-center gap-2 shrink-0",
-									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-										type: "button",
-										onClick: () => handlePromptSchemaSetup(false),
-										className: "rounded bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-800 whitespace-nowrap",
-										children: "Provision Headers"
-									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-										type: "button",
-										onClick: () => {
-											setAdminInitialSection("backend_and_maintenance");
-											setActiveTab("admin");
-										},
-										className: "rounded border border-amber-300 bg-white px-3 py-1.5 text-xs font-medium text-amber-900 hover:bg-amber-50 whitespace-nowrap",
-										children: "Open Schema Manager"
-									})]
-								})]
-							}),
-							activeTab === "dashboard" && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(PrintableDashboardView, {
-								projects: sheetData.projects,
-								subProjects: sheetData.subProjects,
-								contractsTCP: sheetData.contractsTCP,
-								contractPayments: sheetData.contractPayments,
-								contractors: sheetData.contractors,
-								sites: sheetData.sites,
-								projectTypes: sheetData.projectTypes,
-								activeUser,
-								onNavigateTab: (tab) => setActiveTab(tab)
-							}),
-							activeTab === "projects" && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ProjectCreationAndList, {
-								sites: sheetData.sites,
-								projectTypes: sheetData.projectTypes,
-								projects: sheetData.projects,
-								subProjects: sheetData.subProjects,
-								contractsTCP: sheetData.contractsTCP,
-								modulePermission: activeUser.permissions.projects,
-								canAwardContracts: activeUser.permissions.contracts.add,
-								activeUser,
-								onSelectActiveUser: (uid) => setActiveUserId(uid),
-								onOpenProfileModal: () => setIsProfileModalOpen(true),
-								onOpenAdminAccounts: handleOpenAdminAccounts,
-								onCreateProject: async (mainProj, subs) => {
-									const target = getAppsScriptTargetOrThrow();
-									const fullSubs = subs.map((s) => ({
-										...s,
-										projectId: mainProj.projectId,
-										mainProjectCode: mainProj.mainProjectCode
-									}));
-									if (target) await appendProjectWithSubProjects(target, mainProj, fullSubs);
-									else {
-										const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-										updateSandboxData((prev) => {
-											const newProjectRow = {
-												rowNumber: prev.projects.length + 2,
-												...mainProj,
-												createdAt: now,
-												updatedAt: now
-											};
-											const newSubRows = fullSubs.map((s, idx) => ({
-												rowNumber: prev.subProjects.length + 2 + idx,
-												...s,
-												updatedAt: now
-											}));
-											return {
-												...prev,
-												projects: [...prev.projects, newProjectRow],
-												subProjects: [...prev.subProjects, ...newSubRows]
-											};
-										});
-									}
-								},
-								onAddSubProjectToExisting: async (subProj) => {
-									const target = getAppsScriptTargetOrThrow();
-									if (target) await appendSubProjectRow(target, subProj);
-									else {
-										const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-										updateSandboxData((prev) => ({
-											...prev,
-											subProjects: [...prev.subProjects, {
-												rowNumber: prev.subProjects.length + 2,
-												...subProj,
-												updatedAt: now
-											}]
+						}),
+						activeMode === "apps_script" && healthState === "CONNECTED" && sheetData.missingSheets.length > 0 && activeTab !== "admin" && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "no-print flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-900",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+								className: "flex items-center gap-2",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Wrench, { className: "h-3.5 w-3.5 text-amber-700 shrink-0" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { children: [
+									"Missing worksheet tabs:",
+									" ",
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", {
+										className: "font-mono",
+										children: sheetData.missingSheets.join(", ")
+									})
+								] })]
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+								type: "button",
+								onClick: () => handlePromptSchemaSetup(false),
+								className: "rounded-md bg-slate-900 px-3 py-1 text-xs font-semibold text-white hover:bg-slate-800",
+								children: "Provision Missing Tabs"
+							})]
+						}),
+						activeTab === "dashboard" && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(PrintableDashboardView, {
+							projects: sheetData.projects,
+							subProjects: sheetData.subProjects,
+							contractsTCP: sheetData.contractsTCP,
+							contractPayments: sheetData.contractPayments,
+							contractors: sheetData.contractors,
+							sites: sheetData.sites,
+							projectTypes: sheetData.projectTypes,
+							activeUser,
+							onNavigateTab: (tab) => navigateTo(tab)
+						}),
+						activeTab === "projects" && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ProjectCreationAndList, {
+							sites: sheetData.sites,
+							projectTypes: sheetData.projectTypes,
+							projects: sheetData.projects,
+							subProjects: sheetData.subProjects,
+							contractsTCP: sheetData.contractsTCP,
+							contractPayments: sheetData.contractPayments,
+							modulePermission: activeUser.permissions.projects,
+							canAwardContracts: activeUser.permissions.contracts.add,
+							activeUser,
+							onSelectActiveUser: (uid) => setActiveUserId(uid),
+							onOpenProfileModal: () => setIsProfileModalOpen(true),
+							onOpenAdminAccounts: () => navigateTo("admin", "accounts_dashboard"),
+							onCreateProject: async (mainProj, subs) => {
+								const target = getAppsScriptTargetOrThrow();
+								const fullSubs = subs.map((s) => ({
+									...s,
+									projectId: mainProj.projectId,
+									mainProjectCode: mainProj.mainProjectCode
+								}));
+								if (target) await appendProjectWithSubProjects(target, mainProj, fullSubs);
+								else {
+									const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+									updateSandboxData((prev) => {
+										const newProjectRow = {
+											rowNumber: prev.projects.length + 2,
+											...mainProj,
+											createdAt: now,
+											updatedAt: now
+										};
+										const newSubRows = fullSubs.map((s, idx) => ({
+											rowNumber: prev.subProjects.length + 2 + idx,
+											...s,
+											updatedAt: now
 										}));
-									}
-								},
-								onUpdateMainProjectStatus: async (proj, newStatus, newProjectName) => {
-									const target = getAppsScriptTargetOrThrow();
-									if (target) await updateMainProjectRow(target, proj, newStatus, newProjectName);
-									else {
-										const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-										updateSandboxData((prev) => ({
+										return {
 											...prev,
-											projects: prev.projects.map((p) => p.projectId === proj.projectId ? {
-												...p,
-												status: newStatus,
-												projectName: newProjectName !== void 0 ? newProjectName : p.projectName,
-												updatedAt: now
-											} : p)
-										}));
-									}
-								},
-								onDeleteMainProject: async (proj) => {
-									const check = checkDeleteReferentialIntegrity({
-										entity: "project",
-										id: proj.projectId,
-										projects: sheetData.projects,
-										subProjects: sheetData.subProjects,
-										contractsTCP: sheetData.contractsTCP,
-										contractPayments: sheetData.contractPayments
+											projects: [...prev.projects, newProjectRow],
+											subProjects: [...prev.subProjects, ...newSubRows]
+										};
 									});
-									if (!check.allowed) throw new Error(check.reason || "Cannot delete project.");
-									const target = getAppsScriptTargetOrThrow();
-									if (target) await deleteMainProjectRow(target, proj.projectId, proj.rowNumber);
-									else updateSandboxData((prev) => ({
+								}
+							},
+							onAddSubProjectToExisting: async (subProj) => {
+								const target = getAppsScriptTargetOrThrow();
+								if (target) await appendSubProjectRow(target, subProj);
+								else {
+									const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+									updateSandboxData((prev) => ({
 										...prev,
-										projects: prev.projects.filter((p) => p.projectId !== proj.projectId)
+										subProjects: [...prev.subProjects, {
+											rowNumber: prev.subProjects.length + 2,
+											...subProj,
+											updatedAt: now
+										}]
 									}));
-								},
-								onUpdateSubProject: async (subProj, updates) => {
-									const target = getAppsScriptTargetOrThrow();
-									const merged = {
-										...subProj,
-										subProjectName: updates.subProjectName !== void 0 ? updates.subProjectName : subProj.subProjectName,
-										status: updates.status,
-										progress: updates.progress,
-										targetDate: updates.targetDate,
-										remarks: updates.remarks
-									};
-									if (target) await updateSubProjectRow(target, merged);
-									else {
-										const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-										updateSandboxData((prev) => ({
-											...prev,
-											subProjects: prev.subProjects.map((s) => s.subProjectId === subProj.subProjectId ? {
-												...merged,
-												updatedAt: now
-											} : s)
-										}));
-									}
-								},
-								onDeleteSubProject: async (subProj) => {
-									const check = checkDeleteReferentialIntegrity({
-										entity: "subProject",
-										id: subProj.subProjectId,
-										projects: sheetData.projects,
-										subProjects: sheetData.subProjects,
-										contractsTCP: sheetData.contractsTCP,
-										contractPayments: sheetData.contractPayments
-									});
-									if (!check.allowed) throw new Error(check.reason || "Cannot delete sub-project.");
-									const target = getAppsScriptTargetOrThrow();
-									if (target) await deleteSubProjectRow(target, subProj.subProjectId, subProj.rowNumber);
-									else updateSandboxData((prev) => ({
+								}
+							},
+							onUpdateMainProjectStatus: async (proj, newStatus, newProjectName) => {
+								const target = getAppsScriptTargetOrThrow();
+								if (target) await updateMainProjectRow(target, proj, newStatus, newProjectName);
+								else {
+									const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+									updateSandboxData((prev) => ({
 										...prev,
-										subProjects: prev.subProjects.filter((s) => s.subProjectId !== subProj.subProjectId)
+										projects: prev.projects.map((p) => p.projectId === proj.projectId ? {
+											...p,
+											status: newStatus,
+											projectName: newProjectName !== void 0 ? newProjectName : p.projectName,
+											updatedAt: now
+										} : p)
 									}));
-								},
-								onNavigateTab: (tab) => setActiveTab(tab),
-								onOpenAwardTCPForSubProject: handleOpenAwardTCPForSubProject,
-								requestConfirmation
-							}),
-							activeTab === "contracts" && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ContractsTCPView, {
-								subProjects: sheetData.subProjects,
-								contractors: sheetData.contractors,
-								contractsTCP: sheetData.contractsTCP,
-								contractPayments: sheetData.contractPayments,
-								contractsPermission: activeUser.permissions.contracts,
-								paymentsPermission: activeUser.permissions.payments,
-								activeUser,
-								onSelectActiveUser: (uid) => setActiveUserId(uid),
-								onOpenProfileModal: () => setIsProfileModalOpen(true),
-								onOpenAdminAccounts: handleOpenAdminAccounts,
-								preselectedSubProjectId,
-								onClearPreselectedSubProject: () => setPreselectedSubProjectId(null),
-								onAwardContractTCP: async (contract) => {
-									const target = getAppsScriptTargetOrThrow();
-									if (target) await appendContractTCPRow(target, contract);
-									else {
-										const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-										updateSandboxData((prev) => ({
-											...prev,
-											contractsTCP: [...prev.contractsTCP, {
-												...contract,
-												rowNumber: prev.contractsTCP.length + 2,
-												updatedAt: now
-											}]
-										}));
-									}
-								},
-								onUpdateContractTCP: async (rowNumber, contract) => {
-									const target = getAppsScriptTargetOrThrow();
-									if (target) await updateContractTCPRow(target, rowNumber, contract);
-									else {
-										const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-										updateSandboxData((prev) => ({
-											...prev,
-											contractsTCP: prev.contractsTCP.map((c) => c.contractId === contract.contractId || c.rowNumber === rowNumber ? {
-												...contract,
-												rowNumber,
-												updatedAt: now
-											} : c)
-										}));
-									}
-								},
-								onDeleteContractTCP: async (contract) => {
-									const check = checkDeleteReferentialIntegrity({
-										entity: "contract",
-										id: contract.contractId,
-										projects: sheetData.projects,
-										subProjects: sheetData.subProjects,
-										contractsTCP: sheetData.contractsTCP,
-										contractPayments: sheetData.contractPayments
-									});
-									if (!check.allowed) throw new Error(check.reason || "Cannot delete contract.");
-									const target = getAppsScriptTargetOrThrow();
-									if (target) await deleteContractTCPRow(target, contract.contractId, contract.rowNumber);
-									else updateSandboxData((prev) => ({
+								}
+							},
+							onDeleteMainProject: async (proj) => {
+								const check = checkDeleteReferentialIntegrity({
+									entity: "project",
+									id: proj.projectId,
+									projects: sheetData.projects,
+									subProjects: sheetData.subProjects,
+									contractsTCP: sheetData.contractsTCP,
+									contractPayments: sheetData.contractPayments
+								});
+								if (!check.allowed) throw new Error(check.reason || "Cannot delete project.");
+								const target = getAppsScriptTargetOrThrow();
+								if (target) await deleteMainProjectRow(target, proj.projectId, proj.rowNumber);
+								else updateSandboxData((prev) => ({
+									...prev,
+									projects: prev.projects.filter((p) => p.projectId !== proj.projectId)
+								}));
+							},
+							onUpdateSubProject: async (subProj, updates) => {
+								const target = getAppsScriptTargetOrThrow();
+								const merged = {
+									...subProj,
+									subProjectName: updates.subProjectName !== void 0 ? updates.subProjectName : subProj.subProjectName,
+									status: updates.status,
+									progress: updates.progress,
+									targetDate: updates.targetDate,
+									remarks: updates.remarks
+								};
+								if (target) await updateSubProjectRow(target, merged);
+								else {
+									const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+									updateSandboxData((prev) => ({
 										...prev,
-										contractsTCP: prev.contractsTCP.filter((c) => c.contractId !== contract.contractId)
-									}));
-								},
-								onCreateContractPayment: async (payment) => {
-									const target = getAppsScriptTargetOrThrow();
-									if (target) await appendContractPaymentRow(target, payment);
-									else {
-										const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-										updateSandboxData((prev) => ({
-											...prev,
-											contractPayments: [...prev.contractPayments, {
-												...payment,
-												rowNumber: prev.contractPayments.length + 2,
-												updatedAt: now
-											}]
-										}));
-									}
-								},
-								onUpdateContractPayment: async (rowNumber, payment) => {
-									const target = getAppsScriptTargetOrThrow();
-									if (target) await updateContractPaymentRow(target, rowNumber, payment);
-									else {
-										const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-										updateSandboxData((prev) => ({
-											...prev,
-											contractPayments: prev.contractPayments.map((p) => p.paymentId === payment.paymentId || p.rowNumber === rowNumber ? {
-												...payment,
-												rowNumber,
-												updatedAt: now
-											} : p)
-										}));
-									}
-								},
-								onDeleteContractPayment: async (payment) => {
-									const target = getAppsScriptTargetOrThrow();
-									if (target) await deleteContractPaymentRow(target, payment.paymentId, payment.rowNumber);
-									else updateSandboxData((prev) => ({
-										...prev,
-										contractPayments: prev.contractPayments.filter((p) => p.paymentId !== payment.paymentId)
-									}));
-								},
-								onNavigateTab: (tab) => setActiveTab(tab),
-								requestConfirmation
-							}),
-							activeTab === "contractors" && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ContractorsSheetView, {
-								contractors: sheetData.contractors,
-								contractsTCP: sheetData.contractsTCP,
-								modulePermission: activeUser.permissions.contractors,
-								activeUser,
-								onSelectActiveUser: (uid) => setActiveUserId(uid),
-								onOpenProfileModal: () => setIsProfileModalOpen(true),
-								onOpenAdminAccounts: handleOpenAdminAccounts,
-								onAddContractor: async (contractor) => {
-									const target = getAppsScriptTargetOrThrow();
-									if (target) await appendContractorRow(target, contractor);
-									else {
-										const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-										updateSandboxData((prev) => ({
-											...prev,
-											contractors: [...prev.contractors, {
-												...contractor,
-												rowNumber: prev.contractors.length + 2,
-												createdAt: now
-											}]
-										}));
-									}
-								},
-								onUpdateContractor: async (rowNumber, contractor) => {
-									const target = getAppsScriptTargetOrThrow();
-									if (target) await updateContractorRow(target, rowNumber, contractor);
-									else updateSandboxData((prev) => ({
-										...prev,
-										contractors: prev.contractors.map((c) => c.contractorCode === contractor.contractorCode || c.rowNumber === rowNumber ? {
-											...contractor,
-											rowNumber
-										} : c)
-									}));
-								},
-								onDeleteContractor: async (contractor) => {
-									const check = checkDeleteReferentialIntegrity({
-										entity: "contractor",
-										id: contractor.contractorCode,
-										projects: sheetData.projects,
-										subProjects: sheetData.subProjects,
-										contractsTCP: sheetData.contractsTCP,
-										contractPayments: sheetData.contractPayments
-									});
-									if (!check.allowed) throw new Error(check.reason || "Cannot delete contractor.");
-									const target = getAppsScriptTargetOrThrow();
-									if (target) await deleteContractorRow(target, contractor.contractorCode, contractor.rowNumber);
-									else updateSandboxData((prev) => ({
-										...prev,
-										contractors: prev.contractors.filter((c) => c.contractorCode !== contractor.contractorCode)
-									}));
-								},
-								requestConfirmation
-							}),
-							activeTab === "sites" && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(SitesSheetView, {
-								sites: sheetData.sites,
-								projects: sheetData.projects,
-								modulePermission: activeUser.permissions.sites,
-								activeUser,
-								onSelectActiveUser: (uid) => setActiveUserId(uid),
-								onOpenProfileModal: () => setIsProfileModalOpen(true),
-								onOpenAdminAccounts: handleOpenAdminAccounts,
-								onAddSite: async (site) => {
-									const target = getAppsScriptTargetOrThrow();
-									if (target) await appendSiteRow(target, site);
-									else {
-										const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-										updateSandboxData((prev) => ({
-											...prev,
-											sites: [...prev.sites, {
-												...site,
-												rowNumber: prev.sites.length + 2,
-												createdAt: now
-											}]
-										}));
-									}
-								},
-								onUpdateSite: async (rowNumber, site) => {
-									const target = getAppsScriptTargetOrThrow();
-									if (target) await updateSiteRow(target, rowNumber, site);
-									else updateSandboxData((prev) => ({
-										...prev,
-										sites: prev.sites.map((s) => s.siteCode === site.siteCode || s.rowNumber === rowNumber ? {
-											...site,
-											rowNumber
+										subProjects: prev.subProjects.map((s) => s.subProjectId === subProj.subProjectId ? {
+											...merged,
+											updatedAt: now
 										} : s)
 									}));
-								},
-								onDeleteSite: async (site) => {
-									const check = checkDeleteReferentialIntegrity({
-										entity: "site",
-										id: site.siteCode,
-										projects: sheetData.projects,
-										subProjects: sheetData.subProjects,
-										contractsTCP: sheetData.contractsTCP,
-										contractPayments: sheetData.contractPayments
-									});
-									if (!check.allowed) throw new Error(check.reason || "Cannot delete site.");
-									const target = getAppsScriptTargetOrThrow();
-									if (target) await deleteSiteRow(target, site.siteCode, site.rowNumber);
-									else updateSandboxData((prev) => ({
+								}
+							},
+							onDeleteSubProject: async (subProj) => {
+								const check = checkDeleteReferentialIntegrity({
+									entity: "subProject",
+									id: subProj.subProjectId,
+									projects: sheetData.projects,
+									subProjects: sheetData.subProjects,
+									contractsTCP: sheetData.contractsTCP,
+									contractPayments: sheetData.contractPayments
+								});
+								if (!check.allowed) throw new Error(check.reason || "Cannot delete sub-project.");
+								const target = getAppsScriptTargetOrThrow();
+								if (target) await deleteSubProjectRow(target, subProj.subProjectId, subProj.rowNumber);
+								else updateSandboxData((prev) => ({
+									...prev,
+									subProjects: prev.subProjects.filter((s) => s.subProjectId !== subProj.subProjectId)
+								}));
+							},
+							onNavigateTab: (tab) => navigateTo(tab),
+							onOpenAwardTCPForSubProject: handleOpenAwardTCPForSubProject,
+							requestConfirmation
+						}),
+						activeTab === "contracts" && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ContractsTCPView, {
+							subProjects: sheetData.subProjects,
+							contractors: sheetData.contractors,
+							contractsTCP: sheetData.contractsTCP,
+							contractPayments: sheetData.contractPayments,
+							contractsPermission: activeUser.permissions.contracts,
+							paymentsPermission: activeUser.permissions.payments,
+							activeUser,
+							onSelectActiveUser: (uid) => setActiveUserId(uid),
+							onOpenProfileModal: () => setIsProfileModalOpen(true),
+							onOpenAdminAccounts: () => navigateTo("admin", "accounts_dashboard"),
+							preselectedSubProjectId,
+							onClearPreselectedSubProject: () => setPreselectedSubProjectId(null),
+							onAwardContractTCP: async (contract) => {
+								const target = getAppsScriptTargetOrThrow();
+								if (target) await appendContractTCPRow(target, contract);
+								else {
+									const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+									updateSandboxData((prev) => ({
 										...prev,
-										sites: prev.sites.filter((s) => s.siteCode !== site.siteCode)
+										contractsTCP: [...prev.contractsTCP, {
+											...contract,
+											rowNumber: prev.contractsTCP.length + 2,
+											updatedAt: now
+										}]
 									}));
-								},
-								requestConfirmation
-							}),
-							activeTab === "admin" && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(MaintenanceTabView, {
-								projectTypes: sheetData.projectTypes,
-								projects: sheetData.projects,
-								sites: sheetData.sites,
-								subProjects: sheetData.subProjects,
-								contractors: sheetData.contractors,
-								contractsTCP: sheetData.contractsTCP,
-								contractPaymentsCount: sheetData.contractPayments.length,
-								userAccounts: effectiveUserAccounts,
-								activeUser,
-								adminPermission: activeUser.permissions.admin,
-								initialSubSection: adminInitialSection,
-								spreadsheetId,
-								sheetData,
-								spreadsheetTitle: sheetData.title,
-								spreadsheetUrl: sheetData.spreadsheetUrl,
-								existingSheets: sheetData.existingSheets,
-								missingSheets: sheetData.missingSheets,
-								lastSyncedAt: sheetData.lastSyncedAt,
-								connectionMode: activeMode,
-								appsScriptUrl,
-								isLoadingSheet,
-								onForceSync: () => {
-									syncFromConnection(connectionConfig, {
-										silent: false,
-										notifySuccess: true
-									});
-								},
-								onOpenConnectionModal: () => setIsConnectionModalOpen(true),
-								onInitializeSchema: handlePromptSchemaSetup,
-								onAddProjectType: async (pt) => {
-									const target = getAppsScriptTargetOrThrow();
-									if (target) await appendProjectTypeRow(target, pt);
-									else {
-										const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-										updateSandboxData((prev) => ({
-											...prev,
-											projectTypes: [...prev.projectTypes, {
-												...pt,
-												rowNumber: prev.projectTypes.length + 2,
-												createdAt: now
-											}]
-										}));
-									}
-								},
-								onUpdateProjectType: async (rowNumber, pt) => {
-									const target = getAppsScriptTargetOrThrow();
-									if (target) await updateProjectTypeRow(target, rowNumber, pt);
-									else updateSandboxData((prev) => ({
+								}
+							},
+							onUpdateContractTCP: async (rowNumber, contract) => {
+								const target = getAppsScriptTargetOrThrow();
+								if (target) await updateContractTCPRow(target, rowNumber, contract);
+								else {
+									const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+									updateSandboxData((prev) => ({
 										...prev,
-										projectTypes: prev.projectTypes.map((t) => t.typeCode === pt.typeCode || t.rowNumber === rowNumber ? {
+										contractsTCP: prev.contractsTCP.map((c) => c.contractId === contract.contractId || c.rowNumber === rowNumber ? {
+											...contract,
+											rowNumber,
+											updatedAt: now
+										} : c)
+									}));
+								}
+							},
+							onDeleteContractTCP: async (contract) => {
+								const check = checkDeleteReferentialIntegrity({
+									entity: "contract",
+									id: contract.contractId,
+									projects: sheetData.projects,
+									subProjects: sheetData.subProjects,
+									contractsTCP: sheetData.contractsTCP,
+									contractPayments: sheetData.contractPayments
+								});
+								if (!check.allowed) throw new Error(check.reason || "Cannot delete contract.");
+								const target = getAppsScriptTargetOrThrow();
+								if (target) await deleteContractTCPRow(target, contract.contractId, contract.rowNumber);
+								else updateSandboxData((prev) => ({
+									...prev,
+									contractsTCP: prev.contractsTCP.filter((c) => c.contractId !== contract.contractId)
+								}));
+							},
+							onCreateContractPayment: async (payment) => {
+								const target = getAppsScriptTargetOrThrow();
+								if (target) await appendContractPaymentRow(target, payment);
+								else {
+									const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+									updateSandboxData((prev) => ({
+										...prev,
+										contractPayments: [...prev.contractPayments, {
+											...payment,
+											rowNumber: prev.contractPayments.length + 2,
+											updatedAt: now
+										}]
+									}));
+								}
+							},
+							onUpdateContractPayment: async (rowNumber, payment) => {
+								const target = getAppsScriptTargetOrThrow();
+								if (target) await updateContractPaymentRow(target, rowNumber, payment);
+								else {
+									const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+									updateSandboxData((prev) => ({
+										...prev,
+										contractPayments: prev.contractPayments.map((p) => p.paymentId === payment.paymentId || p.rowNumber === rowNumber ? {
+											...payment,
+											rowNumber,
+											updatedAt: now
+										} : p)
+									}));
+								}
+							},
+							onDeleteContractPayment: async (payment) => {
+								const target = getAppsScriptTargetOrThrow();
+								if (target) await deleteContractPaymentRow(target, payment.paymentId, payment.rowNumber);
+								else updateSandboxData((prev) => ({
+									...prev,
+									contractPayments: prev.contractPayments.filter((p) => p.paymentId !== payment.paymentId)
+								}));
+							},
+							onNavigateTab: (tab) => navigateTo(tab),
+							requestConfirmation
+						}),
+						activeTab === "contractors" && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ContractorsSheetView, {
+							contractors: sheetData.contractors,
+							contractsTCP: sheetData.contractsTCP,
+							contractPayments: sheetData.contractPayments,
+							modulePermission: activeUser.permissions.contractors,
+							activeUser,
+							onSelectActiveUser: (uid) => setActiveUserId(uid),
+							onOpenProfileModal: () => setIsProfileModalOpen(true),
+							onOpenAdminAccounts: () => navigateTo("admin", "accounts_dashboard"),
+							onAddContractor: async (contractor) => {
+								const target = getAppsScriptTargetOrThrow();
+								if (target) await appendContractorRow(target, contractor);
+								else {
+									const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+									updateSandboxData((prev) => ({
+										...prev,
+										contractors: [...prev.contractors, {
+											...contractor,
+											rowNumber: prev.contractors.length + 2,
+											createdAt: now
+										}]
+									}));
+								}
+							},
+							onUpdateContractor: async (rowNumber, contractor) => {
+								const target = getAppsScriptTargetOrThrow();
+								if (target) await updateContractorRow(target, rowNumber, contractor);
+								else updateSandboxData((prev) => ({
+									...prev,
+									contractors: prev.contractors.map((c) => c.contractorCode === contractor.contractorCode || c.rowNumber === rowNumber ? {
+										...contractor,
+										rowNumber
+									} : c)
+								}));
+							},
+							onDeleteContractor: async (contractor) => {
+								const check = checkDeleteReferentialIntegrity({
+									entity: "contractor",
+									id: contractor.contractorCode,
+									projects: sheetData.projects,
+									subProjects: sheetData.subProjects,
+									contractsTCP: sheetData.contractsTCP,
+									contractPayments: sheetData.contractPayments
+								});
+								if (!check.allowed) throw new Error(check.reason || "Cannot delete contractor.");
+								const target = getAppsScriptTargetOrThrow();
+								if (target) await deleteContractorRow(target, contractor.contractorCode, contractor.rowNumber);
+								else updateSandboxData((prev) => ({
+									...prev,
+									contractors: prev.contractors.filter((c) => c.contractorCode !== contractor.contractorCode)
+								}));
+							},
+							requestConfirmation
+						}),
+						activeTab === "sites" && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(SitesSheetView, {
+							sites: sheetData.sites,
+							projects: sheetData.projects,
+							modulePermission: activeUser.permissions.sites,
+							activeUser,
+							onSelectActiveUser: (uid) => setActiveUserId(uid),
+							onOpenProfileModal: () => setIsProfileModalOpen(true),
+							onOpenAdminAccounts: () => navigateTo("admin", "accounts_dashboard"),
+							onAddSite: async (site) => {
+								const target = getAppsScriptTargetOrThrow();
+								if (target) await appendSiteRow(target, site);
+								else {
+									const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+									updateSandboxData((prev) => ({
+										...prev,
+										sites: [...prev.sites, {
+											...site,
+											rowNumber: prev.sites.length + 2,
+											createdAt: now
+										}]
+									}));
+								}
+							},
+							onUpdateSite: async (rowNumber, site) => {
+								const target = getAppsScriptTargetOrThrow();
+								if (target) await updateSiteRow(target, rowNumber, site);
+								else updateSandboxData((prev) => ({
+									...prev,
+									sites: prev.sites.map((s) => s.siteCode === site.siteCode || s.rowNumber === rowNumber ? {
+										...site,
+										rowNumber
+									} : s)
+								}));
+							},
+							onDeleteSite: async (site) => {
+								const check = checkDeleteReferentialIntegrity({
+									entity: "site",
+									id: site.siteCode,
+									projects: sheetData.projects,
+									subProjects: sheetData.subProjects,
+									contractsTCP: sheetData.contractsTCP,
+									contractPayments: sheetData.contractPayments
+								});
+								if (!check.allowed) throw new Error(check.reason || "Cannot delete site.");
+								const target = getAppsScriptTargetOrThrow();
+								if (target) await deleteSiteRow(target, site.siteCode, site.rowNumber);
+								else updateSandboxData((prev) => ({
+									...prev,
+									sites: prev.sites.filter((s) => s.siteCode !== site.siteCode)
+								}));
+							},
+							requestConfirmation
+						}),
+						activeTab === "admin" && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(MaintenanceTabView, {
+							projectTypes: sheetData.projectTypes,
+							projects: sheetData.projects,
+							sites: sheetData.sites,
+							subProjects: sheetData.subProjects,
+							contractors: sheetData.contractors,
+							contractsTCP: sheetData.contractsTCP,
+							contractPaymentsCount: sheetData.contractPayments.length,
+							userAccounts: effectiveUserAccounts,
+							activeUser,
+							adminPermission: activeUser.permissions.admin,
+							initialSubSection: adminInitialSection,
+							spreadsheetId,
+							sheetData,
+							spreadsheetTitle: sheetData.title,
+							spreadsheetUrl: sheetData.spreadsheetUrl,
+							existingSheets: sheetData.existingSheets,
+							missingSheets: sheetData.missingSheets,
+							lastSyncedAt: sheetData.lastSyncedAt,
+							connectionMode: activeMode,
+							appsScriptUrl,
+							isLoadingSheet,
+							onForceSync: () => {
+								syncFromConnection(connectionConfig, {
+									silent: false,
+									notifySuccess: true
+								});
+							},
+							onOpenConnectionModal: () => setIsConnectionModalOpen(true),
+							onInitializeSchema: handlePromptSchemaSetup,
+							onAddProjectType: async (pt) => {
+								const target = getAppsScriptTargetOrThrow();
+								if (target) await appendProjectTypeRow(target, pt);
+								else {
+									const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+									updateSandboxData((prev) => ({
+										...prev,
+										projectTypes: [...prev.projectTypes, {
 											...pt,
-											rowNumber
-										} : t)
+											rowNumber: prev.projectTypes.length + 2,
+											createdAt: now
+										}]
 									}));
-								},
-								onDeleteProjectType: async (pt) => {
-									const check = checkDeleteReferentialIntegrity({
-										entity: "projectType",
-										id: pt.typeCode,
-										projects: sheetData.projects,
-										subProjects: sheetData.subProjects,
-										contractsTCP: sheetData.contractsTCP,
-										contractPayments: sheetData.contractPayments
-									});
-									if (!check.allowed) throw new Error(check.reason || "Cannot delete project type.");
-									const target = getAppsScriptTargetOrThrow();
-									if (target) await deleteProjectTypeRow(target, pt.typeCode, pt.rowNumber);
-									else updateSandboxData((prev) => ({
+								}
+							},
+							onUpdateProjectType: async (rowNumber, pt) => {
+								const target = getAppsScriptTargetOrThrow();
+								if (target) await updateProjectTypeRow(target, rowNumber, pt);
+								else updateSandboxData((prev) => ({
+									...prev,
+									projectTypes: prev.projectTypes.map((t) => t.typeCode === pt.typeCode || t.rowNumber === rowNumber ? {
+										...pt,
+										rowNumber
+									} : t)
+								}));
+							},
+							onDeleteProjectType: async (pt) => {
+								const check = checkDeleteReferentialIntegrity({
+									entity: "projectType",
+									id: pt.typeCode,
+									projects: sheetData.projects,
+									subProjects: sheetData.subProjects,
+									contractsTCP: sheetData.contractsTCP,
+									contractPayments: sheetData.contractPayments
+								});
+								if (!check.allowed) throw new Error(check.reason || "Cannot delete project type.");
+								const target = getAppsScriptTargetOrThrow();
+								if (target) await deleteProjectTypeRow(target, pt.typeCode, pt.rowNumber);
+								else updateSandboxData((prev) => ({
+									...prev,
+									projectTypes: prev.projectTypes.filter((t) => t.typeCode !== pt.typeCode)
+								}));
+							},
+							onSelectActiveUser: (uid) => {
+								setActiveUserId(uid);
+								const selected = effectiveUserAccounts.find((u) => u.userId === uid);
+								if (selected) showToast(`Switched active profile to ${selected.fullName} (${selected.roleTitle}).`);
+							},
+							onCreateUserAccount: async (account) => {
+								const target = getAppsScriptTargetOrThrow();
+								if (target) await appendUserAccountRow(target, account);
+								else {
+									const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+									updateSandboxData((prev) => ({
 										...prev,
-										projectTypes: prev.projectTypes.filter((t) => t.typeCode !== pt.typeCode)
+										userAccounts: [...prev.userAccounts, {
+											...account,
+											rowNumber: prev.userAccounts.length + 2,
+											updatedAt: now
+										}]
 									}));
-								},
-								onSelectActiveUser: (uid) => {
-									setActiveUserId(uid);
-									const selected = effectiveUserAccounts.find((u) => u.userId === uid);
-									if (selected) showToast(`Switched active workspace profile to ${selected.fullName} (${selected.roleTitle}).`);
-								},
-								onCreateUserAccount: async (account) => {
-									const target = getAppsScriptTargetOrThrow();
-									if (target) await appendUserAccountRow(target, account);
-									else {
-										const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-										updateSandboxData((prev) => ({
-											...prev,
-											userAccounts: [...prev.userAccounts, {
-												...account,
-												rowNumber: prev.userAccounts.length + 2,
-												updatedAt: now
-											}]
-										}));
-									}
-								},
-								onUpdateUserAccount: async (rowNumber, account) => {
-									const target = getAppsScriptTargetOrThrow();
-									if (target) await updateUserAccountRow(target, rowNumber, account);
-									else {
-										const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-										updateSandboxData((prev) => ({
-											...prev,
-											userAccounts: prev.userAccounts.map((u) => u.userId === account.userId || u.rowNumber === rowNumber ? {
-												...account,
-												rowNumber,
-												updatedAt: now
-											} : u)
-										}));
-									}
-								},
-								onDeleteUserAccount: async (account) => {
-									const activeAdminCount = effectiveUserAccounts.filter((u) => u.status === "ACTIVE" && u.permissions.admin.edit).length;
-									const isTargetActiveAdmin = account.status === "ACTIVE" && account.permissions.admin.edit;
-									const check = checkDeleteReferentialIntegrity({
-										entity: "user",
-										id: account.userId,
-										projects: sheetData.projects,
-										subProjects: sheetData.subProjects,
-										contractsTCP: sheetData.contractsTCP,
-										contractPayments: sheetData.contractPayments,
-										activeUserId: activeUser.userId,
-										activeAdminCount,
-										isTargetActiveAdmin
-									});
-									if (!check.allowed) throw new Error(check.reason || "Cannot delete user account.");
-									const target = getAppsScriptTargetOrThrow();
-									if (target) await deleteUserAccountRow(target, account.userId, account.rowNumber);
-									else updateSandboxData((prev) => ({
+								}
+							},
+							onUpdateUserAccount: async (rowNumber, account) => {
+								const target = getAppsScriptTargetOrThrow();
+								if (target) await updateUserAccountRow(target, rowNumber, account);
+								else {
+									const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+									updateSandboxData((prev) => ({
 										...prev,
-										userAccounts: prev.userAccounts.filter((u) => u.userId !== account.userId)
+										userAccounts: prev.userAccounts.map((u) => u.userId === account.userId || u.rowNumber === rowNumber ? {
+											...account,
+											rowNumber,
+											updatedAt: now
+										} : u)
 									}));
-								},
-								onOpenProfileModal: () => setIsProfileModalOpen(true),
-								requestConfirmation
-							})
-						]
-					})
-				]
+								}
+							},
+							onDeleteUserAccount: async (account) => {
+								const activeAdminCount = effectiveUserAccounts.filter((u) => u.status === "ACTIVE" && u.permissions.admin.edit).length;
+								const isTargetActiveAdmin = account.status === "ACTIVE" && account.permissions.admin.edit;
+								const check = checkDeleteReferentialIntegrity({
+									entity: "user",
+									id: account.userId,
+									projects: sheetData.projects,
+									subProjects: sheetData.subProjects,
+									contractsTCP: sheetData.contractsTCP,
+									contractPayments: sheetData.contractPayments,
+									activeUserId: activeUser.userId,
+									activeAdminCount,
+									isTargetActiveAdmin
+								});
+								if (!check.allowed) throw new Error(check.reason || "Cannot delete user account.");
+								const target = getAppsScriptTargetOrThrow();
+								if (target) await deleteUserAccountRow(target, account.userId, account.rowNumber);
+								else updateSandboxData((prev) => ({
+									...prev,
+									userAccounts: prev.userAccounts.filter((u) => u.userId !== account.userId)
+								}));
+							},
+							onOpenProfileModal: () => setIsProfileModalOpen(true),
+							requestConfirmation
+						})
+					]
+				})]
 			}),
 			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(UserProfileModal, {
 				isOpen: isProfileModalOpen,
@@ -29048,6 +30600,7 @@ function App() {
 				isOpen: isConnectionModalOpen,
 				config: connectionConfig,
 				activeMode,
+				healthState,
 				isSyncing: isLoadingSheet,
 				onClose: () => setIsConnectionModalOpen(false),
 				onApplyConnection: handleApplyConnection

@@ -1,5 +1,6 @@
 /**
  * SiteTrack Pro — Google Apps Script Web App Database Bridge (Code.gs)
+ * API Version: 2.1.0
  *
  * Target Spreadsheet ID (preserved): 1HNmAdZe7POIzIm9mCUPxQJL7p9BoBZEO1hXq6PZNs5M
  *
@@ -13,14 +14,30 @@
  *   7. ContractPayments  (A:W — 23 cols) PK: PaymentID (Col A)
  *   8. UserAccounts      (A:K — 11 cols) PK: UserID (Col A)
  *
+ * Supported GET actions:
+ *   - healthCheck     : Verifies spreadsheet ID, worksheets, server timestamp & API version
+ *   - ping            : Backward-compatible alias of healthCheck
+ *   - inspectAndLoad  : Returns verified metadata + all 8 worksheet tables (no auto-seeding)
+ *   - verifyRecord    : Checks if a primary key exists in a worksheet (used for timeout commit checks)
+ *
+ * Supported POST actions (serialized via LockService + SpreadsheetApp.flush()):
+ *   - initializeSchema: Creates missing tabs/headers (optional starter seed for empty lookup tabs)
+ *   - appendRow       : Appends a validated row with duplicate primary-key blocking
+ *   - appendRows      : Atomically pre-validates and appends multiple rows across sheets
+ *   - updateRow       : Updates an existing row verified by primary key
+ *   - deleteRow       : Deletes an existing row verified by primary key
+ *
  * Deployment Instructions:
  *   1. Open your Google Sheet -> Extensions -> Apps Script.
  *   2. Paste this entire file into Code.gs and Save.
- *   3. Click Deploy -> New deployment -> Select type: Web app.
- *   4. Execute as: "Me" | Who has access: "Anyone" (development mode; add server-side auth in Phase 2).
+ *   3. Click Deploy -> Manage deployments (or New deployment) -> Web app.
+ *   4. Execute as: "Me" | Who has access: "Anyone".
+ *      NOTE: Public Web App access is intended for internal/development testing prior to
+ *      production authentication. Add token/OAuth verification before public internet exposure.
  *   5. Copy the Web App URL (https://script.google.com/macros/s/.../exec) into SiteTrack Pro.
  */
 
+var API_VERSION = '2.1.0';
 var DEFAULT_SPREADSHEET_ID = '1HNmAdZe7POIzIm9mCUPxQJL7p9BoBZEO1hXq6PZNs5M';
 
 var REQUIRED_SHEETS = [
@@ -143,22 +160,51 @@ function jsonResponse(payload) {
   );
 }
 
+function isValidSpreadsheetIdFormat(id) {
+  return /^[a-zA-Z0-9_-]{15,80}$/.test(id);
+}
+
 function getSpreadsheet(requestedId) {
-  var id = (requestedId || '').toString().trim() || DEFAULT_SPREADSHEET_ID;
-  try {
-    return SpreadsheetApp.openById(id);
-  } catch (err) {
-    var active = SpreadsheetApp.getActiveSpreadsheet();
-    if (active && (!requestedId || active.getId() === id)) {
-      return active;
-    }
+  var raw = (requestedId || '').toString().trim();
+  var id = raw || DEFAULT_SPREADSHEET_ID;
+
+  if (!isValidSpreadsheetIdFormat(id)) {
     throw new Error(
-      'Unable to open spreadsheet "' +
+      'Invalid Spreadsheet ID format: "' +
         id +
-        '". Ensure the Apps Script owner has Editor access. Details: ' +
-        err.message
+        '". Expected a Google Sheets document ID.'
     );
   }
+
+  var ss = null;
+  try {
+    ss = SpreadsheetApp.openById(id);
+  } catch (err) {
+    // Only fall back to container-bound active spreadsheet if its ID matches exactly
+    var active = SpreadsheetApp.getActiveSpreadsheet();
+    if (active && active.getId() === id) {
+      ss = active;
+    } else {
+      throw new Error(
+        'Unable to open spreadsheet "' +
+          id +
+          '". Ensure the Apps Script owner has Editor access to this spreadsheet. Details: ' +
+          (err && err.message ? err.message : String(err))
+      );
+    }
+  }
+
+  if (!ss || ss.getId() !== id) {
+    throw new Error(
+      'Spreadsheet ID mismatch: requested "' +
+        id +
+        '" but opened "' +
+        (ss ? ss.getId() : 'none') +
+        '".'
+    );
+  }
+
+  return ss;
 }
 
 function normalizeCellValue(val) {
@@ -170,7 +216,35 @@ function normalizeCellValue(val) {
       'yyyy-MM-dd'
     );
   }
+  if (typeof val === 'boolean') {
+    return val ? 'TRUE' : 'FALSE';
+  }
   return String(val);
+}
+
+function buildHealthPayload(ss) {
+  var existingSheets = [];
+  var missingSheets = [];
+  for (var i = 0; i < REQUIRED_SHEETS.length; i++) {
+    var name = REQUIRED_SHEETS[i];
+    if (ss.getSheetByName(name)) {
+      existingSheets.push(name);
+    } else {
+      missingSheets.push(name);
+    }
+  }
+  var nowIso = new Date().toISOString();
+  return {
+    spreadsheetId: ss.getId(),
+    title: ss.getName(),
+    spreadsheetUrl: ss.getUrl(),
+    existingSheets: existingSheets,
+    missingSheets: missingSheets,
+    isSchemaReady: missingSheets.length === 0,
+    serverTimestamp: nowIso,
+    timestamp: nowIso,
+    apiVersion: API_VERSION,
+  };
 }
 
 function inspectSpreadsheetData(ss) {
@@ -205,13 +279,17 @@ function inspectSpreadsheetData(ss) {
     }
   }
 
+  var nowIso = new Date().toISOString();
   return {
     spreadsheetId: ss.getId(),
     title: ss.getName(),
     spreadsheetUrl: ss.getUrl(),
     existingSheets: existingSheets,
     missingSheets: missingSheets,
-    lastSyncedAt: new Date().toISOString(),
+    isSchemaReady: missingSheets.length === 0,
+    lastSyncedAt: nowIso,
+    serverTimestamp: nowIso,
+    apiVersion: API_VERSION,
     tables: tables,
   };
 }
@@ -286,25 +364,36 @@ function doGet(e) {
     var spreadsheetId = (params.spreadsheetId || '').toString().trim();
     var ss = getSpreadsheet(spreadsheetId);
 
-    if (action === 'ping') {
-      var existing = [];
-      for (var i = 0; i < REQUIRED_SHEETS.length; i++) {
-        if (ss.getSheetByName(REQUIRED_SHEETS[i])) {
-          existing.push(REQUIRED_SHEETS[i]);
-        }
-      }
+    if (action === 'healthCheck' || action === 'ping') {
       return jsonResponse({
         ok: true,
-        action: 'ping',
+        action: action,
+        data: buildHealthPayload(ss),
+      });
+    }
+
+    if (action === 'verifyRecord') {
+      var vSheetName = (params.sheetName || '').toString().trim();
+      var vRecordId = (params.recordId || '').toString().trim();
+      if (!SHEET_HEADERS[vSheetName]) {
+        throw new Error('Unknown worksheet: ' + vSheetName);
+      }
+      if (!vRecordId) {
+        throw new Error('recordId is required for verifyRecord.');
+      }
+      var vSheet = ss.getSheetByName(vSheetName);
+      var foundRow = vSheet ? findRowByPrimaryKey(vSheet, vRecordId, -1) : -1;
+      return jsonResponse({
+        ok: true,
+        action: 'verifyRecord',
         data: {
           spreadsheetId: ss.getId(),
-          title: ss.getName(),
-          spreadsheetUrl: ss.getUrl(),
-          existingSheets: existing,
-          missingSheets: REQUIRED_SHEETS.filter(function (s) {
-            return existing.indexOf(s) === -1;
-          }),
-          timestamp: new Date().toISOString(),
+          sheetName: vSheetName,
+          recordId: vRecordId,
+          exists: foundRow !== -1,
+          rowNumber: foundRow,
+          serverTimestamp: new Date().toISOString(),
+          apiVersion: API_VERSION,
         },
       });
     }
@@ -320,11 +409,13 @@ function doGet(e) {
     return jsonResponse({
       ok: false,
       error: 'Unsupported GET action: ' + action,
+      apiVersion: API_VERSION,
     });
   } catch (err) {
     return jsonResponse({
       ok: false,
       error: err && err.message ? err.message : String(err),
+      apiVersion: API_VERSION,
     });
   }
 }
@@ -339,7 +430,13 @@ function doPost(e) {
 
     var rawBody =
       e && e.postData && e.postData.contents ? e.postData.contents : '{}';
-    var payload = JSON.parse(rawBody);
+    var payload;
+    try {
+      payload = JSON.parse(rawBody);
+    } catch (parseErr) {
+      throw new Error('Invalid JSON request payload.');
+    }
+
     var action = (payload.action || '').toString().trim();
     var ss = getSpreadsheet(payload.spreadsheetId);
 
@@ -362,6 +459,7 @@ function doPost(e) {
             .setValues(normalizedSeed);
         }
       }
+      SpreadsheetApp.flush();
       return jsonResponse({
         ok: true,
         action: 'initializeSchema',
@@ -392,13 +490,17 @@ function doPost(e) {
         );
       }
       sheetToAppend.appendRow(row);
+      SpreadsheetApp.flush();
       return jsonResponse({
         ok: true,
         action: 'appendRow',
         data: {
+          spreadsheetId: ss.getId(),
           sheetName: sheetName,
           recordId: primaryKey,
           rowNumber: sheetToAppend.getLastRow(),
+          serverTimestamp: new Date().toISOString(),
+          apiVersion: API_VERSION,
         },
       });
     }
@@ -470,10 +572,16 @@ function doPost(e) {
         }
       }
 
+      SpreadsheetApp.flush();
       return jsonResponse({
         ok: true,
         action: 'appendRows',
-        data: { committedOperations: preparedOps.length },
+        data: {
+          spreadsheetId: ss.getId(),
+          committedOperations: preparedOps.length,
+          serverTimestamp: new Date().toISOString(),
+          apiVersion: API_VERSION,
+        },
       });
     }
 
@@ -487,6 +595,9 @@ function doPost(e) {
       var updRecordId = (payload.recordId || updRowValues[0] || '')
         .toString()
         .trim();
+      if (!updRecordId) {
+        throw new Error('recordId is required to update a row.');
+      }
       var targetRow = findRowByPrimaryKey(
         updSheet,
         updRecordId,
@@ -498,19 +609,23 @@ function doPost(e) {
             updRecordId +
             '" was not found in ' +
             updSheetName +
-            '. Please click Sync Sheet to refresh latest rows.'
+            '. Please click Sync Now to refresh latest rows.'
         );
       }
       updSheet
         .getRange(targetRow, 1, 1, updRowValues.length)
         .setValues([updRowValues]);
+      SpreadsheetApp.flush();
       return jsonResponse({
         ok: true,
         action: 'updateRow',
         data: {
+          spreadsheetId: ss.getId(),
           sheetName: updSheetName,
           recordId: updRecordId,
           rowNumber: targetRow,
+          serverTimestamp: new Date().toISOString(),
+          apiVersion: API_VERSION,
         },
       });
     }
@@ -540,13 +655,17 @@ function doPost(e) {
         );
       }
       delSheet.deleteRow(delRow);
+      SpreadsheetApp.flush();
       return jsonResponse({
         ok: true,
         action: 'deleteRow',
         data: {
+          spreadsheetId: ss.getId(),
           sheetName: delSheetName,
           recordId: delRecordId,
           deletedRowNumber: delRow,
+          serverTimestamp: new Date().toISOString(),
+          apiVersion: API_VERSION,
         },
       });
     }
@@ -554,11 +673,13 @@ function doPost(e) {
     return jsonResponse({
       ok: false,
       error: 'Unsupported POST action: ' + action,
+      apiVersion: API_VERSION,
     });
   } catch (err) {
     return jsonResponse({
       ok: false,
       error: err && err.message ? err.message : String(err),
+      apiVersion: API_VERSION,
     });
   } finally {
     if (lockAcquired) {
