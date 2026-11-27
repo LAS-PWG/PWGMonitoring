@@ -15148,6 +15148,16 @@ var ChevronRight = createLucideIcon("chevron-right", [["path", {
 * This source code is licensed under the ISC license.
 * See the LICENSE file in the root directory of this source tree.
 */
+var ChevronUp = createLucideIcon("chevron-up", [["path", {
+	d: "m18 15-6-6-6 6",
+	key: "153udz"
+}]]);
+/**
+* @license lucide-react v0.546.0 - ISC
+*
+* This source code is licensed under the ISC license.
+* See the LICENSE file in the root directory of this source tree.
+*/
 var CircleAlert = createLucideIcon("circle-alert", [
 	["circle", {
 		cx: "12",
@@ -18577,21 +18587,21 @@ function buildPrintDocumentHtml(params) {
   <style>
     @page {
       size: A4 ${orientation};
-      margin: 12mm 12mm 14mm 12mm;
+      margin: 10mm 10mm 12mm 10mm;
       @bottom-left {
         content: "SiteTrack Pro · ${escapeHtml(docReference)}";
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-        font-size: 8pt;
+        font-size: 7.5pt;
         color: #64748b;
       }
       @bottom-right {
         content: "Page " counter(page) " of " counter(pages);
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-        font-size: 8pt;
+        font-size: 7.5pt;
         color: #64748b;
       }
     }
-    * {
+    *, *::before, *::after {
       box-sizing: border-box;
       -webkit-print-color-adjust: exact !important;
       print-color-adjust: exact !important;
@@ -18599,114 +18609,126 @@ function buildPrintDocumentHtml(params) {
     html, body {
       margin: 0;
       padding: 0;
+      width: 100%;
+      max-width: 100%;
+      overflow-x: hidden;
       background: #ffffff;
       color: #0f172a;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      font-size: 9.5pt;
-      line-height: 1.4;
+      font-size: 8.5pt;
+      line-height: 1.35;
     }
     .doc-header {
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
       border-bottom: 2px solid #0f172a;
-      padding-bottom: 8px;
-      margin-bottom: 12px;
-      gap: 12px;
+      padding-bottom: 6px;
+      margin-bottom: 10px;
+      gap: 10px;
+      width: 100%;
     }
     .doc-brand {
-      font-size: 13pt;
+      font-size: 12.5pt;
       font-weight: 800;
       letter-spacing: -0.01em;
       color: #0f172a;
     }
     .doc-category {
-      font-size: 8.5pt;
+      font-size: 8pt;
       font-weight: 700;
       text-transform: uppercase;
-      letter-spacing: 0.06em;
+      letter-spacing: 0.04em;
       color: #475569;
       margin-top: 2px;
     }
     .doc-meta {
       text-align: right;
-      font-size: 8pt;
+      font-size: 7.5pt;
       color: #334155;
-      line-height: 1.45;
+      line-height: 1.4;
+      flex-shrink: 0;
     }
     .doc-meta strong {
       color: #0f172a;
     }
     h2 {
-      font-size: 10pt;
+      font-size: 9pt;
       font-weight: 700;
       text-transform: uppercase;
-      letter-spacing: 0.04em;
+      letter-spacing: 0.03em;
       color: #0f172a;
       border-bottom: 1px solid #cbd5e1;
       padding-bottom: 3px;
-      margin: 14px 0 7px 0;
+      margin: 11px 0 6px 0;
       break-after: avoid;
       page-break-after: avoid;
     }
     .meta-grid {
       width: 100%;
+      max-width: 100%;
       border-collapse: collapse;
-      margin-bottom: 10px;
+      margin-bottom: 8px;
       table-layout: fixed;
     }
     .meta-grid td {
       border: 1px solid #cbd5e1;
-      padding: 5px 8px;
+      padding: 4px 6px;
       vertical-align: top;
-      font-size: 8.5pt;
+      font-size: 8pt;
+      overflow-wrap: anywhere;
       word-break: break-word;
     }
     .meta-grid td.k {
       background: #f1f5f9;
       font-weight: 700;
       color: #334155;
-      width: 18%;
+      width: 17%;
     }
     .kpi-strip {
-      display: table;
+      display: flex;
+      gap: 6px;
       width: 100%;
-      table-layout: fixed;
-      border-collapse: separate;
-      border-spacing: 6px 0;
-      margin: 8px -6px 12px -6px;
+      max-width: 100%;
+      margin: 8px 0 10px 0;
     }
     .kpi-box {
-      display: table-cell;
+      flex: 1 1 0;
+      min-width: 0;
       border: 1px solid #cbd5e1;
       background: #f8fafc;
-      padding: 6px 8px;
+      padding: 5px 7px;
       vertical-align: top;
     }
     .kpi-label {
-      font-size: 7.5pt;
+      font-size: 6.8pt;
       font-weight: 700;
       text-transform: uppercase;
       color: #475569;
-      letter-spacing: 0.03em;
+      letter-spacing: 0.02em;
+      overflow-wrap: anywhere;
     }
     .kpi-val {
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-      font-size: 10.5pt;
+      font-size: 9.5pt;
       font-weight: 800;
       color: #0f172a;
       margin-top: 2px;
+      overflow-wrap: anywhere;
     }
     .kpi-sub {
-      font-size: 7.5pt;
+      font-size: 6.8pt;
       color: #64748b;
       margin-top: 1px;
+      overflow-wrap: anywhere;
     }
     table.data-table {
       width: 100%;
+      max-width: 100%;
+      table-layout: fixed;
       border-collapse: collapse;
-      margin-bottom: 10px;
-      font-size: 8pt;
+      margin-bottom: 9px;
+      font-size: 7.5pt;
     }
     table.data-table thead {
       display: table-header-group;
@@ -18720,15 +18742,19 @@ function buildPrintDocumentHtml(params) {
       color: #ffffff;
       font-weight: 700;
       text-align: left;
-      padding: 5px 6px;
+      padding: 4px 4px;
       border: 1px solid #1e293b;
-      font-size: 7.5pt;
-      white-space: nowrap;
+      font-size: 7pt;
+      line-height: 1.2;
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
     table.data-table td {
       border: 1px solid #cbd5e1;
-      padding: 4.5px 6px;
+      padding: 3.5px 4px;
       vertical-align: top;
+      line-height: 1.25;
+      overflow-wrap: anywhere;
       word-break: break-word;
     }
     table.data-table tbody tr:nth-child(even) {
@@ -18743,14 +18769,15 @@ function buildPrintDocumentHtml(params) {
       text-align: right;
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
       font-variant-numeric: tabular-nums;
-      white-space: nowrap;
+      overflow-wrap: anywhere;
     }
     .mono {
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      overflow-wrap: anywhere;
     }
     .muted {
       color: #64748b;
-      font-size: 7.5pt;
+      font-size: 6.8pt;
     }
     .badge {
       display: inline-block;
@@ -18772,23 +18799,22 @@ function buildPrintDocumentHtml(params) {
       margin-top: 8px;
     }
     .signoff {
-      margin-top: 18px;
-      display: table;
+      margin-top: 16px;
+      display: flex;
+      gap: 16px;
       width: 100%;
-      table-layout: fixed;
       break-inside: avoid;
       page-break-inside: avoid;
     }
     .signoff-col {
-      display: table-cell;
-      padding-right: 18px;
-      vertical-align: bottom;
+      flex: 1 1 0;
+      min-width: 0;
     }
     .signoff-line {
       border-top: 1px solid #334155;
-      margin-top: 26px;
+      margin-top: 24px;
       padding-top: 3px;
-      font-size: 8pt;
+      font-size: 7.5pt;
       color: #334155;
     }
     .doc-footer {
@@ -18833,18 +18859,19 @@ function buildPrintDocumentHtml(params) {
 </body>
 </html>`;
 }
-function triggerIframePrint(html) {
+function triggerIframePrint(html, orientation = "portrait") {
 	const existing = document.getElementById("sitetrack-attachment-print-frame");
 	if (existing) existing.remove();
 	const iframe = document.createElement("iframe");
 	iframe.id = "sitetrack-attachment-print-frame";
 	iframe.style.position = "fixed";
-	iframe.style.right = "0";
-	iframe.style.bottom = "0";
-	iframe.style.width = "0";
-	iframe.style.height = "0";
+	iframe.style.left = "-10000px";
+	iframe.style.top = "0";
+	iframe.style.width = orientation === "landscape" ? "277mm" : "190mm";
+	iframe.style.height = "1px";
 	iframe.style.border = "0";
-	iframe.style.visibility = "hidden";
+	iframe.style.opacity = "0";
+	iframe.style.pointerEvents = "none";
 	document.body.appendChild(iframe);
 	const doc = iframe.contentDocument || iframe.contentWindow?.document;
 	if (!doc || !iframe.contentWindow) {
@@ -18864,7 +18891,7 @@ function triggerIframePrint(html) {
 			}, 1500);
 		}
 	};
-	window.setTimeout(runPrint, 200);
+	window.setTimeout(runPrint, 220);
 }
 /**
 * 1. Printable Project Details Attachment
@@ -19050,6 +19077,15 @@ function printSubProjectDetailsAttachment(params) {
 
     <h2>1. Linked Contracts (${contracts.length})</h2>
     <table class="data-table">
+      <colgroup>
+        <col style="width:24%" />
+        <col style="width:11%" />
+        <col style="width:10%" />
+        <col style="width:13%" />
+        <col style="width:14%" />
+        <col style="width:14%" />
+        <col style="width:14%" />
+      </colgroup>
       <thead>
         <tr>
           <th>Contractor</th>
@@ -19066,6 +19102,16 @@ function printSubProjectDetailsAttachment(params) {
 
     <h2>2. Chronological Payment Activity (${sortedPayments.length})</h2>
     <table class="data-table">
+      <colgroup>
+        <col style="width:11%" />
+        <col style="width:13%" />
+        <col style="width:10%" />
+        <col style="width:14%" />
+        <col style="width:13%" />
+        <col style="width:12%" />
+        <col style="width:13%" />
+        <col style="width:14%" />
+      </colgroup>
       <thead>
         <tr>
           <th>Date</th>
@@ -19088,7 +19134,7 @@ function printSubProjectDetailsAttachment(params) {
 		preparedBy,
 		orientation: "portrait",
 		bodyHtml
-	}));
+	}), "portrait");
 }
 /**
 * 3. Printable Contract Details & Chronological Payment History Attachment
@@ -19228,7 +19274,7 @@ function printContractPaymentHistoryAttachment(params) {
 		preparedBy,
 		orientation: "landscape",
 		bodyHtml
-	}));
+	}), "landscape");
 }
 /**
 * 4. Printable Contractor Information & Contract Summary Attachment
@@ -21352,6 +21398,8 @@ function getDensityMetrics(mode, totalRows, orientation) {
 }
 function buildStandalonePrintCss(params) {
 	const { cssPaperSize, orientation, fontSizePx, cellPyPx, cellPxPx } = params;
+	const safeFontPx = orientation === "portrait" ? Math.min(fontSizePx, 8) : Math.min(fontSizePx, 8.8);
+	const safeCellPx = orientation === "portrait" ? Math.min(cellPxPx, 2.5) : Math.min(cellPxPx, 3.2);
 	return `
     @page {
       size: ${cssPaperSize} ${orientation};
@@ -21377,13 +21425,14 @@ function buildStandalonePrintCss(params) {
       -webkit-print-color-adjust: exact !important;
       print-color-adjust: exact !important;
       width: 100%;
+      max-width: 100%;
     }
     .st-print-doc {
       width: 100%;
       max-width: 100%;
       background: #FFFFFF;
       color: #0F172A;
-      overflow: hidden;
+      overflow: visible;
     }
     .st-print-doc-banner {
       display: flex;
@@ -21457,9 +21506,9 @@ function buildStandalonePrintCss(params) {
     table.st-ledger-table th,
     table.st-ledger-table td {
       border: 1px solid #334155;
-      padding: ${cellPyPx}px ${cellPxPx}px;
-      font-size: ${fontSizePx}px;
-      line-height: 1.22;
+      padding: ${cellPyPx}px ${safeCellPx}px;
+      font-size: ${safeFontPx}px;
+      line-height: 1.2;
       vertical-align: middle;
       overflow-wrap: anywhere;
       word-break: break-word;
@@ -21500,15 +21549,21 @@ function buildStandalonePrintCss(params) {
     }
     .st-paired-landscape {
       display: grid;
-      grid-template-columns: minmax(0, 62%) minmax(0, 36.8%);
+      grid-template-columns: minmax(0, 61.5%) minmax(0, 37.3%);
       gap: 1.2%;
       align-items: start;
       width: 100%;
+      max-width: 100%;
     }
     .st-paired-landscape > * {
       min-width: 0;
       max-width: 100%;
       overflow: hidden;
+    }
+    .st-paired-landscape table.st-ledger-table th,
+    .st-paired-landscape table.st-ledger-table td {
+      font-size: ${Math.max(6.8, safeFontPx - .8)}px;
+      padding: ${Math.max(1.5, cellPyPx - .5)}px 2px;
     }
     .st-print-footer {
       margin-top: 9px;
@@ -21525,7 +21580,20 @@ function buildStandalonePrintCss(params) {
 var PrintableDashboardView = ({ projects, subProjects, contractsTCP, contractPayments, contractors, sites, activeUser, onNavigateTab }) => {
 	const [searchQuery, setSearchQuery] = (0, import_react.useState)("");
 	const [selectedProjectId, setSelectedProjectId] = (0, import_react.useState)("");
+	const [isOverviewOpen, setIsOverviewOpen] = (0, import_react.useState)(true);
+	const [isComboOpen, setIsComboOpen] = (0, import_react.useState)(false);
 	const [isPrintModalOpen, setIsPrintModalOpen] = (0, import_react.useState)(false);
+	const comboContainerRef = (0, import_react.useRef)(null);
+	(0, import_react.useEffect)(() => {
+		const handleClickOutside = (event) => {
+			if (comboContainerRef.current && !comboContainerRef.current.contains(event.target)) {
+				setIsComboOpen(false);
+				setSearchQuery("");
+			}
+		};
+		document.addEventListener("mousedown", handleClickOutside);
+		return () => document.removeEventListener("mousedown", handleClickOutside);
+	}, []);
 	const [paperSize, setPaperSize] = (0, import_react.useState)("a4");
 	const [orientation, setOrientation] = (0, import_react.useState)("landscape");
 	const [densityMode, setDensityMode] = (0, import_react.useState)("auto");
@@ -21604,16 +21672,15 @@ var PrintableDashboardView = ({ projects, subProjects, contractsTCP, contractPay
 		].join(" ").toLowerCase().includes(q));
 	}, [projects, searchQuery]);
 	const selectedProject = (0, import_react.useMemo)(() => {
-		if (selectedProjectId) {
-			const exact = projects.find((p) => p.projectId === selectedProjectId);
-			if (exact) return exact;
-		}
-		return filteredProjects[0] || projects[0] || null;
-	}, [
-		projects,
-		filteredProjects,
-		selectedProjectId
-	]);
+		if (!selectedProjectId) return null;
+		return projects.find((p) => p.projectId === selectedProjectId) || null;
+	}, [projects, selectedProjectId]);
+	const selectedProjectLabel = selectedProject ? `${selectedProject.mainProjectCode} — ${selectedProject.projectName || selectedProject.siteName}` : "";
+	const handleSelectProject = (projectId) => {
+		setSelectedProjectId(projectId);
+		setSearchQuery("");
+		setIsComboOpen(false);
+	};
 	const reportData = (0, import_react.useMemo)(() => {
 		if (!selectedProject) return null;
 		const projSubs = subProjects.filter((s) => s.projectId === selectedProject.projectId);
@@ -21756,13 +21823,16 @@ var PrintableDashboardView = ({ projects, subProjects, contractsTCP, contractPay
 			window.print();
 			return;
 		}
+		const printableWidthMm = Math.max(120, previewPaperWidthMm - 20);
 		const iframe = document.createElement("iframe");
 		iframe.style.position = "fixed";
-		iframe.style.right = "0";
-		iframe.style.bottom = "0";
-		iframe.style.width = "0";
-		iframe.style.height = "0";
+		iframe.style.left = "-10000px";
+		iframe.style.top = "0";
+		iframe.style.width = `${printableWidthMm}mm`;
+		iframe.style.height = "1px";
 		iframe.style.border = "0";
+		iframe.style.opacity = "0";
+		iframe.style.pointerEvents = "none";
 		iframe.setAttribute("aria-hidden", "true");
 		document.body.appendChild(iframe);
 		const doc = iframe.contentWindow?.document;
@@ -22497,384 +22567,505 @@ var PrintableDashboardView = ({ projects, subProjects, contractsTCP, contractPay
 		className: "space-y-5",
 		children: [
 			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				className: "no-print grid grid-cols-2 lg:grid-cols-4 gap-3.5",
-				children: [
-					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-						type: "button",
-						onClick: () => onNavigateTab("projects"),
-						className: "text-left rounded-xl border border-slate-200 bg-white p-4 hover:border-slate-300 transition-colors",
-						children: [
-							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								className: "flex items-center justify-between text-xs font-medium text-slate-500",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Total Projects" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(FolderKanban, { className: "h-3.5 w-3.5 text-slate-400" })]
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-								className: "mt-1.5 text-xl font-bold tracking-tight text-slate-900 tabular-nums",
-								children: operationalMetrics.totalProjects
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								className: "mt-1 text-xs text-slate-500",
-								children: [
-									subProjects.length,
-									" sub-projects · ",
-									sites.length,
-									" sites"
-								]
-							})
-						]
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-						type: "button",
-						onClick: () => onNavigateTab("projects"),
-						className: "text-left rounded-xl border border-slate-200 bg-white p-4 hover:border-slate-300 transition-colors",
-						children: [
-							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								className: "flex items-center justify-between text-xs font-medium text-slate-500",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Active Projects" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Clock, { className: "h-3.5 w-3.5 text-blue-600" })]
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-								className: "mt-1.5 text-xl font-bold tracking-tight text-blue-700 tabular-nums",
-								children: operationalMetrics.activeProjects
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-								className: "mt-1 text-xs text-slate-500",
-								children: "Started, In Progress, or Under Review"
-							})
-						]
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-						type: "button",
-						onClick: () => onNavigateTab("projects"),
-						className: "text-left rounded-xl border border-slate-200 bg-white p-4 hover:border-slate-300 transition-colors",
-						children: [
-							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								className: "flex items-center justify-between text-xs font-medium text-slate-500",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Completed Projects" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(CircleCheck, { className: "h-3.5 w-3.5 text-emerald-600" })]
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-								className: "mt-1.5 text-xl font-bold tracking-tight text-emerald-700 tabular-nums",
-								children: operationalMetrics.completedProjects
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-								className: "mt-1 text-xs text-slate-500",
-								children: operationalMetrics.totalProjects > 0 ? `${Math.round(operationalMetrics.completedProjects / operationalMetrics.totalProjects * 100)}% portfolio completion` : "No projects recorded"
-							})
-						]
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-						type: "button",
-						onClick: () => onNavigateTab("projects"),
-						className: "text-left rounded-xl border border-slate-200 bg-white p-4 hover:border-slate-300 transition-colors",
-						children: [
-							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								className: "flex items-center justify-between text-xs font-medium text-slate-500",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Delayed Projects" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(TriangleAlert, { className: `h-3.5 w-3.5 ${operationalMetrics.delayedProjects > 0 ? "text-red-600" : "text-slate-400"}` })]
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-								className: `mt-1.5 text-xl font-bold tracking-tight tabular-nums ${operationalMetrics.delayedProjects > 0 ? "text-red-700" : "text-slate-900"}`,
-								children: operationalMetrics.delayedProjects
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-								className: "mt-1 text-xs text-slate-500",
-								children: operationalMetrics.delayedProjects > 0 ? "Requires schedule follow-up" : "No projects currently flagged delayed"
-							})
-						]
-					})
-				]
-			}),
-			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				className: "no-print grid grid-cols-2 lg:grid-cols-4 gap-3.5",
-				children: [
-					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "rounded-xl border border-slate-200 bg-white p-4",
-						children: [
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-								className: "text-xs font-medium text-slate-500",
-								children: "Total Active Contract Value (TCP)"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-								className: "mt-1.5 text-xl font-bold tracking-tight text-slate-900 tabular-nums",
-								children: formatCurrency(portfolioSummary.totalActiveTCP)
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								className: "mt-1 text-xs text-slate-500",
-								children: [
-									contractsTCP.filter((c) => c.contractStatus !== "CANCEL").length,
-									" ",
-									"active contracts · ",
-									contractors.filter((c) => c.active).length,
-									" ",
-									"contractors"
-								]
-							})
-						]
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "rounded-xl border border-slate-200 bg-white p-4",
-						children: [
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-								className: "text-xs font-medium text-slate-500",
-								children: "Total Payments Made (Gross Settled)"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-								className: "mt-1.5 text-xl font-bold tracking-tight text-emerald-700 tabular-nums",
-								children: formatCurrency(portfolioSummary.totalReceivedGross)
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								className: "mt-1 text-xs text-slate-500",
-								children: ["Net Cheques: ", formatCurrency(portfolioSummary.totalReceivedCheques)]
-							})
-						]
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "rounded-xl border border-slate-200 bg-white p-4",
-						children: [
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-								className: "text-xs font-medium text-slate-500",
-								children: "Unreleased Retention Holdback"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-								className: "mt-1.5 text-xl font-bold tracking-tight text-amber-700 tabular-nums",
-								children: formatCurrency(portfolioSummary.totalUnreleasedRetention)
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								className: "mt-1 text-xs text-slate-500",
-								children: [
-									"Safe Progress Release:",
-									" ",
-									formatCurrency(portfolioSummary.totalSafeProgressRelease)
-								]
-							})
-						]
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "rounded-xl border border-slate-200 bg-white p-4",
-						children: [
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-								className: "text-xs font-medium text-slate-500",
-								children: "Outstanding Contract Balance"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-								className: "mt-1.5 text-xl font-bold tracking-tight text-slate-900 tabular-nums",
-								children: formatCurrency(portfolioSummary.totalRemainingBalance)
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								className: "mt-1 text-xs text-slate-500",
-								children: ["In-Flight RFPs: ", formatCurrency(portfolioSummary.totalInFlightRFP)]
-							})
-						]
-					})
-				]
-			}),
-			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				className: "no-print grid grid-cols-1 lg:grid-cols-3 gap-4",
-				children: [
-					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "rounded-xl border border-slate-200 bg-white overflow-hidden flex flex-col",
-						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-							className: "flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-2.5",
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								className: "flex items-center gap-2 text-xs font-bold text-slate-800",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CalendarClock, { className: "h-3.5 w-3.5 text-slate-500" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Upcoming Target Dates" })]
-							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-								type: "button",
-								onClick: () => onNavigateTab("projects"),
-								className: "text-[11px] font-semibold text-blue-700 hover:underline",
-								children: "View Projects"
-							})]
-						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-							className: "divide-y divide-slate-200 text-xs flex-1",
-							children: operationalMetrics.upcomingTargets.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-								className: "px-4 py-6 text-center text-slate-500",
-								children: "No open sub-project target dates recorded."
-							}) : operationalMetrics.upcomingTargets.map(({ subProject, daysDiff }) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-								type: "button",
-								onClick: () => setSelectedProjectId(subProject.projectId),
-								className: "st-hover-row w-full px-4 py-2.5 text-left flex items-start justify-between gap-2 transition-colors",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-									className: "min-w-0",
-									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-										className: "font-mono text-[11px] font-bold text-slate-900 truncate",
-										children: subProject.subProjectCode
-									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-										className: "text-slate-600 truncate",
-										children: subProject.subProjectName
-									})]
-								}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-									className: "text-right shrink-0",
-									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-										className: "font-mono text-[11px] font-semibold text-slate-800",
-										children: formatShortDate(subProject.targetDate)
-									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-										className: `text-[10px] font-semibold ${daysDiff < 0 ? "text-red-700" : daysDiff <= 14 ? "text-amber-700" : "text-slate-500"}`,
-										children: daysDiff < 0 ? `${Math.abs(daysDiff)}d overdue` : daysDiff === 0 ? "Due today" : `In ${daysDiff}d`
-									})]
-								})]
-							}, subProject.subProjectId))
+				className: "no-print rounded-xl border border-slate-200 bg-white overflow-hidden",
+				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+					type: "button",
+					onClick: () => setIsOverviewOpen((prev) => !prev),
+					"aria-expanded": isOverviewOpen,
+					className: "st-hover-row w-full flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-left transition-colors",
+					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "flex flex-wrap items-center gap-x-3 gap-y-1 min-w-0",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+							className: "inline-flex items-center gap-2 text-sm font-bold text-slate-900",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(FolderKanban, { className: "h-4 w-4 text-slate-500 shrink-0" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Portfolio Overview & Activity" })]
+						}), !isOverviewOpen && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+							className: "text-xs text-slate-500 tabular-nums",
+							children: [
+								operationalMetrics.totalProjects,
+								" projects ·",
+								" ",
+								formatCurrency(portfolioSummary.totalActiveTCP),
+								" TCP ·",
+								" ",
+								formatCurrency(portfolioSummary.totalRemainingBalance),
+								" balance"
+							]
 						})]
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "rounded-xl border border-slate-200 bg-white overflow-hidden flex flex-col",
-						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-							className: "flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-2.5",
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								className: "flex items-center gap-2 text-xs font-bold text-slate-800",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(FolderKanban, { className: "h-3.5 w-3.5 text-slate-500" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Recent Project Updates" })]
-							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-								type: "button",
-								onClick: () => onNavigateTab("projects"),
-								className: "text-[11px] font-semibold text-blue-700 hover:underline",
-								children: "Manage All"
-							})]
-						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-							className: "divide-y divide-slate-200 text-xs flex-1",
-							children: operationalMetrics.recentUpdates.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-								className: "px-4 py-6 text-center text-slate-500",
-								children: "No project updates recorded yet."
-							}) : operationalMetrics.recentUpdates.map((item) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-								type: "button",
-								onClick: () => setSelectedProjectId(item.projectId),
-								className: "st-hover-row w-full px-4 py-2.5 text-left flex items-start justify-between gap-2 transition-colors",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-									className: "min-w-0",
-									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-										className: "flex items-center gap-1.5",
-										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-											className: "font-mono text-[11px] font-bold text-slate-900 truncate",
-											children: item.code
-										}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-											className: "text-[10px] text-slate-500",
-											children: ["· ", item.kind]
-										})]
-									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-										className: "text-slate-600 truncate",
-										children: item.title
-									})]
-								}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-									className: "text-right shrink-0",
-									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-										className: "text-[11px] font-semibold text-slate-800",
-										children: item.status
-									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-										className: "font-mono text-[10px] text-slate-500",
-										children: formatShortDate(item.date)
-									})]
-								})]
-							}, `${item.kind}-${item.id}`))
-						})]
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "rounded-xl border border-slate-200 bg-white overflow-hidden flex flex-col",
-						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-							className: "flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-2.5",
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								className: "flex items-center gap-2 text-xs font-bold text-slate-800",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CreditCard, { className: "h-3.5 w-3.5 text-slate-500" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Recent Payment Activities" })]
-							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-								type: "button",
-								onClick: () => onNavigateTab("contracts"),
-								className: "text-[11px] font-semibold text-blue-700 hover:underline",
-								children: "Payment Ledger"
-							})]
-						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-							className: "divide-y divide-slate-200 text-xs flex-1",
-							children: operationalMetrics.recentPayments.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-								className: "px-4 py-6 text-center text-slate-500",
-								children: "No payment activities recorded yet."
-							}) : operationalMetrics.recentPayments.map((pay) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-								type: "button",
-								onClick: () => onNavigateTab("contracts"),
-								className: "st-hover-row w-full px-4 py-2.5 text-left flex items-start justify-between gap-2 transition-colors",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-									className: "min-w-0",
-									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-										className: "font-mono text-[11px] font-bold text-slate-900 truncate",
-										children: [pay.cvNumber ? `CV ${pay.cvNumber}` : `RFP ${pay.rfpNumber}`, /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-											className: "font-normal text-slate-500",
+					}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+						className: "inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 shrink-0",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: isOverviewOpen ? "Collapse" : "Expand" }), isOverviewOpen ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ChevronUp, { className: "h-4 w-4" }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ChevronDown, { className: "h-4 w-4" })]
+					})]
+				}), isOverviewOpen && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+					className: "border-t border-slate-200 p-4 space-y-4",
+					children: [
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "grid grid-cols-2 lg:grid-cols-4 gap-3.5",
+							children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+									type: "button",
+									onClick: () => onNavigateTab("projects"),
+									className: "text-left rounded-xl border border-slate-200 bg-white p-4 hover:border-slate-300 transition-colors",
+									children: [
+										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+											className: "flex items-center justify-between text-xs font-medium text-slate-500",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Total Projects" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(FolderKanban, { className: "h-3.5 w-3.5 text-slate-400" })]
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+											className: "mt-1.5 text-xl font-bold tracking-tight text-slate-900 tabular-nums",
+											children: operationalMetrics.totalProjects
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+											className: "mt-1 text-xs text-slate-500",
 											children: [
-												" ",
-												"· ",
-												pay.subProjectCode
+												subProjects.length,
+												" sub-projects · ",
+												sites.length,
+												" sites"
 											]
+										})
+									]
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+									type: "button",
+									onClick: () => onNavigateTab("projects"),
+									className: "text-left rounded-xl border border-slate-200 bg-white p-4 hover:border-slate-300 transition-colors",
+									children: [
+										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+											className: "flex items-center justify-between text-xs font-medium text-slate-500",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Active Projects" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Clock, { className: "h-3.5 w-3.5 text-blue-600" })]
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+											className: "mt-1.5 text-xl font-bold tracking-tight text-blue-700 tabular-nums",
+											children: operationalMetrics.activeProjects
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+											className: "mt-1 text-xs text-slate-500",
+											children: "Started, In Progress, or Under Review"
+										})
+									]
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+									type: "button",
+									onClick: () => onNavigateTab("projects"),
+									className: "text-left rounded-xl border border-slate-200 bg-white p-4 hover:border-slate-300 transition-colors",
+									children: [
+										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+											className: "flex items-center justify-between text-xs font-medium text-slate-500",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Completed Projects" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(CircleCheck, { className: "h-3.5 w-3.5 text-emerald-600" })]
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+											className: "mt-1.5 text-xl font-bold tracking-tight text-emerald-700 tabular-nums",
+											children: operationalMetrics.completedProjects
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+											className: "mt-1 text-xs text-slate-500",
+											children: operationalMetrics.totalProjects > 0 ? `${Math.round(operationalMetrics.completedProjects / operationalMetrics.totalProjects * 100)}% portfolio completion` : "No projects recorded"
+										})
+									]
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+									type: "button",
+									onClick: () => onNavigateTab("projects"),
+									className: "text-left rounded-xl border border-slate-200 bg-white p-4 hover:border-slate-300 transition-colors",
+									children: [
+										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+											className: "flex items-center justify-between text-xs font-medium text-slate-500",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Delayed Projects" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(TriangleAlert, { className: `h-3.5 w-3.5 ${operationalMetrics.delayedProjects > 0 ? "text-red-600" : "text-slate-400"}` })]
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+											className: `mt-1.5 text-xl font-bold tracking-tight tabular-nums ${operationalMetrics.delayedProjects > 0 ? "text-red-700" : "text-slate-900"}`,
+											children: operationalMetrics.delayedProjects
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+											className: "mt-1 text-xs text-slate-500",
+											children: operationalMetrics.delayedProjects > 0 ? "Requires schedule follow-up" : "No projects currently flagged delayed"
+										})
+									]
+								})
+							]
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "no-print grid grid-cols-2 lg:grid-cols-4 gap-3.5",
+							children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "rounded-xl border border-slate-200 bg-white p-4",
+									children: [
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+											className: "text-xs font-medium text-slate-500",
+											children: "Total Active Contract Value (TCP)"
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+											className: "mt-1.5 text-xl font-bold tracking-tight text-slate-900 tabular-nums",
+											children: formatCurrency(portfolioSummary.totalActiveTCP)
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+											className: "mt-1 text-xs text-slate-500",
+											children: [
+												contractsTCP.filter((c) => c.contractStatus !== "CANCEL").length,
+												" ",
+												"active contracts · ",
+												contractors.filter((c) => c.active).length,
+												" ",
+												"contractors"
+											]
+										})
+									]
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "rounded-xl border border-slate-200 bg-white p-4",
+									children: [
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+											className: "text-xs font-medium text-slate-500",
+											children: "Total Payments Made (Gross Settled)"
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+											className: "mt-1.5 text-xl font-bold tracking-tight text-emerald-700 tabular-nums",
+											children: formatCurrency(portfolioSummary.totalReceivedGross)
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+											className: "mt-1 text-xs text-slate-500",
+											children: ["Net Cheques: ", formatCurrency(portfolioSummary.totalReceivedCheques)]
+										})
+									]
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "rounded-xl border border-slate-200 bg-white p-4",
+									children: [
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+											className: "text-xs font-medium text-slate-500",
+											children: "Unreleased Retention Holdback"
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+											className: "mt-1.5 text-xl font-bold tracking-tight text-amber-700 tabular-nums",
+											children: formatCurrency(portfolioSummary.totalUnreleasedRetention)
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+											className: "mt-1 text-xs text-slate-500",
+											children: [
+												"Safe Progress Release:",
+												" ",
+												formatCurrency(portfolioSummary.totalSafeProgressRelease)
+											]
+										})
+									]
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "rounded-xl border border-slate-200 bg-white p-4",
+									children: [
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+											className: "text-xs font-medium text-slate-500",
+											children: "Outstanding Contract Balance"
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+											className: "mt-1.5 text-xl font-bold tracking-tight text-slate-900 tabular-nums",
+											children: formatCurrency(portfolioSummary.totalRemainingBalance)
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+											className: "mt-1 text-xs text-slate-500",
+											children: ["In-Flight RFPs: ", formatCurrency(portfolioSummary.totalInFlightRFP)]
+										})
+									]
+								})
+							]
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "no-print grid grid-cols-1 lg:grid-cols-3 gap-4",
+							children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "rounded-xl border border-slate-200 bg-white overflow-hidden flex flex-col",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+										className: "flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-2.5",
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+											className: "flex items-center gap-2 text-xs font-bold text-slate-800",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CalendarClock, { className: "h-3.5 w-3.5 text-slate-500" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Upcoming Target Dates" })]
+										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+											type: "button",
+											onClick: () => onNavigateTab("projects"),
+											className: "text-[11px] font-semibold text-blue-700 hover:underline",
+											children: "View Projects"
 										})]
-									}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-										className: "text-slate-600 truncate",
-										children: [
-											pay.rfpPayee || pay.contractorName,
-											" · ",
-											pay.billingType
-										]
+									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+										className: "divide-y divide-slate-200 text-xs flex-1",
+										children: operationalMetrics.upcomingTargets.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+											className: "px-4 py-6 text-center text-slate-500",
+											children: "No open sub-project target dates recorded."
+										}) : operationalMetrics.upcomingTargets.map(({ subProject, daysDiff }) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+											type: "button",
+											onClick: () => handleSelectProject(subProject.projectId),
+											className: "st-hover-row w-full px-4 py-2.5 text-left flex items-start justify-between gap-2 transition-colors",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+												className: "min-w-0",
+												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+													className: "font-mono text-[11px] font-bold text-slate-900 truncate",
+													children: subProject.subProjectCode
+												}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+													className: "text-slate-600 truncate",
+													children: subProject.subProjectName
+												})]
+											}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+												className: "text-right shrink-0",
+												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+													className: "font-mono text-[11px] font-semibold text-slate-800",
+													children: formatShortDate(subProject.targetDate)
+												}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+													className: `text-[10px] font-semibold ${daysDiff < 0 ? "text-red-700" : daysDiff <= 14 ? "text-amber-700" : "text-slate-500"}`,
+													children: daysDiff < 0 ? `${Math.abs(daysDiff)}d overdue` : daysDiff === 0 ? "Due today" : `In ${daysDiff}d`
+												})]
+											})]
+										}, subProject.subProjectId))
 									})]
-								}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-									className: "text-right shrink-0",
-									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-										className: "font-mono text-[11px] font-bold text-slate-900 tabular-nums",
-										children: formatCurrency(pay.chequeAmount > 0 ? pay.chequeAmount : pay.rfpAmount)
-									}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-										className: "text-[10px] text-slate-500",
-										children: [
-											PAYMENT_STAGE_STATUS_LABELS[pay.paymentStatus],
-											" ·",
-											" ",
-											formatShortDate(pay.cvDate || pay.rfpDate)
-										]
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "rounded-xl border border-slate-200 bg-white overflow-hidden flex flex-col",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+										className: "flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-2.5",
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+											className: "flex items-center gap-2 text-xs font-bold text-slate-800",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(FolderKanban, { className: "h-3.5 w-3.5 text-slate-500" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Recent Project Updates" })]
+										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+											type: "button",
+											onClick: () => onNavigateTab("projects"),
+											className: "text-[11px] font-semibold text-blue-700 hover:underline",
+											children: "Manage All"
+										})]
+									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+										className: "divide-y divide-slate-200 text-xs flex-1",
+										children: operationalMetrics.recentUpdates.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+											className: "px-4 py-6 text-center text-slate-500",
+											children: "No project updates recorded yet."
+										}) : operationalMetrics.recentUpdates.map((item) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+											type: "button",
+											onClick: () => handleSelectProject(item.projectId),
+											className: "st-hover-row w-full px-4 py-2.5 text-left flex items-start justify-between gap-2 transition-colors",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+												className: "min-w-0",
+												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+													className: "flex items-center gap-1.5",
+													children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+														className: "font-mono text-[11px] font-bold text-slate-900 truncate",
+														children: item.code
+													}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+														className: "text-[10px] text-slate-500",
+														children: ["· ", item.kind]
+													})]
+												}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+													className: "text-slate-600 truncate",
+													children: item.title
+												})]
+											}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+												className: "text-right shrink-0",
+												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+													className: "text-[11px] font-semibold text-slate-800",
+													children: item.status
+												}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+													className: "font-mono text-[10px] text-slate-500",
+													children: formatShortDate(item.date)
+												})]
+											})]
+										}, `${item.kind}-${item.id}`))
 									})]
-								})]
-							}, pay.paymentId))
-						})]
-					})
-				]
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "rounded-xl border border-slate-200 bg-white overflow-hidden flex flex-col",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+										className: "flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-2.5",
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+											className: "flex items-center gap-2 text-xs font-bold text-slate-800",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CreditCard, { className: "h-3.5 w-3.5 text-slate-500" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Recent Payment Activities" })]
+										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+											type: "button",
+											onClick: () => onNavigateTab("contracts"),
+											className: "text-[11px] font-semibold text-blue-700 hover:underline",
+											children: "Payment Ledger"
+										})]
+									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+										className: "divide-y divide-slate-200 text-xs flex-1",
+										children: operationalMetrics.recentPayments.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+											className: "px-4 py-6 text-center text-slate-500",
+											children: "No payment activities recorded yet."
+										}) : operationalMetrics.recentPayments.map((pay) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+											type: "button",
+											onClick: () => onNavigateTab("contracts"),
+											className: "st-hover-row w-full px-4 py-2.5 text-left flex items-start justify-between gap-2 transition-colors",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+												className: "min-w-0",
+												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+													className: "font-mono text-[11px] font-bold text-slate-900 truncate",
+													children: [pay.cvNumber ? `CV ${pay.cvNumber}` : `RFP ${pay.rfpNumber}`, /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+														className: "font-normal text-slate-500",
+														children: [
+															" ",
+															"· ",
+															pay.subProjectCode
+														]
+													})]
+												}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+													className: "text-slate-600 truncate",
+													children: [
+														pay.rfpPayee || pay.contractorName,
+														" · ",
+														pay.billingType
+													]
+												})]
+											}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+												className: "text-right shrink-0",
+												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+													className: "font-mono text-[11px] font-bold text-slate-900 tabular-nums",
+													children: formatCurrency(pay.chequeAmount > 0 ? pay.chequeAmount : pay.rfpAmount)
+												}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+													className: "text-[10px] text-slate-500",
+													children: [
+														PAYMENT_STAGE_STATUS_LABELS[pay.paymentStatus],
+														" ·",
+														" ",
+														formatShortDate(pay.cvDate || pay.rfpDate)
+													]
+												})]
+											})]
+										}, pay.paymentId))
+									})]
+								})
+							]
+						})
+					]
+				})]
 			}),
 			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 				className: "no-print rounded-xl border border-slate-200 bg-white p-4",
 				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-					className: "flex flex-col lg:flex-row lg:items-center gap-3",
+					className: "flex flex-col sm:flex-row sm:items-center gap-3",
 					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						ref: comboContainerRef,
 						className: "relative flex-1 min-w-0",
-						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Search, { className: "pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-							type: "text",
-							value: searchQuery,
-							onChange: (e) => setSearchQuery(e.target.value),
-							placeholder: "Search by Project Code, Site, Developer, Type, or Description...",
-							className: "w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 py-2 text-sm text-slate-900 focus:border-slate-900 focus:outline-none"
-						})]
-					}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "flex flex-wrap items-center gap-2.5",
-						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("select", {
-							"aria-label": "Select project report",
-							value: selectedProject?.projectId || "",
-							onChange: (e) => setSelectedProjectId(e.target.value),
-							className: "min-w-[240px] max-w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-900 focus:border-slate-900 focus:outline-none",
-							children: filteredProjects.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
-								value: "",
-								children: "No matching projects"
-							}) : filteredProjects.map((p) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("option", {
-								value: p.projectId,
-								children: [
-									p.mainProjectCode,
-									" — ",
-									p.projectName || p.siteName
-								]
-							}, p.projectId))
-						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-							type: "button",
-							disabled: !selectedProject,
-							onClick: () => setIsPrintModalOpen(true),
-							className: "inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50 transition-colors",
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Printer, { className: "h-4 w-4" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Print / PDF Preview" })]
-						})]
+						children: [
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Search, { className: "pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" }),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+								type: "text",
+								role: "combobox",
+								"aria-expanded": isComboOpen,
+								"aria-label": "Search or select a project",
+								value: isComboOpen ? searchQuery : selectedProjectLabel,
+								onFocus: () => {
+									setIsComboOpen(true);
+									setSearchQuery("");
+								},
+								onChange: (e) => {
+									setSearchQuery(e.target.value);
+									if (!isComboOpen) setIsComboOpen(true);
+								},
+								onKeyDown: (e) => {
+									if (e.key === "Escape") {
+										setIsComboOpen(false);
+										setSearchQuery("");
+									} else if (e.key === "Enter" && isComboOpen && filteredProjects.length > 0) {
+										e.preventDefault();
+										handleSelectProject(filteredProjects[0].projectId);
+									}
+								},
+								placeholder: isComboOpen && selectedProjectLabel ? selectedProjectLabel : "Select or search project by code, name, site, or developer...",
+								className: "w-full rounded-lg border border-slate-300 bg-white pl-9 pr-16 py-2 text-sm font-medium text-slate-900 placeholder:font-normal placeholder:text-slate-400 focus:border-slate-900 focus:outline-none"
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-0.5",
+								children: [(selectedProjectId || searchQuery) && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+									type: "button",
+									onClick: () => {
+										setSelectedProjectId("");
+										setSearchQuery("");
+										setIsComboOpen(false);
+									},
+									"aria-label": "Clear selected project",
+									className: "rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700",
+									children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(X, { className: "h-3.5 w-3.5" })
+								}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+									type: "button",
+									onClick: () => {
+										if (isComboOpen) {
+											setIsComboOpen(false);
+											setSearchQuery("");
+										} else {
+											setIsComboOpen(true);
+											setSearchQuery("");
+										}
+									},
+									"aria-label": "Toggle project list",
+									className: "rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-900",
+									children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ChevronDown, { className: `h-4 w-4 transition-transform ${isComboOpen ? "rotate-180" : ""}` })
+								})]
+							}),
+							isComboOpen && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+								role: "listbox",
+								className: "absolute left-0 right-0 z-30 mt-1.5 max-h-72 overflow-y-auto rounded-lg border border-slate-300 bg-white shadow-lg divide-y divide-slate-100",
+								children: filteredProjects.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+									className: "px-3.5 py-4 text-center text-xs text-slate-500",
+									children: "No matching projects found."
+								}) : filteredProjects.map((p) => {
+									const isSelected = p.projectId === selectedProjectId;
+									return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+										type: "button",
+										role: "option",
+										"aria-selected": isSelected,
+										onMouseDown: (e) => {
+											e.preventDefault();
+											handleSelectProject(p.projectId);
+										},
+										className: `st-hover-row w-full px-3.5 py-2.5 text-left flex items-center justify-between gap-3 transition-colors ${isSelected ? "bg-slate-100" : ""}`,
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+											className: "min-w-0",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+												className: "text-xs font-semibold text-slate-900 truncate",
+												children: [
+													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+														className: "font-mono font-bold",
+														children: p.mainProjectCode
+													}),
+													" ",
+													"— ",
+													p.projectName || p.siteName
+												]
+											}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+												className: "text-[11px] text-slate-500 truncate mt-0.5",
+												children: [
+													p.siteName,
+													p.developer,
+													p.typeName
+												].filter(Boolean).join(" · ")
+											})]
+										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+											className: "shrink-0 text-[11px] font-semibold text-slate-600",
+											children: p.status
+										})]
+									}, p.projectId);
+								})
+							})
+						]
+					}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+						type: "button",
+						disabled: !selectedProject,
+						onClick: () => setIsPrintModalOpen(true),
+						className: "inline-flex items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50 transition-colors shrink-0",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Printer, { className: "h-4 w-4" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Print / PDF Preview" })]
 					})]
 				}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 					className: "mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3 text-xs text-slate-500",
-					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { children: [
+					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: selectedProject && reportData ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
 						"Showing complete financial ledger for",
 						" ",
 						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", {
 							className: "text-slate-900",
-							children: selectedProject ? selectedProject.mainProjectCode : "None"
+							children: selectedProject.mainProjectCode
 						}),
-						reportData ? ` (${reportData.contractRows.length} contracts · ${reportData.rfpRows.length} RFPs · ${reportData.releasedPayments.length} payments)` : ""
-					] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						" ",
+						"(",
+						reportData.contractRows.length,
+						" contracts ·",
+						" ",
+						reportData.rfpRows.length,
+						" RFPs ·",
+						" ",
+						reportData.releasedPayments.length,
+						" payments)"
+					] }) : "Select or search a project above to display its financial ledger." }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 						className: "flex items-center gap-3",
 						children: [
 							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
@@ -22899,9 +23090,9 @@ var PrintableDashboardView = ({ projects, subProjects, contractsTCP, contractPay
 					})]
 				})]
 			}),
-			!reportData ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+			!reportData ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 				className: "rounded-xl border border-slate-200 bg-white p-10 text-center",
-				children: [
+				children: projects.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 						className: "text-sm font-medium text-slate-700",
 						children: "No project records available to display."
@@ -22916,11 +23107,17 @@ var PrintableDashboardView = ({ projects, subProjects, contractsTCP, contractPay
 						className: "mt-4 inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-800",
 						children: "Go to Projects"
 					})
-				]
+				] }) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+					className: "text-sm font-medium text-slate-700",
+					children: "No project selected."
+				}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+					className: "mt-1 text-xs text-slate-500",
+					children: "Use the searchable project dropdown above to load a project's contracts, RFPs, payments, and printable ledger."
+				})] })
 			}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-				className: "rounded-xl border border-slate-200 bg-white p-5 overflow-x-auto",
+				className: "st-print-screen-wrap rounded-xl border border-slate-200 bg-white p-5 overflow-x-auto",
 				children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-					className: "min-w-[820px]",
+					className: "st-print-screen-inner min-w-[820px]",
 					children: renderLedgerDocument(void 0, false, {
 						["--print-font-size"]: "11px",
 						["--print-cell-py"]: "5px",
@@ -23205,7 +23402,8 @@ var ContractsTCPView = ({ subProjects, contractors, contractsTCP, contractPaymen
 	const [manualLaborEwtInput, setManualLaborEwtInput] = (0, import_react.useState)("");
 	const [manualMaterialEwtInput, setManualMaterialEwtInput] = (0, import_react.useState)("");
 	const [manualTotalWhtInput, setManualTotalWhtInput] = (0, import_react.useState)("");
-	const [expandedContractIds, setExpandedContractIds] = (0, import_react.useState)({});
+	const [detailContractId, setDetailContractId] = (0, import_react.useState)(null);
+	const [detailPaymentId, setDetailPaymentId] = (0, import_react.useState)(null);
 	const [statusFilter, setStatusFilter] = (0, import_react.useState)("ALL");
 	const [typeFilter, setTypeFilter] = (0, import_react.useState)("ALL");
 	const [contractorFilter, setContractorFilter] = (0, import_react.useState)("ALL");
@@ -23481,10 +23679,7 @@ var ContractsTCPView = ({ subProjects, contractors, contractsTCP, contractPaymen
 				setIsManualTaxOverride(false);
 				setRemarks("");
 				setPaymentTermsNotes("");
-				setExpandedContractIds((prev) => ({
-					...prev,
-					[effectiveContractId]: true
-				}));
+				setDetailContractId(effectiveContractId);
 			}
 		});
 	};
@@ -23596,10 +23791,7 @@ var ContractsTCPView = ({ subProjects, contractors, contractsTCP, contractPaymen
 					receiptDate: ""
 				});
 				setRfpModalContract(null);
-				setExpandedContractIds((prev) => ({
-					...prev,
-					[targetContract.contractId]: true
-				}));
+				setDetailContractId(targetContract.contractId);
 			}
 		});
 	};
@@ -24107,11 +24299,11 @@ var ContractsTCPView = ({ subProjects, contractors, contractsTCP, contractPaymen
 			setPaymentSortDir("desc");
 		}
 	};
-	const toggleExpandContract = (contractId) => {
-		setExpandedContractIds((prev) => ({
-			...prev,
-			[contractId]: !prev[contractId]
-		}));
+	const openContractDetailsModal = (contractId) => {
+		setDetailPaymentId(null);
+		setDetailContractId(contractId);
+		setEditingRow(null);
+		setEditForm(null);
 	};
 	const contractStatusClass = (st) => {
 		switch (st) {
@@ -25157,779 +25349,222 @@ var ContractsTCPView = ({ subProjects, contractors, contractsTCP, contractPaymen
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 						className: "overflow-x-auto",
 						children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("table", {
-							className: "w-full text-left border-collapse",
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("thead", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", {
-								className: "border-b border-slate-300 bg-slate-100 text-xs font-semibold text-slate-700",
-								children: [
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", { className: "py-2.5 px-3 w-8" }),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-										className: "py-2.5 px-3",
-										children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-											type: "button",
-											onClick: () => toggleContractSort("subProject"),
-											className: "inline-flex items-center gap-1 hover:text-slate-900",
-											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Sub-Project, Contractor & Scope" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ArrowUpDown, { className: "h-3 w-3 opacity-60" })]
+							className: "w-full table-fixed text-left border-collapse",
+							children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("colgroup", { children: [
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("col", { className: "w-[34%]" }),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("col", { className: "w-[13%]" }),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("col", { className: "w-[13%]" }),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("col", { className: "w-[13%]" }),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("col", { className: "w-[11%]" }),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("col", { className: "w-[16%]" })
+								] }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("thead", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", {
+									className: "border-b border-slate-300 bg-slate-100 text-xs font-semibold text-slate-700",
+									children: [
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+											className: "py-2.5 px-3",
+											children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+												type: "button",
+												onClick: () => toggleContractSort("subProject"),
+												className: "inline-flex items-center gap-1 hover:text-slate-900",
+												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Project & Contractor" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ArrowUpDown, { className: "h-3 w-3 opacity-60" })]
+											})
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+											className: "py-2.5 px-3 text-right",
+											children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+												type: "button",
+												onClick: () => toggleContractSort("tcp"),
+												className: "inline-flex items-center justify-end gap-1 hover:text-slate-900",
+												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Total TCP" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ArrowUpDown, { className: "h-3 w-3 opacity-60" })]
+											})
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+											className: "py-2.5 px-3 text-right",
+											children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+												type: "button",
+												onClick: () => toggleContractSort("paid"),
+												className: "inline-flex items-center justify-end gap-1 hover:text-slate-900",
+												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Paid" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ArrowUpDown, { className: "h-3 w-3 opacity-60" })]
+											})
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+											className: "py-2.5 px-3 text-right",
+											children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+												type: "button",
+												onClick: () => toggleContractSort("balance"),
+												className: "inline-flex items-center justify-end gap-1 hover:text-slate-900",
+												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Balance" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ArrowUpDown, { className: "h-3 w-3 opacity-60" })]
+											})
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+											className: "py-2.5 px-3",
+											children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+												type: "button",
+												onClick: () => toggleContractSort("status"),
+												className: "inline-flex items-center gap-1 hover:text-slate-900",
+												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Status" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ArrowUpDown, { className: "h-3 w-3 opacity-60" })]
+											})
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+											className: "py-2.5 px-3 text-right",
+											children: "Actions"
 										})
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-										className: "py-2.5 px-3",
-										children: "Terms & BIR Tax"
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-										className: "py-2.5 px-3 text-right",
-										children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-											type: "button",
-											onClick: () => toggleContractSort("tcp"),
-											className: "inline-flex items-center justify-end gap-1 hover:text-slate-900",
-											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Total TCP" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ArrowUpDown, { className: "h-3 w-3 opacity-60" })]
-										})
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-										className: "py-2.5 px-3 text-right",
-										children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-											type: "button",
-											onClick: () => toggleContractSort("paid"),
-											className: "inline-flex items-center justify-end gap-1 hover:text-slate-900",
-											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Paid / Released" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ArrowUpDown, { className: "h-3 w-3 opacity-60" })]
-										})
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-										className: "py-2.5 px-3 text-right",
-										children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-											type: "button",
-											onClick: () => toggleContractSort("balance"),
-											className: "inline-flex items-center justify-end gap-1 hover:text-slate-900",
-											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Remaining TCP" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ArrowUpDown, { className: "h-3 w-3 opacity-60" })]
-										})
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-										className: "py-2.5 px-3 text-right",
-										children: "Retention Holdback (Protected)"
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-										className: "py-2.5 px-3 text-right",
-										children: "Max Safe Progress Release"
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-										className: "py-2.5 px-3",
-										children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-											type: "button",
-											onClick: () => toggleContractSort("status"),
-											className: "inline-flex items-center gap-1 hover:text-slate-900",
-											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Status" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ArrowUpDown, { className: "h-3 w-3 opacity-60" })]
-										})
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-										className: "py-2.5 px-3 text-right",
-										children: "Actions"
-									})
-								]
-							}) }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tbody", {
-								className: "divide-y divide-slate-200 text-xs",
-								children: paginatedContracts.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tr", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-									colSpan: 10,
-									className: "py-12 px-6 text-center text-slate-500",
-									children: "No TCP contracts found matching your filter criteria."
-								}) }) : paginatedContracts.map((record) => {
-									const isEditing = editingRow === record.rowNumber && editForm !== null;
-									const isExpanded = Boolean(expandedContractIds[record.contractId]);
-									const rollup = rollupByContractId[record.contractId] || {
-										tcpAmount: record.tcpAmount,
-										retentionTargetAmount: 0,
-										withholdingTargetAmount: 0,
-										totalDeductibleTarget: 0,
-										maxSafeNonRetentionBillable: record.tcpAmount,
-										nonRetentionSettledAndRequested: 0,
-										retentionReleasedGross: 0,
-										unreleasedRetentionHoldback: 0,
-										safeRemainingProgressBillable: record.tcpAmount,
-										receivedGrossDeducted: 0,
-										receivedChequePaid: 0,
-										remainingTCPAfterReceived: record.tcpAmount,
-										inFlightRFPAmount: 0,
-										retentionAlreadyDeducted: 0,
-										withholdingAlreadyDeducted: 0,
-										totalAlreadyDeducted: 0,
-										remainingDeductibleBalance: 0,
-										payments: []
-									};
-									return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_react.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", {
-										className: `transition-colors ${record.contractStatus === "CANCEL" ? "opacity-65" : ""}`,
-										children: [
-											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-												className: "py-3 px-3",
-												children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-													type: "button",
-													onClick: () => toggleExpandContract(record.contractId),
-													className: "rounded p-1 text-slate-500 hover:bg-slate-200/70 hover:text-slate-900",
-													children: isExpanded ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ChevronDown, { className: "h-4 w-4" }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ChevronRight, { className: "h-4 w-4" })
-												})
-											}),
-											/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
-												onClick: () => toggleExpandContract(record.contractId),
-												className: "py-3 px-3 cursor-pointer",
-												children: [
-													/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-														className: "flex flex-wrap items-center gap-1.5",
-														children: [
-															/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-																className: "font-mono font-bold text-slate-900",
-																children: record.subProjectCode
-															}),
-															/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-																className: "font-sans text-slate-500",
-																children: [
-																	"(",
-																	record.mainProjectCode,
-																	")"
-																]
-															}),
-															/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-																className: "rounded bg-blue-50 border border-blue-200 px-1.5 py-0.5 text-[10px] font-semibold text-blue-800",
-																children: record.tcpType
-															})
-														]
-													}),
-													/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-														className: "text-xs text-slate-800 font-semibold mt-0.5",
-														children: [
-															record.contractorCode,
-															" ·",
-															" ",
-															record.contractorName
-														]
-													}),
-													record.remarks && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-														className: "text-[11px] text-slate-500 mt-0.5",
-														children: record.remarks
-													}),
-													record.parentContractId && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-														className: "mt-0.5 inline-flex items-center gap-1 text-xs font-mono text-amber-800",
-														children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(GitBranch, { className: "h-3 w-3 shrink-0" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { children: ["Modifies/Ref: ", record.parentContractId] })]
-													})
-												]
-											}),
-											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-												className: "py-3 px-3 whitespace-nowrap",
-												children: isEditing && editForm ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-													className: "space-y-1 text-xs",
-													children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-														className: "flex items-center gap-1",
-														children: [
-															/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "DP%" }),
-															/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-																type: "number",
-																value: editForm.dpPercent,
-																onChange: (e) => setEditForm({
-																	...editForm,
-																	dpPercent: Number.parseFloat(e.target.value) || 0
+									]
+								}) }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("tbody", {
+									className: "divide-y divide-slate-200 text-xs",
+									children: paginatedContracts.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tr", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+										colSpan: 6,
+										className: "py-12 px-6 text-center text-slate-500",
+										children: "No TCP contracts found matching your filter criteria."
+									}) }) : paginatedContracts.map((record) => {
+										const rollup = rollupByContractId[record.contractId] || {
+											tcpAmount: record.tcpAmount,
+											retentionTargetAmount: 0,
+											withholdingTargetAmount: 0,
+											totalDeductibleTarget: 0,
+											maxSafeNonRetentionBillable: record.tcpAmount,
+											nonRetentionSettledAndRequested: 0,
+											retentionReleasedGross: 0,
+											unreleasedRetentionHoldback: 0,
+											safeRemainingProgressBillable: record.tcpAmount,
+											receivedGrossDeducted: 0,
+											receivedChequePaid: 0,
+											remainingTCPAfterReceived: record.tcpAmount,
+											inFlightRFPAmount: 0,
+											retentionAlreadyDeducted: 0,
+											withholdingAlreadyDeducted: 0,
+											totalAlreadyDeducted: 0,
+											remainingDeductibleBalance: 0,
+											payments: []
+										};
+										return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", {
+											className: `transition-colors hover:bg-slate-50 ${record.contractStatus === "CANCEL" ? "opacity-65" : ""}`,
+											children: [
+												/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
+													onClick: () => openContractDetailsModal(record.contractId),
+													className: "py-3 px-3 cursor-pointer align-top",
+													children: [
+														/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+															className: "flex flex-wrap items-center gap-1.5",
+															children: [
+																/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+																	className: "font-mono font-bold text-slate-900 break-words",
+																	children: record.subProjectCode
 																}),
-																className: "w-12 rounded border border-slate-300 px-1 py-0.5 font-mono"
-															}),
-															/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Ret%" }),
-															/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-																type: "number",
-																value: editForm.retentionPercent,
-																onChange: (e) => setEditForm({
-																	...editForm,
-																	retentionPercent: Number.parseFloat(e.target.value) || 0
+																/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+																	className: "font-sans text-[11px] text-slate-500",
+																	children: [
+																		"(",
+																		record.mainProjectCode,
+																		")"
+																	]
 																}),
-																className: "w-12 rounded border border-slate-300 px-1 py-0.5 font-mono"
-															})
-														]
-													}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-														className: "flex items-center gap-1",
-														children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Parent ID:" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-															type: "text",
-															value: editForm.parentContractId || "",
-															onChange: (e) => setEditForm({
-																...editForm,
-																parentContractId: e.target.value.toUpperCase()
-															}),
-															placeholder: "CON-0001",
-															className: "w-24 rounded border border-slate-300 px-1 py-0.5 font-mono"
-														})]
-													})]
-												}) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-													className: "font-mono text-xs text-slate-700 space-y-0.5",
-													children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
-														"DP ",
-														record.dpPercent,
-														"% · Prog",
-														" ",
-														record.progressBillingPercent,
-														"%"
-													] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-														className: "text-slate-500",
-														children: [
-															"Ret ",
-															record.retentionPercent,
-															"% · WHT",
-															" ",
-															record.hasWithholdingTax ? `${Number(record.withholdingTaxPercent).toFixed(2)}%` : "None"
-														]
-													})]
-												})
-											}),
-											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-												className: "py-3 px-3 text-right font-mono font-semibold text-slate-900 tabular-nums whitespace-nowrap",
-												children: isEditing && editForm ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-													type: "number",
-													step: "0.01",
-													value: editForm.tcpAmount,
-													onChange: (e) => setEditForm({
-														...editForm,
-														tcpAmount: Number.parseFloat(e.target.value) || 0
-													}),
-													className: "w-28 rounded border border-slate-300 px-2 py-1 text-xs font-mono text-right"
-												}) : formatCurrency(record.tcpAmount)
-											}),
-											/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
-												className: "py-3 px-3 text-right font-mono tabular-nums whitespace-nowrap",
-												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-													className: "font-semibold text-emerald-700",
-													children: formatCurrency(rollup.receivedGrossDeducted)
-												}), rollup.inFlightRFPAmount > 0 && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-													className: "text-xs text-amber-700",
-													children: [
-														"In-Flight:",
-														" ",
-														formatCurrency(rollup.inFlightRFPAmount)
-													]
-												})]
-											}),
-											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-												className: "py-3 px-3 text-right font-mono font-bold text-slate-900 tabular-nums whitespace-nowrap",
-												children: formatCurrency(rollup.remainingTCPAfterReceived)
-											}),
-											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-												className: "py-3 px-3 text-right font-mono tabular-nums whitespace-nowrap",
-												children: record.retentionPercent > 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-													className: "font-semibold text-amber-700",
-													children: formatCurrency(rollup.unreleasedRetentionHoldback)
-												}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-													className: "text-xs text-slate-500",
-													children: [
-														"Target (",
-														record.retentionPercent,
-														"%):",
-														" ",
-														formatCurrency(rollup.retentionTargetAmount)
-													]
-												})] }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-													className: "text-slate-400",
-													children: "NA"
-												})
-											}),
-											/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
-												className: "py-3 px-3 text-right font-mono tabular-nums whitespace-nowrap",
-												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-													className: "font-bold text-emerald-700",
-													children: formatCurrency(rollup.safeRemainingProgressBillable)
-												}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-													className: "text-xs text-slate-500",
-													children: [
-														"WHT Withheld:",
-														" ",
-														formatCurrency(rollup.withholdingAlreadyDeducted)
-													]
-												})]
-											}),
-											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-												className: "py-3 px-3 whitespace-nowrap",
-												children: contractsPermission.edit ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("select", {
-													value: record.contractStatus,
-													onChange: (e) => handleQuickStatusChange(record, e.target.value),
-													"aria-label": `Change status for contract ${record.contractId}`,
-													className: `rounded border border-slate-200 bg-white px-2 py-1 text-xs font-mono focus:border-slate-900 focus:outline-none ${contractStatusClass(record.contractStatus)}`,
-													children: CONTRACT_STATUS_OPTIONS.map((st) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
-														value: st,
-														className: "text-slate-900 font-normal no-underline",
-														children: st
-													}, st))
-												}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-													className: `font-mono ${contractStatusClass(record.contractStatus)}`,
-													children: record.contractStatus
-												})
-											}),
-											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-												className: "py-3 px-3 text-right whitespace-nowrap",
-												children: isEditing ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-													className: "flex items-center justify-end gap-1.5",
-													children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-														type: "button",
-														onClick: handleSaveEdit,
-														className: "rounded bg-slate-900 px-2.5 py-1 text-xs font-medium text-white hover:bg-slate-800",
-														children: "Save"
-													}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-														type: "button",
-														onClick: () => {
-															setEditingRow(null);
-															setEditForm(null);
-														},
-														className: "rounded border border-slate-300 p-1 text-slate-500 hover:bg-slate-100",
-														children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(X, { className: "h-3.5 w-3.5" })
-													})]
-												}) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-													className: "flex items-center justify-end gap-1.5",
-													children: [
-														/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-															type: "button",
-															onClick: () => printContractPaymentHistoryAttachment({
-																contract: record,
-																rollup,
-																payments: rollup.payments,
-																preparedBy: activeUser.fullName
-															}),
-															title: "Print Contract & Payment History Attachment",
-															className: "inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 whitespace-nowrap",
-															children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Printer, { className: "h-3 w-3" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Print" })]
+																/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+																	className: "rounded bg-blue-50 border border-blue-200 px-1.5 py-0.5 text-[10px] font-semibold text-blue-800",
+																	children: record.tcpType
+																})
+															]
 														}),
-														paymentsPermission.add && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+														/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+															className: "text-xs text-slate-800 font-semibold mt-0.5 truncate",
+															title: `${record.contractorCode} · ${record.contractorName}`,
+															children: record.contractorName
+														}),
+														record.remarks && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+															className: "text-[11px] text-slate-500 mt-0.5 truncate",
+															title: record.remarks,
+															children: record.remarks
+														})
+													]
+												}),
+												/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
+													className: "py-3 px-3 text-right font-mono tabular-nums align-top",
+													children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+														className: "font-bold text-slate-900",
+														children: formatCurrency(rollup.tcpAmount)
+													}), (record.dpPercent > 0 || record.retentionPercent > 0) && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+														className: "text-[11px] text-slate-500 mt-0.5",
+														children: [
+															record.dpPercent > 0 ? `DP ${record.dpPercent}%` : "",
+															record.dpPercent > 0 && record.retentionPercent > 0 ? " · " : "",
+															record.retentionPercent > 0 ? `Ret ${record.retentionPercent}%` : ""
+														]
+													})]
+												}),
+												/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
+													className: "py-3 px-3 text-right font-mono tabular-nums align-top",
+													children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+														className: "font-semibold text-emerald-700",
+														children: formatCurrency(rollup.receivedGrossDeducted)
+													}), rollup.inFlightRFPAmount > 0 && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+														className: "text-[11px] text-amber-700 mt-0.5",
+														children: [
+															"+",
+															formatCurrency(rollup.inFlightRFPAmount),
+															" ",
+															"req."
+														]
+													})]
+												}),
+												/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
+													className: "py-3 px-3 text-right font-mono tabular-nums align-top",
+													children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+														className: "font-bold text-slate-900",
+														children: formatCurrency(rollup.remainingTCPAfterReceived)
+													}), rollup.unreleasedRetentionHoldback > 0 && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+														className: "text-[11px] text-amber-700 mt-0.5",
+														children: [
+															"Ret:",
+															" ",
+															formatCurrency(rollup.unreleasedRetentionHoldback)
+														]
+													})]
+												}),
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+													className: "py-3 px-3 align-top",
+													children: contractsPermission.edit ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("select", {
+														value: record.contractStatus,
+														onChange: (e) => handleQuickStatusChange(record, e.target.value),
+														"aria-label": `Change status for contract ${record.contractId}`,
+														className: `w-full rounded border border-slate-200 bg-white px-1.5 py-1 text-xs font-mono focus:border-slate-900 focus:outline-none ${contractStatusClass(record.contractStatus)}`,
+														children: CONTRACT_STATUS_OPTIONS.map((st) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
+															value: st,
+															className: "text-slate-900 font-normal no-underline",
+															children: st
+														}, st))
+													}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+														className: `font-mono ${contractStatusClass(record.contractStatus)}`,
+														children: record.contractStatus
+													})
+												}),
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+													className: "py-3 px-3 text-right align-top",
+													children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+														className: "flex flex-wrap items-center justify-end gap-1.5",
+														children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+															type: "button",
+															onClick: () => openContractDetailsModal(record.contractId),
+															className: "inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-800 hover:bg-slate-100 whitespace-nowrap",
+															title: "View full contract details, terms, BIR tax, retention holdback, actions, and payment history",
+															children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Eye, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { children: ["Details", rollup.payments.length > 0 ? ` (${rollup.payments.length})` : ""] })]
+														}), paymentsPermission.add && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
 															type: "button",
 															onClick: () => openNewRfpModal(record),
 															disabled: record.contractStatus === "CANCEL",
-															className: "inline-flex items-center gap-1 rounded bg-slate-900 px-2.5 py-1 text-xs font-medium text-white hover:bg-slate-800 disabled:opacity-40 whitespace-nowrap",
-															children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Plus, { className: "h-3 w-3" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "New RFP" })]
-														}),
-														contractsPermission.add && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-															type: "button",
-															onClick: () => handleStartModifyExistingContract(record, "Escalation"),
-															title: "Create Escalation, Modification, or Takeover linked to this Contract",
-															className: "inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-800 hover:bg-slate-100 whitespace-nowrap",
-															children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(GitBranch, { className: "h-3 w-3" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Modify / Takeover" })]
-														}),
-														contractsPermission.edit && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-															type: "button",
-															onClick: () => startEditing(record),
-															className: "inline-flex items-center gap-1 rounded border border-slate-200 px-2 py-1 text-xs font-medium text-slate-600 hover:border-slate-300 hover:bg-slate-100",
-															children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(PenLine, { className: "h-3 w-3" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Edit" })]
-														}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-															type: "button",
-															onClick: () => handleDeleteContract(record),
-															disabled: rollup.payments.some((p) => p.paymentStatus !== "CANCELLED") || contractsTCP.some((c) => c.parentContractId === record.contractId),
-															title: rollup.payments.some((p) => p.paymentStatus !== "CANCELLED") ? "Cannot delete contract with active payments (cancel/delete payments first or set status to CANCEL)" : `Delete contract ${record.contractId}`,
-															className: "inline-flex items-center gap-1 rounded border border-red-200 bg-red-50/60 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-35 disabled:cursor-not-allowed",
-															children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Trash2, { className: "h-3 w-3" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Delete" })]
-														})] })
-													]
-												})
-											})
-										]
-									}), isExpanded && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tr", {
-										className: "bg-slate-50/70",
-										children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-											colSpan: 10,
-											className: "px-6 py-5",
-											children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-												className: "rounded-md border border-slate-200 bg-white space-y-4 p-4",
-												children: [
-													/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-														className: "grid grid-cols-1 md:grid-cols-4 gap-3 rounded-md border border-slate-200 bg-slate-50 p-3.5 text-xs",
-														children: [
-															/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
-																/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-																	className: "text-slate-500",
-																	children: "1. Contract Price & Paid / Released"
-																}),
-																/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-																	className: "mt-1 font-mono font-bold text-slate-900 tabular-nums",
-																	children: ["TCP: ", formatCurrency(rollup.tcpAmount)]
-																}),
-																/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-																	className: "font-mono text-emerald-700 tabular-nums",
-																	children: ["Paid / Released: -", formatCurrency(rollup.receivedGrossDeducted)]
-																}),
-																/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-																	className: "font-mono font-semibold text-slate-900 tabular-nums",
-																	children: [
-																		"Total Remaining TCP:",
-																		" ",
-																		formatCurrency(rollup.remainingTCPAfterReceived)
-																	]
-																})
-															] }),
-															/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
-																/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-																	className: "text-slate-500",
-																	children: [
-																		"2. Retention Holdback (",
-																		record.retentionPercent,
-																		"% of TCP · Not a Tax)"
-																	]
-																}),
-																/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-																	className: "mt-1 font-mono font-semibold text-slate-900 tabular-nums",
-																	children: [
-																		"Retention Holdback:",
-																		" ",
-																		formatCurrency(rollup.retentionTargetAmount)
-																	]
-																}),
-																/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-																	className: "font-mono text-amber-700 font-semibold tabular-nums",
-																	children: [
-																		"Protected (Unreleased):",
-																		" ",
-																		formatCurrency(rollup.unreleasedRetentionHoldback)
-																	]
-																}),
-																/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-																	className: "font-mono text-slate-600 tabular-nums",
-																	children: [
-																		"Released Retention:",
-																		" ",
-																		formatCurrency(rollup.retentionReleasedGross)
-																	]
-																})
-															] }),
-															/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
-																/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-																	className: "text-slate-500",
-																	children: "3. Safe Releasable Progress Balance"
-																}),
-																/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-																	className: "mt-1 font-mono font-bold text-emerald-700 tabular-nums",
-																	children: [
-																		"Max Safe Progress Release:",
-																		" ",
-																		formatCurrency(rollup.safeRemainingProgressBillable)
-																	]
-																}),
-																/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-																	className: "font-mono text-slate-600 tabular-nums",
-																	children: [
-																		"Max Non-Ret TCP (",
-																		100 - (record.retentionPercent || 0),
-																		"%):",
-																		" ",
-																		formatCurrency(rollup.maxSafeNonRetentionBillable)
-																	]
-																}),
-																/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-																	className: "text-[11px] text-slate-500",
-																	children: [
-																		"Releasing above this amount will eat into the ",
-																		record.retentionPercent,
-																		"% retention holdback."
-																	]
-																})
-															] }),
-															/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
-																/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-																	className: "text-slate-500",
-																	children: "4. BIR Withholding Tax (Applies to Billings & Retention Release)"
-																}),
-																/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-																	className: "mt-1 font-mono font-semibold text-slate-900 tabular-nums",
-																	children: [
-																		"Total WHT Target:",
-																		" ",
-																		formatCurrency(rollup.withholdingTargetAmount)
-																	]
-																}),
-																/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-																	className: "font-mono text-blue-700 tabular-nums",
-																	children: [
-																		"2307 Already Withheld:",
-																		" ",
-																		formatCurrency(rollup.withholdingAlreadyDeducted)
-																	]
-																}),
-																/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-																	className: "font-mono text-slate-600 tabular-nums",
-																	children: [
-																		"Remaining WHT Due:",
-																		" ",
-																		formatCurrency(Math.max(0, rollup.withholdingTargetAmount - rollup.withholdingAlreadyDeducted))
-																	]
-																})
-															] })
-														]
-													}),
-													/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-														className: "flex flex-wrap items-center justify-between gap-3",
-														children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-															className: "text-xs font-semibold text-slate-900",
-															children: [
-																"Payment History — RFPs, Cheque Releases (CV) & Contractor Receipts (",
-																rollup.payments.length,
-																") · Newest First"
-															]
-														}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-															className: "flex flex-wrap items-center gap-2",
-															children: [
-																/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-																	type: "button",
-																	onClick: () => printContractPaymentHistoryAttachment({
-																		contract: record,
-																		rollup,
-																		payments: rollup.payments,
-																		preparedBy: activeUser.fullName
-																	}),
-																	className: "inline-flex items-center gap-1.5 rounded border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-800 hover:bg-slate-100",
-																	children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Printer, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Print Payment History" })]
-																}),
-																contractsPermission.add && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-																	type: "button",
-																	onClick: () => handleStartModifyExistingContract(record, "Escalation"),
-																	className: "rounded border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-800 hover:bg-slate-50",
-																	children: "+ Escalation / Addon"
-																}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-																	type: "button",
-																	onClick: () => handleStartModifyExistingContract(record, "Contract Takeover"),
-																	className: "rounded border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-800 hover:bg-slate-50",
-																	children: "+ Contract Takeover"
-																})] }),
-																paymentsPermission.add && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
-																	/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-																		type: "button",
-																		onClick: () => openNewRfpModal(record, "Downpayment (DP)"),
-																		className: "rounded border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-800 hover:bg-slate-50",
-																		children: [
-																			"+ Request DP (",
-																			record.dpPercent,
-																			"%)"
-																		]
-																	}),
-																	/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-																		type: "button",
-																		onClick: () => openNewRfpModal(record, "Progress Billing"),
-																		className: "rounded bg-slate-900 px-3 py-1 text-xs font-medium text-white hover:bg-slate-800",
-																		children: "+ New Progress Billing RFP"
-																	}),
-																	/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-																		type: "button",
-																		onClick: () => openNewRfpModal(record, "Retention Release"),
-																		className: "rounded border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-800 hover:bg-slate-50",
-																		children: [
-																			"+ Release Retention (",
-																			record.retentionPercent,
-																			"%)"
-																		]
-																	})
-																] })
-															]
+															className: "inline-flex items-center gap-1 rounded bg-slate-900 px-2 py-1 text-xs font-medium text-white hover:bg-slate-800 disabled:opacity-40 whitespace-nowrap",
+															title: "Create New RFP for this Contract",
+															children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Plus, { className: "h-3 w-3" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "RFP" })]
 														})]
-													}),
-													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-														className: "overflow-x-auto",
-														children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("table", {
-															className: "w-full text-left border-collapse border-t border-slate-200",
-															children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("thead", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", {
-																className: "border-b border-slate-200 bg-slate-50/60 text-xs font-semibold text-slate-500",
-																children: [
-																	/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-																		className: "py-2 px-3 font-mono",
-																		children: "Pay ID"
-																	}),
-																	/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-																		className: "py-2 px-3",
-																		children: "1. Payment Request (RFP)"
-																	}),
-																	/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-																		className: "py-2 px-3 text-right",
-																		children: "RFP Gross & Ret"
-																	}),
-																	/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-																		className: "py-2 px-3",
-																		children: "2. Cheque Release (CV)"
-																	}),
-																	/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-																		className: "py-2 px-3 text-right",
-																		children: "Cheque Amt & Withheld"
-																	}),
-																	/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-																		className: "py-2 px-3",
-																		children: "3. Contractor Receipt (OR/CR/Inv)"
-																	}),
-																	/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-																		className: "py-2 px-3",
-																		children: "Stage"
-																	}),
-																	/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-																		className: "py-2 px-3 text-right",
-																		children: "Workflow Actions"
-																	})
-																]
-															}) }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tbody", {
-																className: "divide-y divide-slate-100 text-xs",
-																children: rollup.payments.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tr", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
-																	colSpan: 8,
-																	className: "py-6 px-4 text-center text-slate-500",
-																	children: [
-																		"No payment requests (RFPs) recorded for ",
-																		record.contractId,
-																		" yet."
-																	]
-																}) }) : [...rollup.payments].sort((a, b) => {
-																	const da = a.cvDate || a.rfpDate || a.updatedAt || "";
-																	return (b.cvDate || b.rfpDate || b.updatedAt || "").localeCompare(da) || b.paymentId.localeCompare(a.paymentId);
-																}).map((p) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", {
-																	className: p.paymentStatus === "CANCELLED" ? "opacity-55 bg-red-50/20" : "hover:bg-slate-50/80",
-																	children: [
-																		/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
-																			className: "py-2.5 px-3 font-mono font-semibold text-slate-800 whitespace-nowrap",
-																			children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { children: p.paymentId }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-																				className: "text-xs font-sans font-normal text-slate-500",
-																				children: p.billingType
-																			})]
-																		}),
-																		/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
-																			className: "py-2.5 px-3",
-																			children: [
-																				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-																					className: "font-mono font-semibold text-slate-900",
-																					children: [
-																						"RFP #",
-																						p.rfpNumber,
-																						" ",
-																						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-																							className: "font-normal text-slate-500",
-																							children: [
-																								"(",
-																								p.rfpDate,
-																								")"
-																							]
-																						})
-																					]
-																				}),
-																				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-																					className: "text-xs text-slate-600",
-																					children: [
-																						"Payee:",
-																						" ",
-																						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: p.rfpPayee })
-																					]
-																				}),
-																				p.rfpRemarks && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-																					className: "text-[11px] text-slate-500 mt-0.5",
-																					children: p.rfpRemarks
-																				})
-																			]
-																		}),
-																		/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
-																			className: "py-2.5 px-3 text-right font-mono tabular-nums whitespace-nowrap",
-																			children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-																				className: "font-semibold text-slate-900",
-																				children: formatCurrency(p.rfpAmount)
-																			}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-																				className: "text-xs text-slate-500",
-																				children: ["Ret: -", formatCurrency(p.retentionDeducted)]
-																			})]
-																		}),
-																		/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-																			className: "py-2.5 px-3 whitespace-nowrap",
-																			children: p.cvNumber ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-																				className: "font-mono font-semibold text-slate-900",
-																				children: ["CV #", p.cvNumber]
-																			}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-																				className: "text-xs font-mono text-slate-500",
-																				children: ["Date: ", p.cvDate]
-																			})] }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-																				className: "text-slate-400",
-																				children: "Awaiting Cheque Release"
-																			})
-																		}),
-																		/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-																			className: "py-2.5 px-3 text-right font-mono tabular-nums whitespace-nowrap",
-																			children: p.cvNumber || p.chequeAmount > 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-																				className: "font-semibold text-blue-700",
-																				children: [
-																					"Cheque:",
-																					" ",
-																					formatCurrency(p.chequeAmount)
-																				]
-																			}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-																				className: "text-xs text-slate-500",
-																				children: ["Withheld: -", formatCurrency(p.withheldAmount)]
-																			})] }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-																				className: "text-slate-400",
-																				children: "—"
-																			})
-																		}),
-																		/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-																			className: "py-2.5 px-3 whitespace-nowrap",
-																			children: p.receiptNumber ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-																				className: "font-mono font-semibold text-emerald-800",
-																				children: [
-																					p.receiptType,
-																					" #",
-																					p.receiptNumber
-																				]
-																			}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-																				className: "text-xs font-mono text-slate-500",
-																				children: [
-																					"Received:",
-																					" ",
-																					p.receiptDate
-																				]
-																			})] }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-																				className: "text-slate-400",
-																				children: "Awaiting Contractor Receipt"
-																			})
-																		}),
-																		/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-																			className: "py-2.5 px-3 whitespace-nowrap",
-																			children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-																				className: paymentStageClass(p.paymentStatus),
-																				children: PAYMENT_STAGE_STATUS_LABELS[p.paymentStatus]
-																			})
-																		}),
-																		/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
-																			className: "py-2.5 px-3 text-right whitespace-nowrap",
-																			children: [p.paymentStatus !== "CANCELLED" && (paymentsPermission.edit ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-																				className: "flex items-center justify-end gap-1.5",
-																				children: [
-																					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-																						type: "button",
-																						onClick: () => openReleaseChequeModal(p),
-																						className: "inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-800 hover:bg-slate-100",
-																						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CreditCard, { className: "h-3 w-3" }), p.cvNumber ? "Edit CV" : "Release Cheque (CV)"]
-																					}),
-																					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-																						type: "button",
-																						onClick: () => openContractorReceiptModal(p),
-																						className: "inline-flex items-center gap-1 rounded bg-slate-900 px-2 py-1 text-xs font-medium text-white hover:bg-slate-800",
-																						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Receipt, { className: "h-3 w-3" }), p.receiptNumber ? "Edit Receipt" : "Contractor Receipt"]
-																					}),
-																					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-																						type: "button",
-																						onClick: () => handleCancelPayment(p),
-																						className: "inline-flex items-center gap-1 rounded border border-red-200 bg-red-50/60 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100",
-																						title: "Cancel Payment Request",
-																						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Ban, { className: "h-3 w-3" }), "Cancel"]
-																					}),
-																					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-																						type: "button",
-																						onClick: () => handleDeletePayment(p),
-																						className: "inline-flex items-center gap-1 rounded border border-red-200 bg-white px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50",
-																						title: "Delete Payment Row",
-																						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Trash2, { className: "h-3 w-3" }), "Delete"]
-																					})
-																				]
-																			}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-																				className: "text-xs font-mono text-slate-400",
-																				children: "Read-Only"
-																			})), p.paymentStatus === "CANCELLED" && paymentsPermission.edit && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-																				type: "button",
-																				onClick: () => handleDeletePayment(p),
-																				className: "inline-flex items-center gap-1 rounded border border-red-200 bg-white px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50",
-																				title: "Permanently Delete Cancelled Payment Row",
-																				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Trash2, { className: "h-3 w-3" }), "Delete"]
-																			})]
-																		})
-																	]
-																}, `${p.paymentId}-${p.rowNumber}`))
-															})]
-														})
 													})
-												]
-											})
-										})
-									})] }, `${record.contractId}-${record.rowNumber}`);
+												})
+											]
+										}, `${record.contractId}-${record.rowNumber}`);
+									})
 								})
-							})]
+							]
 						})
 					}),
 					filteredContracts.length > CONTRACTS_PAGE_SIZE && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
@@ -26046,50 +25681,38 @@ var ContractsTCPView = ({ subProjects, contractors, contractsTCP, contractPaymen
 								className: "border-b border-slate-200 bg-slate-50/80 text-xs font-semibold text-slate-500",
 								children: [
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-										className: "py-2.5 px-3 font-mono",
-										children: "Pay ID"
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-										className: "py-2.5 px-3",
-										children: "Contract & Sub-Project"
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-										className: "py-2.5 px-3",
+										className: "py-2.5 px-4",
 										children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
 											type: "button",
 											onClick: () => togglePaymentSort("date"),
 											className: "inline-flex items-center gap-1 hover:text-slate-900",
-											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "RFP Details, Date & Payee" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ArrowUpDown, { className: "h-3 w-3 opacity-60" })]
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "RFP & Date" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ArrowUpDown, { className: "h-3 w-3 opacity-60" })]
 										})
 									}),
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-										className: "py-2.5 px-3 text-right",
+										className: "py-2.5 px-3",
+										children: "Project & Payee"
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+										className: "py-2.5 px-3 text-right whitespace-nowrap",
 										children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
 											type: "button",
 											onClick: () => togglePaymentSort("rfpAmount"),
 											className: "inline-flex items-center justify-end gap-1 hover:text-slate-900",
-											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "RFP Amt & Retention" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ArrowUpDown, { className: "h-3 w-3 opacity-60" })]
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "RFP Gross" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ArrowUpDown, { className: "h-3 w-3 opacity-60" })]
 										})
 									}),
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-										className: "py-2.5 px-3",
-										children: "Cheque Release (CV)"
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-										className: "py-2.5 px-3 text-right",
+										className: "py-2.5 px-3 text-right whitespace-nowrap",
 										children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
 											type: "button",
 											onClick: () => togglePaymentSort("chequeAmount"),
 											className: "inline-flex items-center justify-end gap-1 hover:text-slate-900",
-											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Cheque Amt & Withheld" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ArrowUpDown, { className: "h-3 w-3 opacity-60" })]
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Net Cheque" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ArrowUpDown, { className: "h-3 w-3 opacity-60" })]
 										})
 									}),
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-										className: "py-2.5 px-3",
-										children: "Contractor Receipt Issued"
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-										className: "py-2.5 px-3",
+										className: "py-2.5 px-3 whitespace-nowrap",
 										children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
 											type: "button",
 											onClick: () => togglePaymentSort("status"),
@@ -26098,121 +25721,86 @@ var ContractsTCPView = ({ subProjects, contractors, contractsTCP, contractPaymen
 										})
 									}),
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-										className: "py-2.5 px-3 text-right",
+										className: "py-2.5 px-4 text-right whitespace-nowrap",
 										children: "Actions"
 									})
 								]
 							}) }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tbody", {
 								className: "divide-y divide-slate-200 text-xs",
 								children: paginatedPayments.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tr", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-									colSpan: 9,
+									colSpan: 6,
 									className: "py-12 px-6 text-center text-slate-500",
 									children: "No payment records found."
 								}) }) : paginatedPayments.map((p) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", {
-									className: p.paymentStatus === "CANCELLED" ? "opacity-55 bg-red-50/20" : "hover:bg-slate-50/80",
+									onClick: () => setDetailPaymentId(p.paymentId),
+									className: `cursor-pointer transition-colors ${p.paymentStatus === "CANCELLED" ? "opacity-55 bg-red-50/20" : "hover:bg-slate-50/80"}`,
 									children: [
 										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
-											className: "py-3 px-3 font-mono font-semibold text-slate-900 whitespace-nowrap",
-											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { children: p.paymentId }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-												className: "text-xs font-sans font-normal text-slate-500",
-												children: p.billingType
-											})]
-										}),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
-											className: "py-3 px-3 whitespace-nowrap",
-											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+											className: "py-3 px-4 whitespace-nowrap",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 												className: "font-mono font-semibold text-slate-900",
-												children: p.contractId
-											}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-												className: "text-xs font-mono text-slate-500",
 												children: [
-													p.subProjectCode,
-													" (",
-													p.mainProjectCode,
-													")"
+													"RFP #",
+													p.rfpNumber,
+													" ",
+													/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+														className: "font-normal text-slate-500",
+														children: [
+															"(",
+															p.rfpDate,
+															")"
+														]
+													})
+												]
+											}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+												className: "text-[11px] text-slate-500 mt-0.5",
+												children: [
+													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+														className: "font-mono",
+														children: p.paymentId
+													}),
+													" ·",
+													" ",
+													p.billingType
 												]
 											})]
 										}),
 										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
-											className: "py-3 px-3",
-											children: [
-												/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-													className: "font-mono font-semibold text-slate-900",
-													children: [
-														"RFP #",
-														p.rfpNumber,
-														" ",
-														/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-															className: "font-normal text-slate-500",
-															children: [
-																"(",
-																p.rfpDate,
-																")"
-															]
-														})
-													]
-												}),
-												/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-													className: "text-xs text-slate-700",
-													children: ["Payee: ", /* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: p.rfpPayee })]
-												}),
-												p.rfpRemarks && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-													className: "text-[11px] text-slate-500 mt-0.5",
-													children: p.rfpRemarks
-												})
-											]
-										}),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
-											className: "py-3 px-3 text-right font-mono tabular-nums whitespace-nowrap",
-											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-												className: "font-semibold text-slate-900",
-												children: formatCurrency(p.rfpAmount)
-											}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-												className: "text-xs text-slate-500",
-												children: ["Ret Ded: ", formatCurrency(p.retentionDeducted)]
+											className: "py-3 px-3 max-w-xs",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+												className: "font-mono font-semibold text-slate-900 truncate",
+												children: [
+													p.subProjectCode,
+													" ",
+													/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+														className: "font-normal text-slate-500",
+														children: [
+															"(",
+															p.mainProjectCode,
+															")"
+														]
+													})
+												]
+											}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+												className: "text-xs text-slate-700 truncate",
+												children: p.rfpPayee
 											})]
 										}),
 										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-											className: "py-3 px-3 whitespace-nowrap",
-											children: p.cvNumber ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-												className: "font-mono font-semibold text-slate-900",
-												children: ["CV #", p.cvNumber]
-											}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-												className: "text-xs font-mono text-slate-500",
-												children: p.cvDate
-											})] }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-												className: "text-slate-400",
-												children: "Pending CV"
-											})
+											className: "py-3 px-3 text-right font-mono font-semibold text-slate-900 tabular-nums whitespace-nowrap",
+											children: formatCurrency(p.rfpAmount)
 										}),
 										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
 											className: "py-3 px-3 text-right font-mono tabular-nums whitespace-nowrap",
 											children: p.cvNumber || p.chequeAmount > 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 												className: "font-semibold text-blue-700",
 												children: formatCurrency(p.chequeAmount)
-											}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-												className: "text-xs text-slate-500",
-												children: ["Withheld: ", formatCurrency(p.withheldAmount)]
+											}), p.cvNumber && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+												className: "text-[11px] text-slate-500",
+												children: ["CV #", p.cvNumber]
 											})] }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
 												className: "text-slate-400",
-												children: "—"
-											})
-										}),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-											className: "py-3 px-3 whitespace-nowrap",
-											children: p.receiptNumber ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-												className: "font-mono font-semibold text-emerald-800",
-												children: [
-													p.receiptType,
-													" #",
-													p.receiptNumber
-												]
-											}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-												className: "text-xs font-mono text-slate-500",
-												children: ["Date: ", p.receiptDate]
-											})] }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-												className: "text-slate-400",
-												children: "Not Received"
+												children: "Pending CV"
 											})
 										}),
 										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
@@ -26222,45 +25810,15 @@ var ContractsTCPView = ({ subProjects, contractors, contractsTCP, contractPaymen
 												children: PAYMENT_STAGE_STATUS_LABELS[p.paymentStatus]
 											})
 										}),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
-											className: "py-3 px-3 text-right whitespace-nowrap",
-											children: [p.paymentStatus !== "CANCELLED" && (paymentsPermission.edit ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-												className: "flex items-center justify-end gap-1.5",
-												children: [
-													/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-														type: "button",
-														onClick: () => openReleaseChequeModal(p),
-														className: "inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-800 hover:bg-slate-100",
-														children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CreditCard, { className: "h-3 w-3" }), p.cvNumber ? "Edit CV" : "Release Cheque"]
-													}),
-													/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-														type: "button",
-														onClick: () => openContractorReceiptModal(p),
-														className: "inline-flex items-center gap-1 rounded bg-slate-900 px-2 py-1 text-xs font-medium text-white hover:bg-slate-800",
-														children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Receipt, { className: "h-3 w-3" }), p.receiptNumber ? "Edit Receipt" : "Receipt"]
-													}),
-													/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-														type: "button",
-														onClick: () => handleCancelPayment(p),
-														className: "inline-flex items-center gap-1 rounded border border-red-200 bg-red-50/60 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100",
-														children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Ban, { className: "h-3 w-3" }), "Cancel"]
-													}),
-													/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-														type: "button",
-														onClick: () => handleDeletePayment(p),
-														className: "inline-flex items-center gap-1 rounded border border-red-200 bg-white px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50",
-														children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Trash2, { className: "h-3 w-3" }), "Delete"]
-													})
-												]
-											}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-												className: "text-xs font-mono text-slate-400",
-												children: "Read-Only"
-											})), p.paymentStatus === "CANCELLED" && paymentsPermission.edit && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+											className: "py-3 px-4 text-right whitespace-nowrap",
+											onClick: (e) => e.stopPropagation(),
+											children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
 												type: "button",
-												onClick: () => handleDeletePayment(p),
-												className: "inline-flex items-center gap-1 rounded border border-red-200 bg-white px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50",
-												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Trash2, { className: "h-3 w-3" }), "Delete"]
-											})]
+												onClick: () => setDetailPaymentId(p.paymentId),
+												className: "inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-800 hover:bg-slate-100",
+												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Eye, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Details" })]
+											})
 										})
 									]
 								}, `${p.paymentId}-${p.rowNumber}`))
@@ -27091,7 +26649,705 @@ var ContractsTCPView = ({ subProjects, contractors, contractsTCP, contractPaymen
 						]
 					})]
 				})
-			})
+			}),
+			detailContractId && (() => {
+				const record = contractsTCP.find((c) => c.contractId === detailContractId);
+				if (!record) return null;
+				const isEditing = editingRow === record.rowNumber && editForm !== null;
+				const rollup = rollupByContractId[record.contractId] || {
+					tcpAmount: record.tcpAmount,
+					retentionTargetAmount: 0,
+					withholdingTargetAmount: 0,
+					totalDeductibleTarget: 0,
+					maxSafeNonRetentionBillable: record.tcpAmount,
+					nonRetentionSettledAndRequested: 0,
+					retentionReleasedGross: 0,
+					unreleasedRetentionHoldback: 0,
+					safeRemainingProgressBillable: record.tcpAmount,
+					receivedGrossDeducted: 0,
+					receivedChequePaid: 0,
+					remainingTCPAfterReceived: record.tcpAmount,
+					inFlightRFPAmount: 0,
+					retentionAlreadyDeducted: 0,
+					withholdingAlreadyDeducted: 0,
+					totalAlreadyDeducted: 0,
+					remainingDeductibleBalance: 0,
+					payments: []
+				};
+				const sortedContractPayments = [...rollup.payments].sort((a, b) => {
+					const da = a.cvDate || a.rfpDate || a.updatedAt || "";
+					return (b.cvDate || b.rfpDate || b.updatedAt || "").localeCompare(da) || b.paymentId.localeCompare(a.paymentId);
+				});
+				const cannotDelete = rollup.payments.some((p) => p.paymentStatus !== "CANCELLED") || contractsTCP.some((c) => c.parentContractId === record.contractId);
+				return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+					className: "fixed inset-0 z-30 flex items-center justify-center bg-slate-900/55 p-4 backdrop-blur-[1px]",
+					role: "dialog",
+					"aria-modal": "true",
+					onClick: () => {
+						setDetailContractId(null);
+						setEditingRow(null);
+						setEditForm(null);
+					},
+					children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "w-full max-w-5xl max-h-[90vh] flex flex-col rounded-xl border border-slate-200 bg-white shadow-2xl overflow-hidden",
+						onClick: (e) => e.stopPropagation(),
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "flex items-start justify-between gap-4 border-b border-slate-200 px-6 py-4 bg-slate-50",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "min-w-0",
+								children: [
+									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+										className: "flex flex-wrap items-center gap-2",
+										children: [
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h3", {
+												className: "text-base font-bold text-slate-900 font-mono",
+												children: record.subProjectCode
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+												className: "text-xs text-slate-500",
+												children: [
+													"(",
+													record.mainProjectCode,
+													")"
+												]
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+												className: "rounded bg-blue-50 border border-blue-200 px-2 py-0.5 text-[11px] font-semibold text-blue-800",
+												children: record.tcpType
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+												className: `text-xs font-mono ${contractStatusClass(record.contractStatus)}`,
+												children: record.contractStatus
+											})
+										]
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
+										className: "mt-1 text-xs text-slate-700 font-medium",
+										children: [
+											record.contractorCode,
+											" · ",
+											record.contractorName,
+											record.awardDate ? ` · Awarded ${record.awardDate}` : ""
+										]
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
+										className: "mt-0.5 text-[11px] text-slate-500 font-mono",
+										children: [
+											"Contract Ref: ",
+											record.contractId,
+											record.tcpId ? ` · TCP: ${record.tcpId}` : "",
+											record.parentContractId ? ` · Modifies: ${record.parentContractId}` : ""
+										]
+									}),
+									record.remarks && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
+										className: "mt-1 text-xs text-slate-600",
+										children: ["Scope / Remarks: ", record.remarks]
+									})
+								]
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+								type: "button",
+								onClick: () => {
+									setDetailContractId(null);
+									setEditingRow(null);
+									setEditForm(null);
+								},
+								className: "rounded-md p-1.5 text-slate-400 hover:bg-slate-200/70 hover:text-slate-700 shrink-0",
+								"aria-label": "Close contract details",
+								children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(X, { className: "h-4 w-4" })
+							})]
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "flex-1 overflow-y-auto p-6 space-y-5",
+							children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs",
+									children: [
+										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+											className: "rounded-lg border border-slate-200 bg-slate-50/70 p-3 space-y-1",
+											children: [
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+													className: "text-[11px] font-semibold text-slate-500",
+													children: "Total TCP & Terms"
+												}),
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+													className: "text-sm font-mono font-bold text-slate-900 tabular-nums",
+													children: formatCurrency(record.tcpAmount)
+												}),
+												/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+													className: "text-[11px] font-mono text-slate-600",
+													children: [
+														"DP ",
+														record.dpPercent,
+														"% · Prog",
+														" ",
+														record.progressBillingPercent,
+														"% · Ret",
+														" ",
+														record.retentionPercent,
+														"%"
+													]
+												})
+											]
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+											className: "rounded-lg border border-slate-200 bg-slate-50/70 p-3 space-y-1",
+											children: [
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+													className: "text-[11px] font-semibold text-slate-500",
+													children: "Paid & Remaining TCP"
+												}),
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+													className: "text-sm font-mono font-bold text-emerald-700 tabular-nums",
+													children: formatCurrency(rollup.receivedGrossDeducted)
+												}),
+												/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+													className: "text-[11px] font-mono text-slate-600",
+													children: [
+														"Bal: ",
+														formatCurrency(rollup.remainingTCPAfterReceived),
+														rollup.inFlightRFPAmount > 0 ? ` · In-Flight: ${formatCurrency(rollup.inFlightRFPAmount)}` : ""
+													]
+												})
+											]
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+											className: "rounded-lg border border-slate-200 bg-slate-50/70 p-3 space-y-1",
+											children: [
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+													className: "text-[11px] font-semibold text-slate-500",
+													children: "Retention Holdback (Protected)"
+												}),
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+													className: "text-sm font-mono font-bold text-amber-700 tabular-nums",
+													children: formatCurrency(rollup.unreleasedRetentionHoldback)
+												}),
+												/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+													className: "text-[11px] font-mono text-slate-600",
+													children: [
+														"Max Safe Release:",
+														" ",
+														/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", {
+															className: "text-emerald-700",
+															children: formatCurrency(rollup.safeRemainingProgressBillable)
+														})
+													]
+												})
+											]
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+											className: "rounded-lg border border-slate-200 bg-slate-50/70 p-3 space-y-1",
+											children: [
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+													className: "text-[11px] font-semibold text-slate-500",
+													children: "BIR Withholding (Form 2307)"
+												}),
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+													className: "text-sm font-mono font-bold text-slate-900 tabular-nums",
+													children: formatCurrency(rollup.withholdingAlreadyDeducted)
+												}),
+												/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+													className: "text-[11px] font-mono text-slate-600",
+													children: [
+														"Target: ",
+														formatCurrency(rollup.withholdingTargetAmount),
+														" ",
+														"· Due:",
+														" ",
+														formatCurrency(Math.max(0, rollup.withholdingTargetAmount - rollup.withholdingAlreadyDeducted))
+													]
+												})
+											]
+										})
+									]
+								}),
+								isEditing && editForm && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "rounded-lg border border-blue-200 bg-blue-50/40 p-4 space-y-3 text-xs",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+										className: "flex items-center justify-between",
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+											className: "font-semibold text-slate-900",
+											children: [
+												"Edit Contract Parameters (",
+												record.contractId,
+												")"
+											]
+										}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+											className: "flex items-center gap-2",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+												type: "button",
+												onClick: handleSaveEdit,
+												className: "rounded bg-slate-900 px-3 py-1 text-xs font-semibold text-white hover:bg-slate-800",
+												children: "Save Changes"
+											}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+												type: "button",
+												onClick: () => {
+													setEditingRow(null);
+													setEditForm(null);
+												},
+												className: "rounded border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50",
+												children: "Cancel"
+											})]
+										})]
+									}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+										className: "grid grid-cols-2 sm:grid-cols-4 gap-3",
+										children: [
+											/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", {
+												className: "block text-[11px] font-medium text-slate-600 mb-1",
+												children: "Total TCP Amount (PHP)"
+											}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+												type: "number",
+												step: "0.01",
+												value: editForm.tcpAmount,
+												onChange: (e) => setEditForm({
+													...editForm,
+													tcpAmount: Number.parseFloat(e.target.value) || 0
+												}),
+												className: "w-full rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-mono text-right"
+											})] }),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", {
+												className: "block text-[11px] font-medium text-slate-600 mb-1",
+												children: "Downpayment (%)"
+											}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+												type: "number",
+												value: editForm.dpPercent,
+												onChange: (e) => setEditForm({
+													...editForm,
+													dpPercent: Number.parseFloat(e.target.value) || 0
+												}),
+												className: "w-full rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-mono"
+											})] }),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", {
+												className: "block text-[11px] font-medium text-slate-600 mb-1",
+												children: "Retention Holdback (%)"
+											}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+												type: "number",
+												value: editForm.retentionPercent,
+												onChange: (e) => setEditForm({
+													...editForm,
+													retentionPercent: Number.parseFloat(e.target.value) || 0
+												}),
+												className: "w-full rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-mono"
+											})] }),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", {
+												className: "block text-[11px] font-medium text-slate-600 mb-1",
+												children: "Parent Contract Ref"
+											}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+												type: "text",
+												value: editForm.parentContractId || "",
+												onChange: (e) => setEditForm({
+													...editForm,
+													parentContractId: e.target.value.toUpperCase()
+												}),
+												placeholder: "CON-0001",
+												className: "w-full rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-mono"
+											})] })
+										]
+									})]
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "flex flex-wrap items-center justify-between gap-2 border-y border-slate-200 py-3",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+										className: "flex flex-wrap items-center gap-2",
+										children: paymentsPermission.add && record.contractStatus !== "CANCEL" && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
+											/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+												type: "button",
+												onClick: () => openNewRfpModal(record, "Progress Billing"),
+												className: "inline-flex items-center gap-1 rounded bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800",
+												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Plus, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Progress Billing RFP" })]
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+												type: "button",
+												onClick: () => openNewRfpModal(record, "Downpayment (DP)"),
+												className: "rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-800 hover:bg-slate-50",
+												children: [
+													"+ DP (",
+													record.dpPercent,
+													"%)"
+												]
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+												type: "button",
+												onClick: () => openNewRfpModal(record, "Retention Release"),
+												className: "rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-800 hover:bg-slate-50",
+												children: [
+													"+ Retention Release (",
+													record.retentionPercent,
+													"%)"
+												]
+											})
+										] })
+									}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+										className: "flex flex-wrap items-center gap-1.5",
+										children: [
+											/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+												type: "button",
+												onClick: () => printContractPaymentHistoryAttachment({
+													contract: record,
+													rollup,
+													payments: rollup.payments,
+													preparedBy: activeUser.fullName
+												}),
+												className: "inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-800 hover:bg-slate-50",
+												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Printer, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Print History" })]
+											}),
+											contractsPermission.add && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+												type: "button",
+												onClick: () => {
+													setDetailContractId(null);
+													handleStartModifyExistingContract(record, "Escalation");
+												},
+												className: "inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-800 hover:bg-slate-50",
+												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(GitBranch, { className: "h-3 w-3" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Escalation" })]
+											}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+												type: "button",
+												onClick: () => {
+													setDetailContractId(null);
+													handleStartModifyExistingContract(record, "Contract Takeover");
+												},
+												className: "rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-800 hover:bg-slate-50",
+												children: "Takeover"
+											})] }),
+											contractsPermission.edit && !isEditing && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+												type: "button",
+												onClick: () => startEditing(record),
+												className: "inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50",
+												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(PenLine, { className: "h-3 w-3" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Edit" })]
+											}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+												type: "button",
+												disabled: cannotDelete,
+												onClick: () => {
+													setDetailContractId(null);
+													handleDeleteContract(record);
+												},
+												title: cannotDelete ? "Cannot delete contract with active payments or child escalations/takeovers" : "Delete Contract Row",
+												className: "inline-flex items-center gap-1 rounded border border-red-200 bg-white px-2.5 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-35 disabled:cursor-not-allowed",
+												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Trash2, { className: "h-3 w-3" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Delete" })]
+											})] })
+										]
+									})]
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "space-y-2",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+										className: "text-xs font-semibold text-slate-900",
+										children: [
+											"Payment History (",
+											sortedContractPayments.length,
+											") · Newest First"
+										]
+									}), sortedContractPayments.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+										className: "rounded-lg border border-dashed border-slate-200 py-8 text-center text-xs text-slate-500",
+										children: [
+											"No payment requests (RFPs) recorded for",
+											" ",
+											record.subProjectCode,
+											" yet."
+										]
+									}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+										className: "divide-y divide-slate-200 rounded-lg border border-slate-200",
+										children: sortedContractPayments.map((p) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+											className: `p-3.5 text-xs flex flex-col md:flex-row md:items-center justify-between gap-3 ${p.paymentStatus === "CANCELLED" ? "opacity-55 bg-red-50/20" : "bg-white hover:bg-slate-50/70"}`,
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+												className: "space-y-1 min-w-0",
+												children: [
+													/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+														className: "flex flex-wrap items-center gap-2",
+														children: [
+															/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+																className: "font-mono font-bold text-slate-900",
+																children: ["RFP #", p.rfpNumber]
+															}),
+															/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+																className: "text-slate-500 font-mono",
+																children: [
+																	"(",
+																	p.rfpDate,
+																	")"
+																]
+															}),
+															/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+																className: "rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-slate-700",
+																children: p.billingType
+															}),
+															/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+																className: paymentStageClass(p.paymentStatus),
+																children: PAYMENT_STAGE_STATUS_LABELS[p.paymentStatus]
+															})
+														]
+													}),
+													/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+														className: "flex flex-wrap items-center gap-x-4 gap-y-0.5 text-[11px] font-mono text-slate-600 tabular-nums",
+														children: [
+															/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { children: [
+																"Gross:",
+																" ",
+																/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", {
+																	className: "text-slate-900",
+																	children: formatCurrency(p.rfpAmount)
+																})
+															] }),
+															p.retentionDeducted > 0 && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { children: ["Ret: -", formatCurrency(p.retentionDeducted)] }),
+															p.cvNumber ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { children: [
+																"CV #",
+																p.cvNumber,
+																" (",
+																p.cvDate,
+																") · Cheque:",
+																" ",
+																/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", {
+																	className: "text-blue-700",
+																	children: formatCurrency(p.chequeAmount)
+																}),
+																p.withheldAmount > 0 ? ` · WHT: ${formatCurrency(p.withheldAmount)}` : ""
+															] }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+																className: "text-slate-400",
+																children: "Awaiting Cheque Release"
+															}),
+															p.receiptNumber && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+																className: "text-emerald-800 font-semibold",
+																children: [
+																	p.receiptType,
+																	" #",
+																	p.receiptNumber,
+																	" (",
+																	p.receiptDate,
+																	")"
+																]
+															})
+														]
+													}),
+													p.rfpRemarks && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+														className: "text-[11px] text-slate-500",
+														children: ["Remarks: ", p.rfpRemarks]
+													})
+												]
+											}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+												className: "flex flex-wrap items-center gap-1.5 shrink-0",
+												children: [p.paymentStatus !== "CANCELLED" && paymentsPermission.edit && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
+													/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+														type: "button",
+														onClick: () => openReleaseChequeModal(p),
+														className: "inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-800 hover:bg-slate-100",
+														children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CreditCard, { className: "h-3 w-3" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: p.cvNumber ? "Edit CV" : "Release CV" })]
+													}),
+													/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+														type: "button",
+														onClick: () => openContractorReceiptModal(p),
+														className: "inline-flex items-center gap-1 rounded bg-slate-900 px-2 py-1 text-xs font-medium text-white hover:bg-slate-800",
+														children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Receipt, { className: "h-3 w-3" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: p.receiptNumber ? "Edit Receipt" : "Receipt" })]
+													}),
+													/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+														type: "button",
+														onClick: () => handleCancelPayment(p),
+														className: "inline-flex items-center gap-1 rounded border border-red-200 bg-red-50/60 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100",
+														children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Ban, { className: "h-3 w-3" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Cancel" })]
+													})
+												] }), paymentsPermission.edit && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+													type: "button",
+													onClick: () => handleDeletePayment(p),
+													className: "inline-flex items-center gap-1 rounded border border-red-200 bg-white px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50",
+													children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Trash2, { className: "h-3 w-3" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Delete" })]
+												})]
+											})]
+										}, `${p.paymentId}-${p.rowNumber}`))
+									})]
+								})
+							]
+						})]
+					})
+				});
+			})(),
+			detailPaymentId && (() => {
+				const p = contractPayments.find((item) => item.paymentId === detailPaymentId);
+				if (!p) return null;
+				return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+					className: "fixed inset-0 z-30 flex items-center justify-center bg-slate-900/55 p-4 backdrop-blur-[1px]",
+					role: "dialog",
+					"aria-modal": "true",
+					onClick: () => setDetailPaymentId(null),
+					children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "w-full max-w-2xl max-h-[90vh] flex flex-col rounded-xl border border-slate-200 bg-white shadow-2xl overflow-hidden",
+						onClick: (e) => e.stopPropagation(),
+						children: [
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "flex items-start justify-between gap-4 border-b border-slate-200 px-6 py-4 bg-slate-50",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "flex flex-wrap items-center gap-2",
+									children: [
+										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("h3", {
+											className: "text-base font-bold text-slate-900 font-mono",
+											children: ["RFP #", p.rfpNumber]
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+											className: "rounded bg-slate-200/80 px-2 py-0.5 text-[11px] font-semibold text-slate-700",
+											children: p.billingType
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+											className: paymentStageClass(p.paymentStatus),
+											children: PAYMENT_STAGE_STATUS_LABELS[p.paymentStatus]
+										})
+									]
+								}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
+									className: "mt-1 text-xs text-slate-600 font-mono",
+									children: [
+										p.paymentId,
+										" · ",
+										p.subProjectCode,
+										" (",
+										p.mainProjectCode,
+										") · Contract ",
+										p.contractId
+									]
+								})] }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+									type: "button",
+									onClick: () => setDetailPaymentId(null),
+									className: "rounded-md p-1.5 text-slate-400 hover:bg-slate-200/70 hover:text-slate-700",
+									"aria-label": "Close payment details",
+									children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(X, { className: "h-4 w-4" })
+								})]
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "flex-1 overflow-y-auto p-6 space-y-4 text-xs",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "grid grid-cols-1 sm:grid-cols-3 gap-3",
+									children: [
+										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+											className: "rounded-lg border border-slate-200 bg-slate-50/70 p-3.5 space-y-1",
+											children: [
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+													className: "text-[11px] font-semibold text-slate-500",
+													children: "1. Payment Request (RFP)"
+												}),
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+													className: "font-mono font-bold text-slate-900 text-sm tabular-nums",
+													children: formatCurrency(p.rfpAmount)
+												}),
+												/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+													className: "text-slate-600",
+													children: ["Date: ", /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+														className: "font-mono",
+														children: p.rfpDate
+													})]
+												}),
+												/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+													className: "text-slate-600",
+													children: ["Payee: ", /* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", {
+														className: "text-slate-900",
+														children: p.rfpPayee
+													})]
+												}),
+												/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+													className: "text-slate-500 font-mono",
+													children: ["Ret Ded: ", formatCurrency(p.retentionDeducted)]
+												})
+											]
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+											className: "rounded-lg border border-slate-200 bg-slate-50/70 p-3.5 space-y-1",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+												className: "text-[11px] font-semibold text-slate-500",
+												children: "2. Cheque Release (CV)"
+											}), p.cvNumber || p.chequeAmount > 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+													className: "font-mono font-bold text-blue-700 text-sm tabular-nums",
+													children: formatCurrency(p.chequeAmount)
+												}),
+												/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+													className: "font-mono text-slate-700",
+													children: [
+														"CV #",
+														p.cvNumber || "—",
+														" (",
+														p.cvDate || "—",
+														")"
+													]
+												}),
+												/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+													className: "font-mono text-slate-500",
+													children: ["BIR 2307 WHT: ", formatCurrency(p.withheldAmount)]
+												})
+											] }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+												className: "text-slate-400 pt-1",
+												children: "Awaiting Cheque Release"
+											})]
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+											className: "rounded-lg border border-slate-200 bg-slate-50/70 p-3.5 space-y-1",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+												className: "text-[11px] font-semibold text-slate-500",
+												children: "3. Contractor Receipt"
+											}), p.receiptNumber ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+												className: "font-mono font-bold text-emerald-800 text-sm",
+												children: [
+													p.receiptType,
+													" #",
+													p.receiptNumber
+												]
+											}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+												className: "font-mono text-slate-600",
+												children: ["Date: ", p.receiptDate]
+											})] }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+												className: "text-slate-400 pt-1",
+												children: "Not Yet Received"
+											})]
+										})
+									]
+								}), p.rfpRemarks && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "rounded-lg border border-slate-200 bg-white p-3",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+										className: "text-[11px] font-semibold text-slate-500 mb-1",
+										children: "RFP Remarks / Particulars"
+									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+										className: "text-slate-800",
+										children: p.rfpRemarks
+									})]
+								})]
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 px-6 py-3.5 bg-slate-50",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+									type: "button",
+									onClick: () => openContractDetailsModal(p.contractId),
+									className: "inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(FileText, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Open Parent Contract" })]
+								}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "flex flex-wrap items-center gap-2",
+									children: [p.paymentStatus !== "CANCELLED" && paymentsPermission.edit && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
+										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+											type: "button",
+											onClick: () => openReleaseChequeModal(p),
+											className: "inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-800 hover:bg-slate-100",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CreditCard, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: p.cvNumber ? "Edit CV" : "Release Cheque" })]
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+											type: "button",
+											onClick: () => openContractorReceiptModal(p),
+											className: "inline-flex items-center gap-1 rounded bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Receipt, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: p.receiptNumber ? "Edit Receipt" : "Receipt" })]
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+											type: "button",
+											onClick: () => {
+												setDetailPaymentId(null);
+												handleCancelPayment(p);
+											},
+											className: "inline-flex items-center gap-1 rounded border border-red-200 bg-red-50/60 px-2.5 py-1.5 text-xs font-medium text-red-700 hover:bg-red-100",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Ban, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Cancel" })]
+										})
+									] }), paymentsPermission.edit && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+										type: "button",
+										onClick: () => {
+											setDetailPaymentId(null);
+											handleDeletePayment(p);
+										},
+										className: "inline-flex items-center gap-1 rounded border border-red-200 bg-white px-2.5 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50",
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Trash2, { className: "h-3.5 w-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Delete" })]
+									})]
+								})]
+							})
+						]
+					})
+				});
+			})()
 		]
 	});
 };
